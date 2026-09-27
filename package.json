@@ -154,6 +154,12 @@
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
+        "command": "sailfish.device.connectWlan",
+        "title": "Sailfish: Connect to Device (WLAN)",
+        "category": "Sailfish",
+        "enablement": "sailfish.platformSupported"
+      },
+      {
         "command": "sailfish.showOutput",
         "title": "Sailfish: Show Output",
         "category": "Sailfish"

@@ -5,6 +5,7 @@ import type { SfdkResult } from '../sfdk/runner';
 import { DevicesTreeDataProvider } from './tree';
 import { correlateVm } from './vmCorrelation';
 import { buildSshLaunch } from './sshLaunch';
+import { buildWlanSshLaunch, isValidPort } from './connectWlan';
 
 /** Structural check, not `instanceof DeviceTreeItem`: the item may come from a different copy of the `tree` module. */
 function deviceFrom(item: unknown): SfdkDeviceInfo | undefined {
@@ -243,6 +244,64 @@ function openSsh(services: Services) {
   };
 }
 
+const CUSTOM_USERNAME = 'Custom username…';
+
+/**
+ * "Sailfish: Connect to Device (WLAN)" — opens a real interactive `ssh` terminal to a
+ * device by IP, independent of sfdk/devices.xml (no device needs to be registered first).
+ * No password is ever read or handled here: the user types it into the opened terminal.
+ */
+function connectWlan(services: Services) {
+  return async (): Promise<void> => {
+    const host = await services.prompts.showInputBox({
+      prompt: 'Device IP address or hostname (WLAN)',
+      placeHolder: '192.168.50.125',
+      validateInput: (v) => (v.trim().length === 0 ? 'Required' : v.startsWith('-') ? 'Must not start with "-"' : undefined),
+    });
+    if (!host) {
+      return;
+    }
+    const port = await services.prompts.showInputBox({
+      prompt: 'SSH port',
+      value: '22',
+      validateInput: (v) => (isValidPort(v) ? undefined : 'Enter a port number between 1 and 65535'),
+    });
+    if (!port) {
+      return;
+    }
+    const usernameChoice = await services.prompts.showQuickPick(['nemo', 'defaultuser', CUSTOM_USERNAME], {
+      placeHolder: 'Device username (nemo on Sailfish OS < 3.4.0, defaultuser on newer)',
+    });
+    if (!usernameChoice) {
+      return;
+    }
+    const user =
+      usernameChoice === CUSTOM_USERNAME
+        ? await services.prompts.showInputBox({
+            prompt: 'Custom username',
+            validateInput: (v) => (v.trim().length === 0 ? 'Required' : v.startsWith('-') ? 'Must not start with "-"' : undefined),
+          })
+        : usernameChoice;
+    if (!user) {
+      return;
+    }
+    const launch = buildWlanSshLaunch(host, port, user);
+    if (!launch) {
+      notifyError(services, `Sailfish: could not build an ssh command for ${user}@${host}:${port}`);
+      return;
+    }
+    const terminal = vscode.window.createTerminal({
+      name: `SSH: ${user}@${host}`,
+      shellPath: launch.shellPath,
+      shellArgs: launch.shellArgs,
+    });
+    terminal.show();
+    void services.prompts.showInformationMessage(
+      `Connecting to ${user}@${host}:${port} — type the device's Developer Mode remote-connection password in the terminal.`,
+    );
+  };
+}
+
 /** Registers the sailfish.devices view and its commands (FR-6.2..FR-6.8). */
 export function activateDevices(ctx: vscode.ExtensionContext, services: Services): DevicesTreeDataProvider {
   const provider = new DevicesTreeDataProvider(services);
@@ -259,6 +318,7 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
     vscode.commands.registerCommand('sailfish.device.setDefault', setDefault(services, provider)),
     vscode.commands.registerCommand('sailfish.device.setSfdkDefault', setSfdkDefault(services, provider)),
     vscode.commands.registerCommand('sailfish.device.openSsh', openSsh(services)),
+    vscode.commands.registerCommand('sailfish.device.connectWlan', connectWlan(services)),
   );
 
   return provider;
