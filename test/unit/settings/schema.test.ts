@@ -20,6 +20,7 @@ const EXPECTED_ACTIVATION_EVENTS = [
   'workspaceContains:**/CMakeLists.txt',
   'onCommand:sailfish.newProject',
   'onCommand:sailfish.setSdkPath',
+  'onCommand:sailfish.downloadSdk',
   'onView:sailfish.devices',
   'onLanguage:qml',
 ];

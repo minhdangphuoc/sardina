@@ -23,6 +23,7 @@
     "workspaceContains:**/CMakeLists.txt",
     "onCommand:sailfish.newProject",
     "onCommand:sailfish.setSdkPath",
+    "onCommand:sailfish.downloadSdk",
     "onView:sailfish.devices",
     "onLanguage:qml"
   ],
@@ -43,6 +44,11 @@
       {
         "command": "sailfish.setSdkPath",
         "title": "Sailfish: Set SDK Path",
+        "category": "Sailfish"
+      },
+      {
+        "command": "sailfish.downloadSdk",
+        "title": "Sailfish: Download SDK",
         "category": "Sailfish"
       },
       {

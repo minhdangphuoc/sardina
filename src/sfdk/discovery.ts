@@ -6,11 +6,13 @@ import type { SdkInfo, SdkSource } from '../core/types';
 import type { Services } from '../core/services';
 import { spawnCapture } from './runner';
 import { compareSemverLike, parseSemverLike } from './version';
+import { resolveDownloadUrl, type Variant } from './downloadSdk';
 
 export type { SdkInfo };
 
 const MIN_VERSION = { major: 3, minor: 10, patch: 0, raw: '3.10.0' };
 const SET_SDK_PATH_ACTION = 'Set SDK path';
+const DOWNLOAD_ACTION = 'Download SDK';
 const INSTALL_ACTION = 'Install instructions';
 const DONT_SHOW_ACTION = "Don't show again";
 const INSTALL_URL = 'https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/';
@@ -113,6 +115,7 @@ export class SdkLocator {
     void this.services.prompts
       .showWarningMessage(
         'Sailfish: could not find the Sailfish SDK. Set the SDK path to enable Sailfish commands.',
+        DOWNLOAD_ACTION,
         SET_SDK_PATH_ACTION,
         INSTALL_ACTION,
         DONT_SHOW_ACTION,
@@ -120,6 +123,8 @@ export class SdkLocator {
       .then((choice) => {
         if (choice === SET_SDK_PATH_ACTION) {
           void vscode.commands.executeCommand('sailfish.setSdkPath');
+        } else if (choice === DOWNLOAD_ACTION) {
+          void vscode.commands.executeCommand('sailfish.downloadSdk');
         } else if (choice === INSTALL_ACTION) {
           void vscode.env.openExternal(vscode.Uri.parse(INSTALL_URL));
         }
@@ -203,10 +208,39 @@ async function pickSdkPath(services: Services): Promise<void> {
   await vscode.workspace.getConfiguration('sailfish').update('sdkPath', picked.fsPath, vscode.ConfigurationTarget.Global);
 }
 
+const ONLINE_VARIANT = 'Online installer (smaller; fetches the rest during install)';
+const OFFLINE_VARIANT = 'Offline installer (larger; nothing more to download during install)';
+
+/**
+ * "Sailfish: Download SDK" — opens the correct platform-specific installer download
+ * in the browser. Never downloads or executes anything itself: releases.sailfishos.org
+ * has no version-list API, so the current version is scraped from the docs page and the
+ * URL is opened via openExternal; the user runs the fetched installer themselves.
+ */
+async function downloadSdk(services: Services): Promise<void> {
+  const variantChoice = await services.prompts.showQuickPick([ONLINE_VARIANT, OFFLINE_VARIANT], {
+    placeHolder: 'Which SDK installer?',
+  });
+  if (!variantChoice) {
+    return;
+  }
+  const variant: Variant = variantChoice === ONLINE_VARIANT ? 'online' : 'offline';
+  const url = await resolveDownloadUrl(process.platform, variant);
+  if (!url) {
+    void services.prompts.showWarningMessage(
+      "Sailfish: couldn't determine the direct download link (offline, or the page changed) — opening the install docs instead.",
+    );
+    void vscode.env.openExternal(vscode.Uri.parse(INSTALL_URL));
+    return;
+  }
+  void vscode.env.openExternal(vscode.Uri.parse(url));
+}
+
 export function activateSdk(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(services.sdk);
   ctx.subscriptions.push(
     vscode.commands.registerCommand('sailfish.setSdkPath', () => pickSdkPath(services)),
+    vscode.commands.registerCommand('sailfish.downloadSdk', () => downloadSdk(services)),
     services.settings.onDidChange('sdkPath', () => void services.sdk.refresh()),
   );
   // NFR-1: activation never awaits sfdk probing.
