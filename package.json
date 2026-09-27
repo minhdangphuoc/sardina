@@ -1,0 +1,595 @@
+{
+  "name": "sailfish-tools",
+  "displayName": "Sailfish OS Tools",
+  "description": "Build, deploy, run and manage Sailfish OS applications from VS Code.",
+  "publisher": "sailfish-tools-dev",
+  "version": "0.1.0",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.94.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Snippets",
+    "Other"
+  ],
+  "main": "./dist/extension.js",
+  "extensionDependencies": ["theqtcompany.qt-qml"],
+  "extensionPack": [],
+  "activationEvents": [
+    "workspaceContains:rpm/*.spec",
+    "workspaceContains:**/*.pro",
+    "workspaceContains:**/CMakeLists.txt",
+    "onCommand:sailfish.newProject",
+    "onCommand:sailfish.setSdkPath",
+    "onView:sailfish.devices",
+    "onLanguage:qml"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "qml",
+        "aliases": [
+          "QML",
+          "qml"
+        ],
+        "extensions": [
+          ".qml"
+        ]
+      }
+    ],
+    "commands": [
+      {
+        "command": "sailfish.setSdkPath",
+        "title": "Sailfish: Set SDK Path",
+        "category": "Sailfish"
+      },
+      {
+        "command": "sailfish.newProject",
+        "title": "Sailfish: New Project",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.selectTarget",
+        "title": "Sailfish: Select Target",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.setSfdkDefaultTarget",
+        "title": "Sailfish: Set sfdk Default Target",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.build",
+        "title": "Sailfish: Build",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.deploy",
+        "title": "Sailfish: Deploy",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.run",
+        "title": "Sailfish: Run",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.buildDeployRun",
+        "title": "Sailfish: Build, Deploy and Run",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.package",
+        "title": "Sailfish: Package",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.clean",
+        "title": "Sailfish: Clean",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.devices.refresh",
+        "title": "Sailfish: Refresh Devices",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.emulator.start",
+        "title": "Sailfish: Start Emulator",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.emulator.stop",
+        "title": "Sailfish: Stop Emulator",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.emulator.status",
+        "title": "Sailfish: Emulator Status",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.emulator.show",
+        "title": "Sailfish: Show Emulator",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.emulator.installAvailable",
+        "title": "Sailfish: Install Available Emulator",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.device.setDefault",
+        "title": "Sailfish: Set Default Device",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.device.setSfdkDefault",
+        "title": "Sailfish: Set sfdk Default Device",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.device.openSsh",
+        "title": "Sailfish: Open SSH to Device",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.showOutput",
+        "title": "Sailfish: Show Output",
+        "category": "Sailfish"
+      }
+    ],
+    "configuration": {
+      "title": "Sailfish OS",
+      "properties": {
+        "sailfish.sdkPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path to the Sailfish SDK installation root. Leave empty to auto-detect via environment and default locations."
+        },
+        "sailfish.target": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "The sfdk build target to use for this workspace (e.g. `SailfishOS-4.4.0.58-aarch64`). Leave empty to use the sfdk default target."
+        },
+        "sailfish.device": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "The sfdk device (emulator or hardware) to deploy to and run on for this workspace."
+        },
+        "sailfish.showSnapshotTargets": {
+          "type": "boolean",
+          "default": false,
+          "scope": "window",
+          "markdownDescription": "Show snapshot targets in target-selection pickers, in addition to regular targets."
+        },
+        "sailfish.build.jobs": {
+          "type": "integer",
+          "default": 0,
+          "scope": "resource",
+          "markdownDescription": "Number of parallel build jobs to pass to sfdk. `0` uses the sfdk default."
+        },
+        "sailfish.build.runHarbourCheck": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "markdownDescription": "Run the Harbour compliance check (`sfdk check`) automatically as part of the build task."
+        },
+        "sailfish.build.extraArgs": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [],
+          "scope": "resource",
+          "markdownDescription": "Extra arguments appended to every `sfdk build` invocation for this workspace."
+        },
+        "sailfish.deploy.method": {
+          "type": "string",
+          "enum": [
+            "sdk",
+            "pkcon",
+            "rsync",
+            "zypper",
+            "zypper-dup",
+            "manual"
+          ],
+          "default": "sdk",
+          "scope": "resource",
+          "markdownDescription": "The deployment method used by the `deploy` task."
+        },
+        "sailfish.run.launcher": {
+          "type": "string",
+          "enum": [
+            "auto",
+            "invoker-silica",
+            "sailfish-qml",
+            "custom"
+          ],
+          "default": "auto",
+          "scope": "resource",
+          "markdownDescription": "How the application is launched on the device. `auto` picks the launcher based on the project shape."
+        },
+        "sailfish.run.customCommand": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "Custom remote launch command used when `sailfish.run.launcher` is `custom`."
+        },
+        "sailfish.run.killBeforeLaunch": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Kill any previously running instance of the application on the device before launching it again."
+        },
+        "sailfish.qtqml.silenceQmlls": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this Sailfish project folder. Sailfish OS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
+        },
+        "sailfish.logLevel": {
+          "type": "string",
+          "enum": [
+            "info",
+            "debug"
+          ],
+          "default": "info",
+          "scope": "window",
+          "markdownDescription": "Verbosity of the **Sailfish OS** output channel."
+        },
+        "sailfish.experimental.enableWindows": {
+          "type": "boolean",
+          "default": false,
+          "scope": "machine",
+          "markdownDescription": "**Experimental.** Enable experimental Windows support (via MSYS2). Windows is otherwise unsupported in v0.1."
+        },
+        "sailfish.experimental.msys2Shell": {
+          "type": "string",
+          "default": "C:\\msys64\\msys2_shell.cmd",
+          "scope": "machine",
+          "markdownDescription": "**Experimental.** Path to the MSYS2 shell launcher, used only when `sailfish.experimental.enableWindows` is enabled."
+        }
+      }
+    },
+    "taskDefinitions": [
+      {
+        "type": "sailfish",
+        "required": [
+          "command"
+        ],
+        "properties": {
+          "command": {
+            "type": "string",
+            "enum": [
+              "build",
+              "deploy",
+              "run",
+              "package",
+              "check",
+              "clean",
+              "matrix-build",
+              "logs"
+            ]
+          },
+          "target": {
+            "type": "string"
+          },
+          "device": {
+            "type": "string"
+          },
+          "debug": {
+            "type": "boolean"
+          },
+          "prepare": {
+            "type": "boolean"
+          },
+          "noCheck": {
+            "type": "boolean"
+          },
+          "jobs": {
+            "type": "integer"
+          },
+          "extraArgs": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "deployMethod": {
+            "type": "string",
+            "enum": [
+              "sdk",
+              "pkcon",
+              "rsync",
+              "zypper",
+              "zypper-dup",
+              "manual"
+            ]
+          },
+          "targets": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        }
+      }
+    ],
+    "problemMatchers": [
+      {
+        "name": "sailfish-gcc",
+        "owner": "sailfish",
+        "source": "gcc",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.*?):(\\d+):(\\d+):\\s+(fatal error|error|warning|note):\\s+(.*)$",
+          "file": 1,
+          "line": 2,
+          "column": 3,
+          "severity": 4,
+          "message": 5
+        }
+      },
+      {
+        "name": "sailfish-qmake",
+        "owner": "sailfish",
+        "source": "qmake",
+        "fileLocation": [
+          "autoDetect",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(.*?\\.pr[io]):(\\d+):\\s*(.*)$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        }
+      },
+      {
+        "name": "sailfish-rpmbuild",
+        "owner": "sailfish",
+        "source": "rpmbuild",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(rpm/\\S+\\.spec):\\s*error:\\s+(?:line\\s+(\\d+):\\s+)?(.*)$",
+          "file": 1,
+          "line": 2,
+          "message": 3
+        },
+        "applyTo": "allDocuments"
+      },
+      {
+        "name": "sailfish-rpmvalidator",
+        "owner": "sailfish",
+        "source": "rpmvalidator",
+        "fileLocation": [
+          "relative",
+          "${workspaceFolder}"
+        ],
+        "pattern": {
+          "regexp": "^(rpm/\\S+\\.spec):\\s*(ERROR|WARNING|INFO)\\s*\\[?([^\\]]*)\\]?:?\\s*(.*)$",
+          "file": 1,
+          "severity": 2,
+          "code": 3,
+          "message": 4,
+          "kind": "file"
+        }
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "sailfish",
+          "title": "Sailfish OS",
+          "icon": "resources/sailfish.svg"
+        }
+      ]
+    },
+    "views": {
+      "sailfish": [
+        {
+          "id": "sailfish.devices",
+          "name": "Devices & Emulators",
+          "when": "sailfish.sdkAvailable"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "sailfish.devices.refresh",
+          "when": "view == sailfish.devices",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "sailfish.emulator.start",
+          "when": "view == sailfish.devices && viewItem == emulator",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.emulator.stop",
+          "when": "view == sailfish.devices && viewItem == emulator",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.emulator.status",
+          "when": "view == sailfish.devices && viewItem == emulator"
+        },
+        {
+          "command": "sailfish.emulator.show",
+          "when": "view == sailfish.devices && viewItem == emulator"
+        },
+        {
+          "command": "sailfish.device.setDefault",
+          "when": "view == sailfish.devices && viewItem == emulator"
+        },
+        {
+          "command": "sailfish.device.setDefault",
+          "when": "view == sailfish.devices && viewItem == hardware-device"
+        },
+        {
+          "command": "sailfish.device.openSsh",
+          "when": "view == sailfish.devices && viewItem == hardware-device"
+        },
+        {
+          "command": "sailfish.emulator.installAvailable",
+          "when": "view == sailfish.devices && viewItem == emulator-available",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.emulator.installAvailable",
+          "when": "view == sailfish.devices && viewItem == devices-root-emulators"
+        },
+        {
+          "command": "sailfish.emulator.installAvailable",
+          "when": "view == sailfish.devices && viewItem == devices-root-available"
+        },
+        {
+          "command": "sailfish.devices.refresh",
+          "when": "view == sailfish.devices && viewItem =~ /^devices-root-/"
+        }
+      ]
+    },
+    "snippets": [
+      {
+        "language": "qml",
+        "path": "./snippets/silica.code-snippets"
+      }
+    ],
+    "walkthroughs": [
+      {
+        "id": "sailfish.gettingStarted",
+        "title": "Get started with Sailfish OS",
+        "description": "Set up the Sailfish SDK, create a project, and build, deploy and run it.",
+        "steps": [
+          {
+            "id": "installSdk",
+            "title": "Install and detect the Sailfish SDK",
+            "description": "Install the Sailfish SDK and point the extension at it.\n[Set SDK Path](command:sailfish.setSdkPath)",
+            "media": {
+              "markdown": "media/walkthrough/installSdk.md"
+            },
+            "completionEvents": [
+              "onContext:sailfish.sdkAvailable"
+            ]
+          },
+          {
+            "id": "createProject",
+            "title": "Create a project",
+            "description": "Create a new Sailfish OS application from a template.\n[New Project](command:sailfish.newProject)",
+            "media": {
+              "markdown": "media/walkthrough/createProject.md"
+            },
+            "completionEvents": [
+              "onCommand:sailfish.newProject"
+            ]
+          },
+          {
+            "id": "selectTarget",
+            "title": "Select a build target",
+            "description": "Choose which Sailfish OS build target to use.\n[Select Target](command:sailfish.selectTarget)",
+            "media": {
+              "markdown": "media/walkthrough/selectTarget.md"
+            },
+            "completionEvents": [
+              "onContext:sailfish.hasTarget"
+            ]
+          },
+          {
+            "id": "startEmulator",
+            "title": "Start the emulator",
+            "description": "Start the Sailfish OS emulator to deploy and test your app.\n[Start Emulator](command:sailfish.emulator.start)",
+            "media": {
+              "markdown": "media/walkthrough/startEmulator.md"
+            },
+            "completionEvents": [
+              "onCommand:sailfish.emulator.start"
+            ]
+          },
+          {
+            "id": "buildDeployRun",
+            "title": "Build, deploy and run",
+            "description": "Build your app, deploy it, and run it in one step.\n[Build, Deploy and Run](command:sailfish.buildDeployRun)",
+            "media": {
+              "markdown": "media/walkthrough/buildDeployRun.md"
+            },
+            "completionEvents": [
+              "onCommand:sailfish.buildDeployRun"
+            ]
+          }
+        ]
+      }
+    ],
+    "keybindings": [
+      {
+        "command": "sailfish.buildDeployRun",
+        "key": "ctrl+alt+r",
+        "mac": "cmd+alt+r",
+        "when": "sailfish.isProject"
+      }
+    ]
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "build:watch": "node esbuild.mjs --watch",
+    "build:tests": "tsc -p tsconfig.test.json",
+    "check:types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "lint": "eslint src test --max-warnings=0",
+    "test:unit": "npm run build:tests && mocha \"out/test/unit/**/*.test.js\"",
+    "test:fuzz": "npm run build:tests && mocha \"out/test/fuzz/**/*.test.js\"",
+    "test:integration": "npm run build:tests && node out/test/runTest.js",
+    "test": "npm run test:unit && npm run test:fuzz && npm run test:integration",
+    "check:manifest": "node scripts/check-manifest.mjs",
+    "check:proprietary": "node scripts/check-proprietary.mjs",
+    "package:dry": "node scripts/package-dry.mjs",
+    "verify": "npm run check:types && npm run lint && npm run test && npm run check:manifest && npm run check:proprietary && npm run build && npm run package:dry"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0",
+    "esbuild": "^0.25.0",
+    "@types/vscode": "~1.94.0",
+    "@types/node": "^20.0.0",
+    "@types/mocha": "^10.0.0",
+    "mocha": "^10.0.0",
+    "sinon": "^19.0.0",
+    "@types/sinon": "^17.0.0",
+    "@vscode/test-electron": "^2.4.0",
+    "@vscode/test-cli": "^0.0.10",
+    "@vscode/vsce": "^3.0.0",
+    "eslint": "^9.0.0",
+    "typescript-eslint": "^8.0.0",
+    "glob": "^11.0.0"
+  }
+}

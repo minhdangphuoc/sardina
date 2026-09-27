@@ -1,0 +1,5 @@
+#0 Sailfish OS Emulator 4.4.0.58
+  emulator autodetected defaultuser 127.0.0.1 2223
+this line does not belong here
+#garbled "Xperia 10 - Dual SIM (ARM)"
+    hardware-device user-defined defaultuser@192.168.2.15

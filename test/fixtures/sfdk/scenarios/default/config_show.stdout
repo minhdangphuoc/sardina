@@ -1,0 +1,3 @@
+target: SailfishOS-4.4.0.58-aarch64
+device: Xperia 10 - Dual SIM (ARM)
+output-prefix: [%N] 

@@ -1,0 +1,71 @@
+Building for target SailfishOS-4.4.0.58-aarch64...
++ /usr/bin/rpmbuild -bb rpm/harbour-demo.spec
+Executing(%prep): /bin/sh -e /var/tmp/rpm-tmp.abc123
++ umask 022
++ cd /home/mersdk/share/qml-app
+g++ -c -pipe -O2 -Wall -o .obj/file1.o src/file1.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file2.o src/file2.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file3.o src/file3.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file4.o src/file4.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file5.o src/file5.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file6.o src/file6.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file7.o src/file7.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file8.o src/file8.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file9.o src/file9.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file10.o src/file10.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file11.o src/file11.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file12.o src/file12.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file13.o src/file13.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file14.o src/file14.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file15.o src/file15.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file16.o src/file16.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file17.o src/file17.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file18.o src/file18.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file19.o src/file19.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file20.o src/file20.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file21.o src/file21.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file22.o src/file22.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file23.o src/file23.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file24.o src/file24.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file25.o src/file25.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file26.o src/file26.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file27.o src/file27.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file28.o src/file28.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file29.o src/file29.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file30.o src/file30.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file31.o src/file31.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file32.o src/file32.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file33.o src/file33.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file34.o src/file34.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file35.o src/file35.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file36.o src/file36.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file37.o src/file37.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file38.o src/file38.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file39.o src/file39.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file40.o src/file40.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file41.o src/file41.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file42.o src/file42.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file43.o src/file43.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file44.o src/file44.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file45.o src/file45.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file46.o src/file46.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file47.o src/file47.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file48.o src/file48.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file49.o src/file49.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file50.o src/file50.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file51.o src/file51.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file52.o src/file52.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file53.o src/file53.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file54.o src/file54.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file55.o src/file55.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file56.o src/file56.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file57.o src/file57.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file58.o src/file58.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file59.o src/file59.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file60.o src/file60.cpp
+src/main.cpp: In function 'int main(int, char**)':
+src/main.cpp:9:5: warning: unused variable 'debugFlag' [-Wunused-variable]
+g++ -o harbour-demo .obj/*.o -lQt5Quick -lQt5Qml -lQt5Gui -lQt5Core
++ /usr/lib/rpm/check-buildroot
+Processing files: harbour-demo-0.1-1.aarch64
+Wrote: /home/mersdk/share/qml-app/RPMS/aarch64/harbour-demo-0.1-1.aarch64.rpm

@@ -1,0 +1,3 @@
+cd src/ && g++ -c -o main.o main.cpp
+g++ -o harbour-demo main.o -lQt5Quick -lQt5Qml -lQt5Gui -lQt5Core
+Build complete.

@@ -1,0 +1,3 @@
+qtquick2app        Qt-Quick-2-Anwendung (Silica, empfohlen)
+minimalapp         Minimale Anwendung (kein UI-Framework)
+cpp-qmake          C++-Anwendung, qmake-Build-System (fortgeschritten)

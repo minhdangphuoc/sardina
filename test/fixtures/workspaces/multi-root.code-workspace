@@ -1,0 +1,7 @@
+{
+  "folders": [
+    { "path": "qml-app" },
+    { "path": "cmake-app" }
+  ],
+  "settings": {}
+}

@@ -1,0 +1,6 @@
+Building for target SailfishOS-4.4.0.58-aarch64...
+src/main.cpp: In function 'int main(int, char**)':
+src/main.cpp:9:5: warning: unused variable 'debugFlag' [-Wunused-variable]
+src/main.cpp:14:1: warning: control reaches end of non-void function [-Wreturn-type]
+g++ -o harbour-demo .obj/*.o -lQt5Quick -lQt5Qml -lQt5Gui -lQt5Core
+Wrote: /home/mersdk/share/qml-app/RPMS/aarch64/harbour-demo-0.1-1.aarch64.rpm

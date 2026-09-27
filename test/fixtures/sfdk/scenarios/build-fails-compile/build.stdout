@@ -1,0 +1,11 @@
+Building for target SailfishOS-4.4.0.58-aarch64...
++ /usr/bin/rpmbuild -bb rpm/harbour-demo.spec
++ cd /home/mersdk/share/qml-app
+g++ -c -pipe -O2 -Wall -o .obj/file1.o src/file1.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file2.o src/file2.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file3.o src/file3.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file4.o src/file4.cpp
+g++ -c -pipe -O2 -Wall -o .obj/file5.o src/file5.cpp
+/home/mersdk/share/qml-app/src/main.cpp: In function 'int main(int, char**)':
+/home/mersdk/share/qml-app/src/main.cpp:12:5: error: 'foo' was not declared in this scope
+make: *** [Makefile:20: main.o] Error 1

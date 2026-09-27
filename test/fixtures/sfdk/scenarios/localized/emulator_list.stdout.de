@@ -1,0 +1,8 @@
+#0 "Sailfish OS Emulator 4.4.0.58"
+    emulator autodetected defaultuser@127.0.0.1:2223
+    privater-schluessel: /Users/mersdk/.ssh/sdk
+
+#1 "Sailfish OS Emulator 3.10.1.20 (old)"
+    emulator autodetected defaultuser@127.0.0.1:2224
+    privater-schluessel: /Users/mersdk/.ssh/sdk
+    status: läuft nicht

@@ -1,0 +1,2 @@
+VBoxManage: error: Failed to create the VirtualBoxClient COM object.
+VBoxManage: error: Most likely, the VirtualBox COM server is not running or failed to start.

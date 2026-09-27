@@ -1,0 +1,13 @@
+name: Sailfish OS Emulator 4.4.0.58
+index: 0
+vm-name: Sailfish_OS_Emulator_4.4.0.58
+vm-type: VirtualBox
+memory-size-mb: 2048
+cpu-count: 2
+vdi-capacity-mb: 8192
+mac: 08:00:5A:11:00:01
+subnet: 10.220.57
+ssh-port: 2223
+qml-live-ports: 10234-10236
+free-ports: 10000-10010
+headless: no

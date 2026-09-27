@@ -1,0 +1,12 @@
+Geräteliste:
+#0 "Sailfish OS Emulator 4.4.0.58"
+    emulator autodetected defaultuser@127.0.0.1:2223
+    private-key: /Users/mersdk/.ssh/sdk
+
+#1 "Xperia 10 - Dual SIM (ARM)"
+    hardware-device user-defined defaultuser@192.168.2.15:22
+    private-key: /Users/mersdk/.ssh/sdk_hw
+
+#2 "Xperia 10 III – 日本語"
+    hardware-device user-defined defaultuser@192.168.2.16:22
+    private-key: /Users/mersdk/.ssh/sdk_hw2

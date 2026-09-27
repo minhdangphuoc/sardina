@@ -1,0 +1,7 @@
+qtquick2app        Qt Quick 2 application (Silica, recommended)
+
+
+!!! not-a-type-token
+	minimalapp	Minimal application (tabs)
+###
+cpp-qmake          C++ application, qmake build system (advanced)

@@ -1,0 +1,339 @@
+{
+  "Silica page": {
+    "prefix": "sfpage",
+    "body": [
+      "Page {",
+      "\tid: ${1:page}",
+      "",
+      "\tSilicaFlickable {",
+      "\t\tanchors.fill: parent",
+      "\t\tcontentHeight: column.height",
+      "",
+      "\t\tColumn {",
+      "\t\t\tid: column",
+      "\t\t\twidth: parent.width",
+      "",
+      "\t\t\tPageHeader {",
+      "\t\t\t\ttitle: qsTr(\"${2:Title}\")",
+      "\t\t\t}",
+      "",
+      "\t\t\t$0",
+      "\t\t}",
+      "",
+      "\t\tVerticalScrollDecorator {}",
+      "\t}",
+      "}"
+    ],
+    "description": "Silica Page with a SilicaFlickable, Column and PageHeader"
+  },
+  "Silica dialog": {
+    "prefix": "sfdialog",
+    "body": [
+      "Dialog {",
+      "\tid: ${1:dialog}",
+      "",
+      "\tSilicaFlickable {",
+      "\t\tanchors.fill: parent",
+      "\t\tcontentHeight: column.height",
+      "",
+      "\t\tColumn {",
+      "\t\t\tid: column",
+      "\t\t\twidth: parent.width",
+      "",
+      "\t\t\tDialogHeader {",
+      "\t\t\t\ttitle: qsTr(\"${2:Title}\")",
+      "\t\t\t}",
+      "",
+      "\t\t\t$0",
+      "\t\t}",
+      "\t}",
+      "}"
+    ],
+    "description": "Silica Dialog with a DialogHeader"
+  },
+  "Silica list view": {
+    "prefix": "sflistview",
+    "body": [
+      "SilicaListView {",
+      "\tid: ${1:listView}",
+      "\tanchors.fill: parent",
+      "\tmodel: ${2:listModel}",
+      "",
+      "\theader: PageHeader {",
+      "\t\ttitle: qsTr(\"${3:Title}\")",
+      "\t}",
+      "",
+      "\tdelegate: ListItem {",
+      "\t\tid: ${4:delegate}",
+      "",
+      "\t\tLabel {",
+      "\t\t\tanchors {",
+      "\t\t\t\tleft: parent.left",
+      "\t\t\t\tleftMargin: Theme.horizontalPageMargin",
+      "\t\t\t\tverticalCenter: parent.verticalCenter",
+      "\t\t\t}",
+      "\t\t\ttext: ${5:model.text}",
+      "\t\t}",
+      "",
+      "\t\t$0",
+      "\t}",
+      "",
+      "\tVerticalScrollDecorator {}",
+      "}"
+    ],
+    "description": "SilicaListView with a header, ListItem delegate and VerticalScrollDecorator"
+  },
+  "Silica flickable": {
+    "prefix": "sfflickable",
+    "body": [
+      "SilicaFlickable {",
+      "\tid: ${1:flickable}",
+      "\tanchors.fill: parent",
+      "\tcontentHeight: ${2:content}.height",
+      "",
+      "\tColumn {",
+      "\t\tid: ${2:content}",
+      "\t\twidth: parent.width",
+      "",
+      "\t\t$0",
+      "\t}",
+      "",
+      "\tVerticalScrollDecorator {}",
+      "}"
+    ],
+    "description": "SilicaFlickable with a content Column and VerticalScrollDecorator"
+  },
+  "Silica pull down menu": {
+    "prefix": "sfpulldown",
+    "body": [
+      "PullDownMenu {",
+      "\tMenuItem {",
+      "\t\ttext: qsTr(\"${1:Action}\")",
+      "\t\tonClicked: ${0:{\\}}",
+      "\t}",
+      "}"
+    ],
+    "description": "PullDownMenu with a single MenuItem"
+  },
+  "Silica push up menu": {
+    "prefix": "sfpushup",
+    "body": [
+      "PushUpMenu {",
+      "\tMenuItem {",
+      "\t\ttext: qsTr(\"${1:Action}\")",
+      "\t\tonClicked: ${0:{\\}}",
+      "\t}",
+      "}"
+    ],
+    "description": "PushUpMenu with a single MenuItem"
+  },
+  "Silica cover": {
+    "prefix": "sfcover",
+    "body": [
+      "CoverBackground {",
+      "\tid: ${1:cover}",
+      "",
+      "\tLabel {",
+      "\t\tanchors.centerIn: parent",
+      "\t\ttext: qsTr(\"${2:App}\")",
+      "\t}",
+      "",
+      "\tCoverActionList {",
+      "\t\tid: coverAction",
+      "",
+      "\t\tCoverAction {",
+      "\t\t\ticonSource: \"${3:image://theme/icon-cover-refresh}\"",
+      "\t\t\tonTriggered: ${0:{\\}}",
+      "\t\t}",
+      "\t}",
+      "}"
+    ],
+    "description": "CoverBackground root with a CoverActionList"
+  },
+  "Silica remorse item": {
+    "prefix": "sfremorseitem",
+    "body": [
+      "ListItem {",
+      "\tid: ${1:listItem}",
+      "",
+      "\tmenu: ContextMenu {",
+      "\t\tMenuItem {",
+      "\t\t\ttext: qsTr(\"${2:Delete}\")",
+      "\t\t\tonClicked: remorse.execute(${1:listItem}, qsTr(\"${3:Deleting}\"), function() {",
+      "\t\t\t\t$0",
+      "\t\t\t})",
+      "\t\t}",
+      "\t}",
+      "",
+      "\tRemorseItem {",
+      "\t\tid: remorse",
+      "\t}",
+      "}"
+    ],
+    "description": "ListItem with a RemorseItem-based remorse action"
+  },
+  "Silica remorse popup": {
+    "prefix": "sfremorsepopup",
+    "body": [
+      "RemorsePopup {",
+      "\tid: ${1:remorsePopup}",
+      "}",
+      "",
+      "// ${1:remorsePopup}.execute(qsTr(\"${2:Removing}\"), function() { $0 })"
+    ],
+    "description": "RemorsePopup plus a commented execute() call"
+  },
+  "Silica button": {
+    "prefix": "sfbutton",
+    "body": [
+      "Button {",
+      "\tanchors.horizontalCenter: parent.horizontalCenter",
+      "\ttext: qsTr(\"${1:Button}\")",
+      "\tonClicked: ${0:{\\}}",
+      "}"
+    ],
+    "description": "Silica Button"
+  },
+  "Silica text field": {
+    "prefix": "sftextfield",
+    "body": [
+      "TextField {",
+      "\tid: ${1:textField}",
+      "\twidth: parent.width",
+      "\tlabel: qsTr(\"${2:Label}\")",
+      "\tplaceholderText: label",
+      "\tEnterKey.onClicked: ${0:parent.focus = true}",
+      "}"
+    ],
+    "description": "Silica TextField with label and EnterKey handling"
+  },
+  "Silica switch": {
+    "prefix": "sfswitch",
+    "body": [
+      "TextSwitch {",
+      "\tid: ${1:textSwitch}",
+      "\ttext: qsTr(\"${2:Option}\")",
+      "\tchecked: ${3:false}",
+      "\tonCheckedChanged: ${0:{\\}}",
+      "}"
+    ],
+    "description": "Silica TextSwitch"
+  },
+  "Silica slider": {
+    "prefix": "sfslider",
+    "body": [
+      "Slider {",
+      "\tid: ${1:slider}",
+      "\twidth: parent.width",
+      "\tminimumValue: ${2:0}",
+      "\tmaximumValue: ${3:100}",
+      "\tvalue: ${4:0}",
+      "\tlabel: qsTr(\"${5:Label}\")",
+      "\tonValueChanged: ${0:{\\}}",
+      "}"
+    ],
+    "description": "Silica Slider"
+  },
+  "Silica combo box": {
+    "prefix": "sfcombobox",
+    "body": [
+      "ComboBox {",
+      "\tid: ${1:comboBox}",
+      "\twidth: parent.width",
+      "\tlabel: qsTr(\"${2:Label}\")",
+      "\tcurrentIndex: ${3:0}",
+      "",
+      "\tmenu: ContextMenu {",
+      "\t\tMenuItem { text: qsTr(\"${4:Option}\") }",
+      "\t\t$0",
+      "\t}",
+      "}"
+    ],
+    "description": "Silica ComboBox with a ContextMenu"
+  },
+  "Silica section header": {
+    "prefix": "sfsectionheader",
+    "body": [
+      "SectionHeader {",
+      "\ttext: qsTr(\"${1:Section}\")",
+      "}"
+    ],
+    "description": "Silica SectionHeader"
+  },
+  "Silica detail item": {
+    "prefix": "sfdetailitem",
+    "body": [
+      "DetailItem {",
+      "\tlabel: qsTr(\"${1:Label}\")",
+      "\tvalue: ${2:value}",
+      "}"
+    ],
+    "description": "Silica DetailItem"
+  },
+  "Silica busy indicator": {
+    "prefix": "sfbusy",
+    "body": [
+      "BusyIndicator {",
+      "\tanchors.centerIn: parent",
+      "\tsize: BusyIndicatorSize.${1:Medium}",
+      "\trunning: ${2:true}",
+      "}"
+    ],
+    "description": "Silica BusyIndicator"
+  },
+  "Silica view placeholder": {
+    "prefix": "sfviewplaceholder",
+    "body": [
+      "ViewPlaceholder {",
+      "\tenabled: ${1:listView.count === 0}",
+      "\ttext: qsTr(\"${2:Nothing here}\")",
+      "\thintText: qsTr(\"${3:Pull down to add one}\")",
+      "}"
+    ],
+    "description": "Silica ViewPlaceholder for an empty view"
+  },
+  "Silica application window": {
+    "prefix": "sfappwindow",
+    "body": [
+      "ApplicationWindow {",
+      "\tid: ${1:window}",
+      "\tinitialPage: Qt.resolvedUrl(\"${2:pages/FirstPage.qml}\")",
+      "\tcover: Qt.resolvedUrl(\"${3:cover/CoverPage.qml}\")",
+      "\tallowedOrientations: Orientation.All",
+      "\t$0",
+      "}"
+    ],
+    "description": "ApplicationWindow with initialPage and cover"
+  },
+  "Silica attached page": {
+    "prefix": "sfattached",
+    "body": [
+      "Page {",
+      "\tid: ${1:page}",
+      "",
+      "\tonStatusChanged: {",
+      "\t\tif (status === PageStatus.Active) {",
+      "\t\t\tpageStack.pushAttached(Qt.resolvedUrl(\"${2:SecondPage.qml}\"))",
+      "\t\t\t$0",
+      "\t\t}",
+      "\t}",
+      "}"
+    ],
+    "description": "Page pushing an attached page when it becomes active"
+  },
+  "Silica notification": {
+    "prefix": "sfnotification",
+    "body": [
+      "Notification {",
+      "\tid: ${1:notification}",
+      "\tappName: \"${2:AppName}\"",
+      "\tsummary: qsTr(\"${3:Summary}\")",
+      "\tbody: qsTr(\"${4:Body}\")",
+      "\tonClicked: ${0:{\\}}",
+      "}",
+      "",
+      "// ${1:notification}.publish()"
+    ],
+    "description": "Nemo.Notifications Notification plus a commented publish() call"
+  }
+}
