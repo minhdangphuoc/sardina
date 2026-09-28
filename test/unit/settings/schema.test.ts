@@ -21,6 +21,8 @@ const EXPECTED_ACTIVATION_EVENTS = [
   'onCommand:sailfish.newProject',
   'onCommand:sailfish.setSdkPath',
   'onCommand:sailfish.downloadSdk',
+  'onCommand:sailfish.device.add',
+  'onCommand:sailfish.device.remove',
   'onView:sailfish.devices',
   'onLanguage:qml',
 ];
@@ -35,6 +37,7 @@ interface RowSpec {
 
 const EXPECTED_ROWS: RowSpec[] = [
   { key: 'sailfish.sdkPath', type: 'string', default: '', scope: 'machine' },
+  { key: 'sailfish.devicesXmlPath', type: 'string', default: '', scope: 'machine' },
   { key: 'sailfish.target', type: 'string', default: '', scope: 'resource' },
   { key: 'sailfish.device', type: 'string', default: '', scope: 'resource' },
   { key: 'sailfish.showSnapshotTargets', type: 'boolean', default: false, scope: 'window' },

@@ -6,6 +6,7 @@ import { DevicesTreeDataProvider } from './tree';
 import { correlateVm } from './vmCorrelation';
 import { buildSshLaunch } from './sshLaunch';
 import { buildWlanSshLaunch, isValidPort } from './connectWlan';
+import { addDevice, removeDevice } from './addDevice';
 
 /** Structural check, not `instanceof DeviceTreeItem`: the item may come from a different copy of the `tree` module. */
 function deviceFrom(item: unknown): SfdkDeviceInfo | undefined {
@@ -319,6 +320,8 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
     vscode.commands.registerCommand('sailfish.device.setSfdkDefault', setSfdkDefault(services, provider)),
     vscode.commands.registerCommand('sailfish.device.openSsh', openSsh(services)),
     vscode.commands.registerCommand('sailfish.device.connectWlan', connectWlan(services)),
+    vscode.commands.registerCommand('sailfish.device.add', addDevice(services, ctx)),
+    vscode.commands.registerCommand('sailfish.device.remove', removeDevice(services)),
   );
 
   return provider;

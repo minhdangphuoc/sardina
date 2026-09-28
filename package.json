@@ -24,6 +24,8 @@
     "onCommand:sailfish.newProject",
     "onCommand:sailfish.setSdkPath",
     "onCommand:sailfish.downloadSdk",
+    "onCommand:sailfish.device.add",
+    "onCommand:sailfish.device.remove",
     "onView:sailfish.devices",
     "onLanguage:qml"
   ],
@@ -166,6 +168,18 @@
         "enablement": "sailfish.platformSupported"
       },
       {
+        "command": "sailfish.device.add",
+        "title": "Sailfish: Add Device",
+        "category": "Sailfish",
+        "enablement": "sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.device.remove",
+        "title": "Sailfish: Remove Device",
+        "category": "Sailfish",
+        "enablement": "sailfish.platformSupported"
+      },
+      {
         "command": "sailfish.showOutput",
         "title": "Sailfish: Show Output",
         "category": "Sailfish"
@@ -179,6 +193,12 @@
           "default": "",
           "scope": "machine",
           "markdownDescription": "Absolute path to the Sailfish SDK installation root. Leave empty to auto-detect via environment and default locations."
+        },
+        "sailfish.devicesXmlPath": {
+          "type": "string",
+          "default": "",
+          "scope": "machine",
+          "markdownDescription": "Absolute path to the SDK's `devices.xml` (libsfdk's device registry, shared with Qt Creator). Leave empty to auto-detect."
         },
         "sailfish.target": {
           "type": "string",
@@ -474,6 +494,15 @@
         {
           "command": "sailfish.device.openSsh",
           "when": "view == sailfish.devices && viewItem == hardware-device"
+        },
+        {
+          "command": "sailfish.device.remove",
+          "when": "view == sailfish.devices && viewItem == hardware-device"
+        },
+        {
+          "command": "sailfish.device.add",
+          "when": "view == sailfish.devices && viewItem == devices-root-devices",
+          "group": "inline"
         },
         {
           "command": "sailfish.emulator.installAvailable",

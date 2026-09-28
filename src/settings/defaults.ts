@@ -5,6 +5,7 @@
  */
 export interface SailfishSettings {
   sdkPath: string;
+  devicesXmlPath: string;
   target: string;
   device: string;
   showSnapshotTargets: boolean;
@@ -23,6 +24,7 @@ export interface SailfishSettings {
 
 export const DEFAULTS: SailfishSettings = {
   sdkPath: '',
+  devicesXmlPath: '',
   target: '',
   device: '',
   showSnapshotTargets: false,
