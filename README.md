@@ -52,4 +52,4 @@ reconciliation and how tests stub UI prompts and the fake `sfdk` binary.
 
 ## License
 
-MIT — see `LICENSE`.
+GPL-3.0-or-later — see `LICENSE`.
