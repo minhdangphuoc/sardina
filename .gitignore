@@ -7,3 +7,4 @@ test/fixtures/sfdk/unrecorded.log
 # FR-2.3-fixture-mutation: some integration tests still write directly into this
 # shared fixture's settings instead of a per-test temp copy (known, unfixed).
 test/fixtures/workspaces/*/.vscode/settings.json
+test/fixtures/workspaces/*/devices.xml
