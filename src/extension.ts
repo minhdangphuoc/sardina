@@ -13,6 +13,7 @@ import { activateQtQml } from './qtqml/silence';
 import { activateWalkthrough } from './walkthrough/index';
 import { getShownMessages } from './ui/prompts';
 import { getLastTargetList, resetLastTargetListForTests } from './targets/targetListCache';
+import { checkExternalToolsOnce } from './core/externalTools';
 
 export function activate(ctx: vscode.ExtensionContext) {
   const activationStart = performance.now();
@@ -31,6 +32,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   const devicesProvider = activateDevices(ctx, services);
   activateQtQml(ctx, services);
   activateWalkthrough(ctx, services);
+
+  // NFR-1: never awaited here — a fire-and-forget, once-per-install check.
+  void checkExternalToolsOnce(ctx, services);
 
   const activationMs = performance.now() - activationStart;
 

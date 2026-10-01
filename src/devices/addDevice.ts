@@ -9,6 +9,8 @@ import { buildNewDeviceEntry, removeDeviceByIndex, sanitizeForFilename, type New
 import { conflictingProcessesRunning } from './concurrencyGuard';
 import { parseDeviceRecords } from './listParsing';
 import type { SfdkArch } from './devicesXmlConstants';
+import { missingTools, installHint } from '../core/externalTools';
+import { shQuote } from './shQuote';
 
 const GENERATE_KEY = 'Generate new key (recommended)';
 const USE_EXISTING_KEY = 'Use existing private key';
@@ -43,19 +45,26 @@ async function generateKey(ctx: vscode.ExtensionContext, deviceName: string): Pr
 
 /**
  * FR-7.8, deviation from the TRD's ssh2-based silent push: this opens a real interactive
- * terminal running `ssh-copy-id` and lets the user type their own password there, matching
- * the pattern already validated end-to-end against real hardware for `connectWlan.ts` —
- * the extension never reads or holds the device password in memory either way, which is a
- * stronger guarantee than an in-memory ssh2 password (zeroed-after-use is still a window
- * where it exists in the process). No new dependency, no native-binding bundling risk.
+ * terminal and lets the user type their own password there, matching the pattern already
+ * validated end-to-end against real hardware for `connectWlan.ts` — the extension never
+ * reads or holds the device password in memory either way, which is a stronger guarantee
+ * than an in-memory ssh2 password (zeroed-after-use is still a window where it exists in
+ * the process). No new dependency, no native-binding bundling risk.
+ *
+ * `ssh-copy-id` is run as a COMMAND typed into a real default-shell terminal, never as the
+ * terminal's own `shellPath` — `ssh-copy-id` is a shell script that spawns its own `ssh`
+ * subprocess internally, and VS Code's pty does not reliably negotiate a controlling
+ * terminal when a script (rather than a real interactive binary like plain `ssh`) is made
+ * the terminal's primary process; that previously caused an immediate, promptless launch
+ * failure. Every interpolated value is single-quoted (shQuote) since host/user/port ultimately
+ * come from user input and this command is typed into a real shell, unlike the rest of the
+ * codebase's argv-array/`shell:false` spawns.
  */
 function openKeyPushTerminal(keyPath: string, host: string, port: number, user: string): void {
-  const terminal = vscode.window.createTerminal({
-    name: `SSH key push: ${user}@${host}`,
-    shellPath: 'ssh-copy-id',
-    shellArgs: ['-i', `${keyPath}.pub`, '-p', String(port), '--', `${user}@${host}`],
-  });
+  const terminal = vscode.window.createTerminal({ name: `SSH key push: ${user}@${host}` });
   terminal.show();
+  const cmd = ['ssh-copy-id', '-i', shQuote(`${keyPath}.pub`), '-p', shQuote(String(port)), '--', shQuote(`${user}@${host}`)].join(' ');
+  terminal.sendText(cmd, true);
 }
 
 async function verifyDeviceRegistered(services: Services, deviceName: string): Promise<boolean | null> {
@@ -125,9 +134,15 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
 
     let privateKeyFile: string | null = null;
     if (authChoice === GENERATE_KEY) {
+      const missing = await missingTools(['ssh-keygen', 'ssh-copy-id']);
+      if (missing.length > 0) {
+        const hints = missing.map((tool) => `• ${installHint(tool, process.platform)}`).join('\n');
+        void services.prompts.showErrorMessage(`Sailfish: missing required tool(s):\n${hints}`);
+        return;
+      }
       privateKeyFile = await generateKey(ctx, name);
       if (!privateKeyFile) {
-        void services.prompts.showErrorMessage('Sailfish: ssh-keygen failed — is OpenSSH installed?');
+        void services.prompts.showErrorMessage('Sailfish: ssh-keygen failed unexpectedly.');
         return;
       }
       openKeyPushTerminal(privateKeyFile, host, Number(portStr), user);

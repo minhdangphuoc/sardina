@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE QtCreatorSfdkDevices>
+<!-- Written by sailfish-tools, 2026-10-01T05:45:51.344Z. -->
+<qtcreator>
+    <data>
+        <variable>Devices.Count</variable>
+        <value type="int">1</value>
+    </data>
+    <data>
+        <variable>Device.0.Id</variable>
+        <value type="QString">{11ee2a07-952f-4121-a69c-d675a2cb95a0}</value>
+    </data>
+    <data>
+        <variable>Device.0.Name</variable>
+        <value type="QString">Jolla Phone 2026</value>
+    </data>
+    <data>
+        <variable>Device.0.Autodetected</variable>
+        <value type="bool">false</value>
+    </data>
+    <data>
+        <variable>Device.0.Architecture</variable>
+        <value type="int">0</value>
+    </data>
+    <data>
+        <variable>Device.0.WordWidth</variable>
+        <value type="int">64</value>
+    </data>
+    <data>
+        <variable>Device.0.MachineType</variable>
+        <value type="int">0</value>
+    </data>
+    <data>
+        <variable>Device.0.Host</variable>
+        <value type="QString">10.234.92.163</value>
+    </data>
+    <data>
+        <variable>Device.0.Port</variable>
+        <value type="int">22</value>
+    </data>
+    <data>
+        <variable>Device.0.UserName</variable>
+        <value type="QString">defaultuser</value>
+    </data>
+    <data>
+        <variable>Device.0.AuthenticationType</variable>
+        <value type="int">1</value>
+    </data>
+    <data>
+        <variable>Device.0.PrivateKeyFile</variable>
+        <value type="QString">/Users/minhdang/Library/Application Support/Code/User/globalStorage/sailfish-tools-dev.sailfish-tools/ssh/Jolla-Phone-2026</value>
+    </data>
+    <data>
+        <variable>Device.0.Timeout</variable>
+        <value type="int">0</value>
+    </data>
+    <data>
+        <variable>Device.0.HostKeyChecking</variable>
+        <value type="int">2</value>
+    </data>
+    <data>
+        <variable>Device.0.FreePorts</variable>
+        <value type="QString">10000-10009</value>
+    </data>
+    <data>
+        <variable>Device.0.QmlLivePorts</variable>
+        <value type="QString">10234-10243</value>
+    </data>
+</qtcreator>
