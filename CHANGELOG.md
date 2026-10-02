@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## v0.1.2
 
 - Warn when a project path contains whitespace (including a trailing space in a folder name), which breaks sfdk's build engine with a confusing "Cannot find real …" error. The warning shows in the task terminal, and as a notification for Run and Debug.
 - `Sailfish: Set Up Package Signing` command: pick a GPG key, or create one from VS Code input boxes for name, email and passphrase, and fill in the `sailfish.build.sign*` settings for the project.
