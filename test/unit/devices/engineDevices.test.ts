@@ -5,6 +5,7 @@ import * as path from 'node:path';
 import {
   addEngineDevice,
   editEngineDevicesFile,
+  engineHasDevice,
   findSharedConfigDir,
   hasEngineDevice,
   removeEngineDevice,
@@ -50,6 +51,19 @@ describe('engine device list (vmshare/devices.xml)', () => {
     assert.strictEqual(addEngineDevice('garbage', { name: 'x', host: 'h', port: 22, user: 'u', keyPath: 'k' }), undefined);
   });
 
+  it('removing a self-closing entry leaves the following device alone', () => {
+    const xml = '<devices>\n    <device name="A" type="real"/>\n    <device name="B" type="real">\n        <ip>1</ip>\n    </device>\n</devices>\n';
+    const out = removeEngineDevice(xml, 'A');
+    assert.ok(!hasEngineDevice(out, 'A'));
+    assert.ok(hasEngineDevice(out, 'B'));
+  });
+
+  it('refuses to replace a same-named entry that is not a real device', () => {
+    const emulator = 'Sailfish OS Emulator 5.1.0.11';
+    const device = { name: emulator, host: '10.0.0.2', port: 22, user: 'defaultuser', keyPath: 'ssh/k' };
+    assert.strictEqual(addEngineDevice(ENGINE_XML, device), undefined);
+  });
+
   describe('files', () => {
     let tmp: string;
     beforeEach(() => {
@@ -66,6 +80,13 @@ describe('engine device list (vmshare/devices.xml)', () => {
       fs.mkdirSync(path.join(tmp, 'sdk', 'vmshare'), { recursive: true });
       assert.strictEqual(findSharedConfigDir(tmp, path.join(tmp, 'sdk')), path.join(tmp, 'sdk', 'vmshare'));
       assert.strictEqual(findSharedConfigDir(tmp, undefined), undefined);
+    });
+
+    it('engineHasDevice reflects the file, and is false when it is missing', () => {
+      assert.strictEqual(engineHasDevice(tmp, PHONE), false);
+      fs.writeFileSync(path.join(tmp, 'devices.xml'), ENGINE_XML);
+      assert.strictEqual(engineHasDevice(tmp, PHONE), true);
+      assert.strictEqual(engineHasDevice(tmp, 'nope'), false);
     });
 
     it('edits with a backup, and writes nothing when the edit changes nothing', () => {

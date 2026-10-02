@@ -37,7 +37,7 @@ async function cleanStaleOutput(services: Services, folder: vscode.WorkspaceFold
   if (result.exitCode !== 0) {
     services.output.log('warn', `clean before arch change failed (exit ${result.exitCode}): ${(result.stderr || result.stdout).trim()}`);
     void services.prompts.showWarningMessage(
-      'Sailfish: could not fully clean the previous build. If the next build reuses it, run "Sailfish: Clean" or delete the build files.',
+      'Sailfish: could not fully clean the previous build. Run "Sailfish: Clean" or delete the build files, then try again.',
     );
     return false;
   }
@@ -86,6 +86,6 @@ export async function ensureBuildMatchesTargetArch(services: Services, folder: v
     if (choice === undefined) return false;
     if (choice === ALWAYS) await rememberAlways(folder);
   }
-  await cleanStaleOutput(services, folder, previous);
-  return true;
+  // A failed clean leaves old-architecture output behind: building on it makes the broken package this guard exists to prevent.
+  return cleanStaleOutput(services, folder, previous);
 }

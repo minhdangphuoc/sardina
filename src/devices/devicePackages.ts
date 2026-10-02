@@ -51,7 +51,10 @@ export async function installOnDevice(services: Services, device: string, packag
         child.stdout.on('data', onData);
         child.stderr.on('data', onData);
         child.stdin.on('error', () => undefined);
-        const promptTimer = setTimeout(sendPassword, PASSWORD_PROMPT_TIMEOUT_MS);
+        // No password prompt seen: never feed the secret blindly to whatever is reading stdin.
+        const promptTimer = setTimeout(() => {
+          if (!sentPassword) child.kill('SIGTERM');
+        }, PASSWORD_PROMPT_TIMEOUT_MS);
         const killTimer = setTimeout(() => child.kill('SIGTERM'), INSTALL_TIMEOUT_MS);
         const cancel = token.onCancellationRequested(() => child.kill('SIGTERM'));
         const finish = (code: number | undefined): void => {

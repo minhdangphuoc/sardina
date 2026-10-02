@@ -101,8 +101,9 @@ export async function buildDeployThen(
   services: Services,
   title: string,
   then: (app: DeployedApp, progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<void>,
+  resolvedProject?: ProjectDescriptor,
 ): Promise<void> {
-  const project = await activeProjectOrWarn(services);
+  const project = resolvedProject ?? (await activeProjectOrWarn(services));
   if (!project) {
     return;
   }

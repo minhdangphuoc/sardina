@@ -7,7 +7,7 @@ import { resolveDevicesXmlPath } from './devicesXmlLocation';
 import { readDevicesXmlFile, writeDevicesXmlFile, serializeDevicesXml } from './devicesXml';
 import { buildNewDeviceEntry, removeDeviceByIndex, sanitizeForFilename, type NewDeviceAnswers } from './deviceWizard';
 import { qtCreatorRunning, sfdkRunning } from './concurrencyGuard';
-import { addEngineDevice, editEngineDevicesFile, findSharedConfigDir, removeEngineDevice } from './engineDevices';
+import { addEngineDevice, editEngineDevicesFile, engineHasDevice, findSharedConfigDir, removeEngineDevice } from './engineDevices';
 import { parseDeviceRecords } from './listParsing';
 import type { SfdkArch } from './devicesXmlConstants';
 import { missingTools, installHint } from '../core/externalTools';
@@ -336,6 +336,11 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
       return;
     }
 
+    if (!engineHasDevice(sharedConfig, name)) {
+      void services.prompts.showWarningMessage(
+        `Sailfish: "${name}" could not be added to the build engine's device list (${path.join(sharedConfig, 'devices.xml')}), so deploying to it may fail with "not a known device".`,
+      );
+    }
     void services.prompts.showInformationMessage(
       verified === true
         ? `Sailfish: "${name}" registered and confirmed via \`sfdk device list\`.`

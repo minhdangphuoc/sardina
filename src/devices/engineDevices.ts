@@ -33,7 +33,7 @@ function escapeXml(value: string): string {
 
 function deviceBlockRe(name: string): RegExp {
   const escaped = escapeXml(name).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`[ \\t]*<device name="${escaped}"[^>]*>[\\s\\S]*?</device>[ \\t]*\\r?\\n?`);
+  return new RegExp(`[ \\t]*<device name="${escaped}"[^>]*?(?:/>|>[\\s\\S]*?</device>)[ \\t]*\\r?\\n?`);
 }
 
 export function hasEngineDevice(xml: string, name: string): boolean {
@@ -42,6 +42,9 @@ export function hasEngineDevice(xml: string, name: string): boolean {
 
 /** Adds (or replaces) a `type="real"` device before `</devices>`; undefined if the file has no `</devices>`. */
 export function addEngineDevice(xml: string, device: EngineDevice): string | undefined {
+  // Never replace a same-named entry of another type (e.g. the build engine's emulator).
+  const existing = deviceBlockRe(device.name).exec(xml)?.[0];
+  if (existing && !/\btype="real"/.test(existing.split('>')[0])) return undefined;
   const base = removeEngineDevice(xml, device.name);
   const close = base.lastIndexOf('</devices>');
   if (close === -1) return undefined;
@@ -70,6 +73,15 @@ export function findSharedConfigDir(libsfdkDir: string, sdkRoot: string | undefi
   }
   const fallback = sdkRoot ? path.join(sdkRoot, 'vmshare') : undefined;
   return fallback && fs.existsSync(fallback) ? fallback : undefined;
+}
+
+/** Whether `<sharedConfig>/devices.xml` currently lists `name`; false when the file is missing or unreadable. */
+export function engineHasDevice(sharedConfigDir: string, name: string): boolean {
+  try {
+    return hasEngineDevice(fs.readFileSync(path.join(sharedConfigDir, 'devices.xml'), 'utf8'), name);
+  } catch {
+    return false;
+  }
 }
 
 /** Applies `edit` to `<sharedConfig>/devices.xml` with a .bak copy; returns the backup path, or undefined if nothing was written. */

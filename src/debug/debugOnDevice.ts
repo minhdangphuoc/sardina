@@ -26,9 +26,8 @@ async function ensureCppTools(services: Services): Promise<boolean> {
 }
 
 /** Breakpoints need debug info; offer to switch a Release build type first. */
-async function ensureDebugBuild(services: Services): Promise<boolean> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  if (services.settings.get('build.type', folder?.uri) === 'debug') return true;
+async function ensureDebugBuild(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
+  if (services.settings.get('build.type', folder.uri) === 'debug') return true;
   const choice = await services.prompts.showWarningMessage(
     'Sailfish: the build type is Release, so breakpoints and variables may not work. Switch to Debug?',
     { modal: true },
@@ -36,7 +35,7 @@ async function ensureDebugBuild(services: Services): Promise<boolean> {
     DEBUG_ANYWAY,
   );
   if (choice === undefined) return false;
-  if (choice === SWITCH_TO_DEBUG && folder) {
+  if (choice === SWITCH_TO_DEBUG) {
     await vscode.workspace.getConfiguration('sailfish', folder.uri).update('build.type', 'debug', vscode.ConfigurationTarget.WorkspaceFolder);
   }
   return true;
@@ -59,11 +58,10 @@ async function deviceHasGdbserver(services: Services, device: string, cwd: strin
 type GdbserverCheck = 'ready' | 'run-instead' | 'cancel';
 
 /** Before building: warn when the device has no gdbserver, and offer to install it or run without the debugger. */
-async function ensureGdbserver(services: Services): Promise<GdbserverCheck> {
-  const folder = vscode.workspace.workspaceFolders?.[0];
-  const device = services.settings.get('device', folder?.uri);
+async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolder): Promise<GdbserverCheck> {
+  const device = services.settings.get('device', folder.uri);
   if (!device) return 'ready'; // buildDeployThen reports the missing device itself
-  const cwd = folder?.uri.fsPath;
+  const cwd = folder.uri.fsPath;
   if ((await deviceHasGdbserver(services, device, cwd)) !== false) return 'ready'; // unknown: later steps report it
 
   const choice = await services.prompts.showWarningMessage(
@@ -78,7 +76,8 @@ async function ensureGdbserver(services: Services): Promise<GdbserverCheck> {
   if (choice === RUN_WITHOUT_DEBUGGER) return 'run-instead';
   if (choice !== INSTALL_ON_DEVICE) return 'cancel';
 
-  await installOnDevice(services, device, ['gdb-gdbserver']);
+  // undefined: the password box was cancelled (or sfdk couldn't start) — not a failed install.
+  if ((await installOnDevice(services, device, ['gdb-gdbserver'])) === undefined) return 'cancel';
   if (await deviceHasGdbserver(services, device, cwd)) return 'ready';
   void services.prompts.showErrorMessage(
     `Sailfish: gdbserver is still missing on "${device}". The device downloads it from Jolla's repositories, ` +
@@ -171,13 +170,18 @@ function cppdbgConfiguration(app: DeployedApp, recipe: DebugRecipe): vscode.Debu
 /** "Sailfish: Debug on Device": build, deploy, start the app under gdbserver and attach VS Code's debugger. */
 export async function debugOnDevice(services: Services): Promise<void> {
   if (!(await ensureCppTools(services))) return;
-  const gdbserver = await ensureGdbserver(services);
+  const project = await services.projects.resolveActive();
+  if (!project) {
+    void services.prompts.showWarningMessage('Sailfish: no Sailfish project found in this workspace.');
+    return;
+  }
+  const gdbserver = await ensureGdbserver(services, project.folder);
   if (gdbserver === 'run-instead') {
     await vscode.commands.executeCommand('sailfish.buildDeployRun');
     return;
   }
   if (gdbserver === 'cancel') return;
-  if (!(await ensureDebugBuild(services))) return;
+  if (!(await ensureDebugBuild(services, project.folder))) return;
 
   await buildDeployThen(services, 'Sailfish: Debug on Device', async (app, progress, token) => {
     progress.report({ message: 'starting debugger…' });
@@ -220,7 +224,7 @@ export async function debugOnDevice(services: Services): Promise<void> {
         sub.dispose();
       }
     });
-  });
+  }, project);
 }
 
 export function activateDebug(ctx: vscode.ExtensionContext, services: Services): void {
