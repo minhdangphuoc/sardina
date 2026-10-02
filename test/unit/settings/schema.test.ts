@@ -24,6 +24,7 @@ const EXPECTED_ACTIVATION_EVENTS = [
   'onCommand:sailfish.sdk.install',
   'onCommand:sailfish.device.add',
   'onCommand:sailfish.device.remove',
+  'onCommand:sailfish.setupSigning',
   'onView:sailfish.sdk',
   'onView:sailfish.emulators',
   'onView:sailfish.devices',

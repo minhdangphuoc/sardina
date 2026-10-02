@@ -38,6 +38,7 @@
     "onCommand:sailfish.sdk.install",
     "onCommand:sailfish.device.add",
     "onCommand:sailfish.device.remove",
+    "onCommand:sailfish.setupSigning",
     "onView:sailfish.sdk",
     "onView:sailfish.emulators",
     "onView:sailfish.devices",
@@ -112,6 +113,11 @@
         "category": "Sailfish",
         "icon": "$(debug-alt)",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.setupSigning",
+        "title": "Sailfish: Set Up Package Signing",
+        "category": "Sailfish"
       },
       {
         "command": "sailfish.selectBuildType",

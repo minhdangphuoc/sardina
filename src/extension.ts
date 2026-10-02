@@ -8,6 +8,7 @@ import { activateProjects } from './project/detect';
 import { activateTargets } from './targets/selectTarget';
 import { activateWizard } from './wizard/newProject';
 import { activateTasks } from './tasks/commands';
+import { activateSigning } from './tasks/signing';
 import { activateBuildConfigStatusBar } from './tasks/statusBar';
 import { activateDebug } from './debug/debugOnDevice';
 import { activateDevices } from './devices/commands';
@@ -31,6 +32,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const targetStatusBar = activateTargets(ctx, services);
   activateWizard(ctx, services);
   activateTasks(ctx, services);
+  activateSigning(ctx, services);
   activateDebug(ctx, services);
   const buildConfigStatusBar = activateBuildConfigStatusBar(ctx, services);
   const devicesProvider = activateDevices(ctx, services);
