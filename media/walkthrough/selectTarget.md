@@ -5,7 +5,7 @@ Run **Sailfish: Select Target** to choose which Sailfish OS build target
 builds against.
 
 Build targets come from your Sailfish SDK installation; see
-[docs.sailfishos.org](https://docs.sailfishos.org/Develop/SDK/Sailfish_OS_Build_Targets/)
+[docs.sailfishos.org](https://docs.sailfishos.org/Tools/Sailfish_SDK/Building_packages/)
 for how to install additional ones.
 
 The selected target is remembered per project, so you only need to do this

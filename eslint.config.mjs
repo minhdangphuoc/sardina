@@ -22,7 +22,7 @@ export default tseslint.config(
             'test/unit/snippets/*.ts',
             'test/unit/wizard/*.ts',
             'test/unit/targets/*.ts',
-            'test/unit/tasks/*.ts',
+            'test/unit/tasks/*.ts', 'test/unit/debug/*.ts',
             'test/unit/sfdk/*.ts',
             'test/fuzz/*.ts',
           ],

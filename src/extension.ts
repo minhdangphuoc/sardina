@@ -8,6 +8,8 @@ import { activateProjects } from './project/detect';
 import { activateTargets } from './targets/selectTarget';
 import { activateWizard } from './wizard/newProject';
 import { activateTasks } from './tasks/commands';
+import { activateBuildConfigStatusBar } from './tasks/statusBar';
+import { activateDebug } from './debug/debugOnDevice';
 import { activateDevices } from './devices/commands';
 import { activateQtQml } from './qtqml/silence';
 import { activateWalkthrough } from './walkthrough/index';
@@ -29,7 +31,10 @@ export function activate(ctx: vscode.ExtensionContext) {
   const targetStatusBar = activateTargets(ctx, services);
   activateWizard(ctx, services);
   activateTasks(ctx, services);
+  activateDebug(ctx, services);
+  const buildConfigStatusBar = activateBuildConfigStatusBar(ctx, services);
   const devicesProvider = activateDevices(ctx, services);
+  ctx.subscriptions.push(buildConfigStatusBar.watchDevices(devicesProvider));
   activateQtQml(ctx, services);
   activateWalkthrough(ctx, services);
 

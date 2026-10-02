@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { failureTail } from './failureTail';
 import { spawn } from 'node:child_process';
 import type { Services } from '../core/services';
 import { parseEngineStatus } from './parsers/engineStatus';
@@ -27,8 +28,15 @@ export interface SfdkResult {
 
 export const DEFAULT_BUILD_TIMEOUT_MS = 10 * 60 * 1000;
 export const DEFAULT_LIST_TIMEOUT_MS = 60 * 1000;
+/** For an app launch: `invoker` stays in the foreground for the app's lifetime, so only cancellation ends it. */
+export const NO_TIMEOUT = 0;
 
 const LONG_RUNNING_COMMANDS = new Set(['build', 'deploy', 'qmake', 'make', 'package', 'check', 'build-shell']);
+/**
+ * Real sfdk 3.13.5 deadlocks when `emulator list` runs alongside `tools target list`
+ * (both query the SDK maintenance tool), so these families run one at a time.
+ */
+const SERIALIZED_FAMILIES = new Set(['tools', 'emulator']);
 const SIGKILL_GRACE_MS = 5000;
 
 function splitLines(buffer: string): { lines: string[]; rest: string } {
@@ -39,6 +47,8 @@ function splitLines(buffer: string): { lines: string[]; rest: string } {
 
 /** The ONLY spawn site for sfdk (NFR-20: argv arrays, shell:false); handles --no-pager, -c target=/device=, LC_ALL=C, SIGTERM/SIGKILL cancellation, streaming, and the FR-1.5 engine ensure. */
 export class SfdkRunner {
+  private serialQueue: Promise<unknown> = Promise.resolve();
+
   constructor(private readonly services: Services) {}
 
   async run(opts: SfdkRunOptions): Promise<SfdkResult> {
@@ -50,7 +60,12 @@ export class SfdkRunner {
       }
     }
     const args = this.buildArgv(opts);
-    return this.execRaw(args, opts, cwd);
+    if (!SERIALIZED_FAMILIES.has(opts.args[0] ?? '')) {
+      return this.execRaw(args, opts, cwd);
+    }
+    const result = this.serialQueue.then(() => this.execRaw(args, opts, cwd));
+    this.serialQueue = result.catch(() => undefined);
+    return result;
   }
 
   private buildArgv(opts: SfdkRunOptions): string[] {
@@ -166,15 +181,18 @@ export class SfdkRunner {
         }, SIGKILL_GRACE_MS);
       };
 
-      const timeoutTimer = setTimeout(() => {
-        timedOut = true;
-        try {
-          child.kill('SIGTERM');
-        } catch {
-          // ignore
-        }
-        escalateKill();
-      }, timeoutMs);
+      const timeoutTimer =
+        timeoutMs === NO_TIMEOUT
+          ? undefined
+          : setTimeout(() => {
+              timedOut = true;
+              try {
+                child.kill('SIGTERM');
+              } catch {
+                // ignore
+              }
+              escalateKill();
+            }, timeoutMs);
 
       let cancelSub: vscode.Disposable | undefined;
       if (opts.token) {
@@ -224,6 +242,11 @@ export class SfdkRunner {
         this.services.output.logInvocation(result.argv, result.exitCode, result.durationMs);
         if (stdout) this.services.output.log('debug', `stdout:\n${stdout}`);
         if (stderr) this.services.output.log('debug', `stderr:\n${stderr}`);
+        if (result.exitCode !== 0 && !result.cancelled) {
+          // Show why it failed even at the default log level; sfdk prints some errors (e.g. "Fatal: … is not a known device") on stdout.
+          const tail = failureTail(stderr) ?? failureTail(stdout);
+          if (tail) this.services.output.log('warn', `${tail}`);
+        }
         resolve(result);
       };
 

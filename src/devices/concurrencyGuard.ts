@@ -6,8 +6,15 @@ function pgrep(args: string[]): Promise<boolean> {
   });
 }
 
-/** FR-7.6: warns before writing devices.xml if Qt Creator or sfdk might be running and could overwrite the file. */
-export async function conflictingProcessesRunning(): Promise<boolean> {
-  const [qtCreator, sfdk] = await Promise.all([pgrep(['-x', 'qtcreator']), pgrep(['-f', 'bin/sfdk'])]);
-  return qtCreator || sfdk;
+/**
+ * FR-7.6: a running Qt Creator keeps its own in-memory device list and rewrites devices.xml from it,
+ * which silently drops devices added by anyone else (observed with SDK 3.13.5), so callers refuse.
+ */
+export function qtCreatorRunning(): Promise<boolean> {
+  return pgrep(['-x', 'qtcreator']);
+}
+
+/** FR-7.6: a long-lived sfdk (e.g. a running app's `device exec`) is only worth a warning. */
+export function sfdkRunning(): Promise<boolean> {
+  return pgrep(['-f', 'bin/sfdk']);
 }

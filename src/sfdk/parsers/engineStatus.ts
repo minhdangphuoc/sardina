@@ -7,10 +7,10 @@ export type EngineRunningStatus = 'running' | 'stopped';
  * import so this can be unit-tested directly under plain mocha.
  */
 export function parseEngineStatus(raw: string): ParseResult<EngineRunningStatus> {
-  if (/is running/i.test(raw)) {
+  if (/is running|^\s*running:\s*yes/im.test(raw)) {
     return { ok: true, value: 'running', warnings: [] };
   }
-  if (/is stopped/i.test(raw)) {
+  if (/is stopped|^\s*running:\s*no/im.test(raw)) {
     return { ok: true, value: 'stopped', warnings: [] };
   }
   return { ok: false, reason: 'could not parse sfdk engine status output', raw };

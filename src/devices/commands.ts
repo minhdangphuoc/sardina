@@ -1,12 +1,16 @@
 import * as vscode from 'vscode';
+import * as os from 'node:os';
 import type { Services } from '../core/services';
 import type { SfdkDeviceInfo } from '../core/types';
 import type { SfdkResult } from '../sfdk/runner';
 import { DevicesTreeDataProvider } from './tree';
+import { sdkRootState } from './sdkTreeCore';
 import { correlateVm } from './vmCorrelation';
 import { buildSshLaunch } from './sshLaunch';
 import { buildWlanSshLaunch, isValidPort } from './connectWlan';
 import { addDevice, removeDevice } from './addDevice';
+import { sfdkDeviceName } from './listParsing';
+import { installDeviceTools } from './devicePackages';
 
 /** Structural check, not `instanceof DeviceTreeItem`: the item may come from a different copy of the `tree` module. */
 function deviceFrom(item: unknown): SfdkDeviceInfo | undefined {
@@ -88,6 +92,13 @@ function runEmulatorVerb(services: Services, provider: DevicesTreeDataProvider, 
     if (rejectUnsafeName(services, device.name)) {
       return;
     }
+    const state = provider.reachabilityOf(device);
+    if ((verb === 'start' && state === 'online') || (verb === 'stop' && state === 'offline')) {
+      void services.prompts.showInformationMessage(
+        `Sailfish: emulator ${device.name} is already ${verb === 'start' ? 'running' : 'stopped'}.`,
+      );
+      return;
+    }
     const result = await runWithProgress(`Sailfish: emulator ${verb} ${device.name}`, services, (token) =>
       services.runner.run({ args: ['emulator', verb, device.name], ensureEngine: false, token }),
     );
@@ -99,6 +110,18 @@ function runEmulatorVerb(services: Services, provider: DevicesTreeDataProvider, 
       } else {
         notifyIfFailed(services, `emulator ${verb} ${device.name}`, result);
       }
+    }
+    provider.refresh();
+  };
+}
+
+function runEngineVerb(services: Services, provider: DevicesTreeDataProvider, verb: 'start' | 'stop') {
+  return async (): Promise<void> => {
+    const result = await runWithProgress(`Sailfish: engine ${verb}`, services, (token) =>
+      services.runner.run({ args: ['engine', verb], ensureEngine: false, token }),
+    );
+    if (result) {
+      notifyIfFailed(services, `engine ${verb}`, result);
     }
     provider.refresh();
   };
@@ -195,7 +218,7 @@ function setDefault(services: Services, provider: DevicesTreeDataProvider) {
     if (!device) {
       return;
     }
-    if (await writeDefaultDeviceSetting(services, device.name)) {
+    if (await writeDefaultDeviceSetting(services, sfdkDeviceName(device))) {
       provider.refresh();
     }
   };
@@ -207,15 +230,16 @@ function setSfdkDefault(services: Services, provider: DevicesTreeDataProvider) {
     if (!device) {
       return;
     }
-    if (!(await writeDefaultDeviceSetting(services, device.name))) {
+    const name = sfdkDeviceName(device);
+    if (!(await writeDefaultDeviceSetting(services, name))) {
       return;
     }
-    const result = await runWithProgress(`Sailfish: set sfdk default device ${device.name}`, services, (token) =>
-      services.runner.run({ args: ['config', '--global', `device=${device.name}`], ensureEngine: false, token }),
+    const result = await runWithProgress(`Sailfish: set sfdk default device ${name}`, services, (token) =>
+      services.runner.run({ args: ['config', '--global', `device=${name}`], ensureEngine: false, token }),
     );
     provider.refresh();
     if (result) {
-      notifyIfFailed(services, `set sfdk default device ${device.name}`, result);
+      notifyIfFailed(services, `set sfdk default device ${name}`, result);
     }
   };
 }
@@ -306,7 +330,18 @@ function connectWlan(services: Services) {
 /** Registers the sailfish.devices view and its commands (FR-6.2..FR-6.8). */
 export function activateDevices(ctx: vscode.ExtensionContext, services: Services): DevicesTreeDataProvider {
   const provider = new DevicesTreeDataProvider(services);
-  ctx.subscriptions.push(vscode.window.registerTreeDataProvider('sailfish.devices', provider));
+  const sdkView = vscode.window.createTreeView('sailfish.sdk', { treeDataProvider: provider.section('sdk') });
+  const syncSdkDescription = (): void => {
+    const info = services.sdk.current();
+    sdkView.description = info ? sdkRootState(info, os.homedir()).description : undefined;
+  };
+  syncSdkDescription();
+  ctx.subscriptions.push(
+    sdkView,
+    services.sdk.onDidChange(syncSdkDescription),
+    vscode.window.registerTreeDataProvider('sailfish.emulators', provider.section('emulators')),
+    vscode.window.registerTreeDataProvider('sailfish.devices', provider.section('devices')),
+  );
   ctx.subscriptions.push(provider);
 
   ctx.subscriptions.push(
@@ -314,6 +349,8 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
     vscode.commands.registerCommand('sailfish.emulator.start', runEmulatorVerb(services, provider, 'start')),
     vscode.commands.registerCommand('sailfish.emulator.stop', runEmulatorVerb(services, provider, 'stop')),
     vscode.commands.registerCommand('sailfish.emulator.status', runEmulatorVerb(services, provider, 'status')),
+    vscode.commands.registerCommand('sailfish.engine.start', runEngineVerb(services, provider, 'start')),
+    vscode.commands.registerCommand('sailfish.engine.stop', runEngineVerb(services, provider, 'stop')),
     vscode.commands.registerCommand('sailfish.emulator.show', showEmulator(services)),
     vscode.commands.registerCommand('sailfish.emulator.installAvailable', installAvailable(services, provider)),
     vscode.commands.registerCommand('sailfish.device.setDefault', setDefault(services, provider)),
@@ -322,6 +359,7 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
     vscode.commands.registerCommand('sailfish.device.connectWlan', connectWlan(services)),
     vscode.commands.registerCommand('sailfish.device.add', addDevice(services, ctx)),
     vscode.commands.registerCommand('sailfish.device.remove', removeDevice(services)),
+    vscode.commands.registerCommand('sailfish.device.installTools', installDeviceTools(services)),
   );
 
   return provider;

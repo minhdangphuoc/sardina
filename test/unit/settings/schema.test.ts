@@ -21,8 +21,11 @@ const EXPECTED_ACTIVATION_EVENTS = [
   'onCommand:sailfish.newProject',
   'onCommand:sailfish.setSdkPath',
   'onCommand:sailfish.downloadSdk',
+  'onCommand:sailfish.sdk.install',
   'onCommand:sailfish.device.add',
   'onCommand:sailfish.device.remove',
+  'onView:sailfish.sdk',
+  'onView:sailfish.emulators',
   'onView:sailfish.devices',
   'onLanguage:qml',
 ];
@@ -60,7 +63,9 @@ const EXPECTED_ROWS: RowSpec[] = [
   },
   { key: 'sailfish.run.customCommand', type: 'string', default: '', scope: 'resource' },
   { key: 'sailfish.run.killBeforeLaunch', type: 'boolean', default: true, scope: 'resource' },
-  { key: 'sailfish.qtqml.silenceQmlls', type: 'boolean', default: true, scope: 'window' },
+  { key: 'sailfish.build.type', type: 'string', default: 'release', scope: 'resource', enum: ['release', 'debug'] },
+  { key: 'sailfish.build.cleanOnArchChange', type: 'boolean', default: false, scope: 'resource' },
+  { key: 'sailfish.qtqml.silenceQmlls', type: 'boolean', default: true, scope: 'resource' },
   { key: 'sailfish.logLevel', type: 'string', default: 'info', scope: 'window', enum: ['info', 'debug'] },
   { key: 'sailfish.experimental.enableWindows', type: 'boolean', default: false, scope: 'machine' },
   {

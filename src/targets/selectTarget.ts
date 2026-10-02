@@ -5,6 +5,7 @@ import type { TargetDescriptor } from '../core/types';
 import { parseTargetList } from './parseTargetList';
 import { setLastTargetList } from './targetListCache';
 import { TargetStatusBar } from './statusBar';
+import { offerCleanOnTargetChange } from '../tasks/archGuard';
 
 const SHOW_OUTPUT_ACTION = 'Show Output';
 const OPEN_DOCS_ACTION = 'Open SDK docs';
@@ -136,6 +137,7 @@ async function selectTarget(services: Services, statusBar: TargetStatusBar | und
   await config.update('target', picked.target.name, vscode.ConfigurationTarget.WorkspaceFolder);
   await services.contextKeys.set('sailfish.hasTarget', true);
   statusBar?.refresh();
+  void offerCleanOnTargetChange(services, folder, picked.target.name);
 }
 
 /** FR-4.4: only ever called on explicit user action, never implicitly from selectTarget. */

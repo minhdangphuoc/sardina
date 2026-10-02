@@ -1,0 +1,3 @@
+#0 "Sailfish OS Emulator 5.1.0.11"
+    emulator         autodetected  defaultuser@127.0.0.1:2223
+    private-key: ~/SailfishOS/vmshare/ssh/private_keys/sdk

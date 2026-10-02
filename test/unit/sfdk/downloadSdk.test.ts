@@ -1,5 +1,5 @@
 import * as assert from 'assert';
-import { platformTarget, parseLatestVersion, buildDownloadUrl } from '../../../src/sfdk/downloadSdk';
+import { platformTarget, parseLatestVersion, buildDownloadUrl, parseInstallerVersions, hasOnlineInstaller } from '../../../src/sfdk/downloadSdk';
 
 describe('platformTarget ("Sailfish: Download SDK")', () => {
   it('maps darwin/linux/win32 to the right installer suffix and extension', () => {
@@ -33,5 +33,37 @@ describe('buildDownloadUrl', () => {
   it('builds the offline variant for linux', () => {
     const url = buildDownloadUrl('3.13.5', { suffix: 'linux64', ext: 'run' }, 'offline');
     assert.strictEqual(url, 'https://releases.sailfishos.org/sdk/installers/3.13.5/SailfishSDK-3.13.5-linux64-offline.run');
+  });
+});
+
+describe('parseInstallerVersions', () => {
+  it('orders live releases first, then deprecated, each newest first; skips unusable names', () => {
+    const html = [
+      '<a href="1609.deprecated/">', '<a href="2.1.deprecated/">', '<a href="3.10.4.deprecated/">',
+      '<a href="3.2.10.deprecated/">', '<a href="3.12.5/">', '<a href="3.13.5/">', '<a href="3.13.10/">', '<a href="latest/">',
+    ].join('\n');
+    assert.deepStrictEqual(parseInstallerVersions(html), [
+      { version: '3.13.10', deprecated: false },
+      { version: '3.13.5', deprecated: false },
+      { version: '3.12.5', deprecated: false },
+      { version: '3.10.4', deprecated: true },
+      { version: '3.2.10', deprecated: true },
+    ]);
+  });
+
+  it('returns an empty list when the index has no versions', () => {
+    assert.deepStrictEqual(parseInstallerVersions('<html></html>'), []);
+  });
+});
+
+describe('deprecated releases', () => {
+  it('builds the URL inside the .deprecated directory but keeps the plain version in the file name', () => {
+    const url = buildDownloadUrl('3.10.4', { suffix: 'linux64', ext: 'run' }, 'online', true);
+    assert.strictEqual(url, 'https://releases.sailfishos.org/sdk/installers/3.10.4.deprecated/SailfishSDK-3.10.4-linux64-online.run');
+  });
+
+  it('only 3.x and later ship an online installer', () => {
+    assert.strictEqual(hasOnlineInstaller('3.0.7'), true);
+    assert.strictEqual(hasOnlineInstaller('2.4.0'), false);
   });
 });

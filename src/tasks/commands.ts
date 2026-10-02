@@ -6,6 +6,9 @@ import { buildArgs, deployArgs, runArgs } from './argv';
 import { chooseLauncher } from './launcher';
 import { mapBuildError, mapDeployError, type MappedError } from './errors';
 import { runNotificationAction } from './notify';
+import { launchInAppTerminal } from './appTerminal';
+import { deployInstallsApp, deployMethodLabel } from './buildConfig';
+import { ensureBuildMatchesTargetArch } from './archGuard';
 
 async function ensureTarget(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
   const target = services.settings.get('target', folder.uri);
@@ -14,6 +17,12 @@ async function ensureTarget(services: Services, folder: vscode.WorkspaceFolder):
   }
   await vscode.commands.executeCommand('sailfish.selectTarget');
   return Boolean(services.settings.get('target', folder.uri));
+}
+
+/** Guards against reusing another architecture's in-source build output (archGuard.ts). */
+function ensureArchClean(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
+  const target = services.settings.get('target', folder.uri);
+  return target ? ensureBuildMatchesTargetArch(services, folder, target) : Promise.resolve(true);
 }
 
 async function activeProjectOrWarn(services: Services): Promise<ProjectDescriptor | undefined> {
@@ -46,6 +55,9 @@ function makeExecuteTaskCommand(services: Services, command: 'build' | 'deploy' 
     if (!(await ensureTarget(services, project.folder))) {
       return;
     }
+    if (command !== 'package' && !(await ensureArchClean(services, project.folder))) {
+      return;
+    }
     const tasks = await vscode.tasks.fetchTasks({ type: SAILFISH_TASK_TYPE });
     const task = findTask(tasks, command, project);
     if (!task) {
@@ -69,7 +81,27 @@ function reportFailure(services: Services, stage: string, mapped: MappedError | 
 }
 
 /** FR-5.10 exception: build -> deploy -> run via SfdkRunner directly, one invocation each, stopping on the first non-zero exit. */
-async function buildDeployRun(services: Services): Promise<void> {
+/** What Run and Debug need once the app is built and installed on the device. */
+export interface DeployedApp {
+  project: ProjectDescriptor;
+  target: string | undefined;
+  device: string | undefined;
+  cwd: string;
+  /** `pkill` for a running instance (unless run.killBeforeLaunch is off) and the launch command. */
+  pkillArgs: string[] | undefined;
+  launchArgs: string[];
+}
+
+/**
+ * Shared by Run and Debug: project/target/arch checks, then build and deploy (one invocation each,
+ * stopping on the first non-zero exit) under a progress notification, then `then` with the
+ * progress still showing. A manual deploy stops before `then`, since nothing is installed.
+ */
+export async function buildDeployThen(
+  services: Services,
+  title: string,
+  then: (app: DeployedApp, progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<void>,
+): Promise<void> {
   const project = await activeProjectOrWarn(services);
   if (!project) {
     return;
@@ -77,13 +109,17 @@ async function buildDeployRun(services: Services): Promise<void> {
   if (!(await ensureTarget(services, project.folder))) {
     return;
   }
+  if (!(await ensureArchClean(services, project.folder))) {
+    return;
+  }
 
   const folderUri = project.folder.uri;
+  const cwd = folderUri.fsPath;
   const target = services.settings.get('target', folderUri) || undefined;
   const device = services.settings.get('device', folderUri) || undefined;
 
   await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Sailfish: Build, Deploy & Run', cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title, cancellable: true },
     async (progress, token) => {
       progress.report({ message: 'building…' });
       const buildResult = await services.runner.run({
@@ -92,11 +128,12 @@ async function buildDeployRun(services: Services): Promise<void> {
           {
             runHarbourCheck: services.settings.get('build.runHarbourCheck', folderUri),
             jobs: services.settings.get('build.jobs', folderUri),
+            buildType: services.settings.get('build.type', folderUri),
           },
         ),
         target,
         device,
-        cwd: project.folder.uri.fsPath,
+        cwd,
         token,
         ensureEngine: true,
       });
@@ -113,7 +150,7 @@ async function buildDeployRun(services: Services): Promise<void> {
         args: deployArgs({ command: 'deploy' }, { method: services.settings.get('deploy.method', folderUri) }),
         target,
         device,
-        cwd: project.folder.uri.fsPath,
+        cwd,
         token,
       });
       if (deployResult.exitCode !== 0) {
@@ -123,8 +160,14 @@ async function buildDeployRun(services: Services): Promise<void> {
       if (token.isCancellationRequested) {
         return;
       }
+      const method = services.settings.get('deploy.method', folderUri);
+      if (!deployInstallsApp(method)) {
+        void services.prompts.showInformationMessage(
+          `Sailfish: ${deployMethodLabel(method)} done — the RPM is in ~/RPMS on the device; install it there to run it.`,
+        );
+        return;
+      }
 
-      progress.report({ message: 'running…' });
       const launcherTokens = chooseLauncher(project, {
         mode: services.settings.get('run.launcher', folderUri),
         customCommand: services.settings.get('run.customCommand', folderUri),
@@ -132,21 +175,27 @@ async function buildDeployRun(services: Services): Promise<void> {
       const { pkillArgs, launchArgs } = runArgs(project.appBinaryPath, launcherTokens, {
         killBeforeLaunch: services.settings.get('run.killBeforeLaunch', folderUri),
       });
-      if (pkillArgs) {
-        await services.runner.run({ args: pkillArgs, target, device, cwd: project.folder.uri.fsPath, token });
-      }
-      const runResult = await services.runner.run({
-        args: launchArgs,
-        target,
-        device,
-        cwd: project.folder.uri.fsPath,
-        token,
-      });
-      if (runResult.exitCode !== 0) {
-        reportFailure(services, 'run', undefined);
-      }
+      await then({ project, target, device, cwd, pkillArgs, launchArgs }, progress, token);
     },
   );
+}
+
+/** FR-5.10 exception: build -> deploy -> run via SfdkRunner directly. */
+function buildDeployRun(services: Services): Promise<void> {
+  return buildDeployThen(services, 'Sailfish: Build, Deploy & Run', async (app, progress, token) => {
+    progress.report({ message: 'launching…' });
+    if (app.pkillArgs) {
+      await services.runner.run({ args: app.pkillArgs, target: app.target, device: app.device, cwd: app.cwd, token });
+    }
+    // The app outlives this progress notification: its output and stop control live in a terminal.
+    launchInAppTerminal(services, {
+      appName: app.project.name,
+      launchArgs: app.launchArgs,
+      target: app.target,
+      device: app.device,
+      cwd: app.cwd,
+    });
+  });
 }
 
 /** FR-5.6 clean: non-critical, fails soft with manual instructions. */

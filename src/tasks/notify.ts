@@ -9,6 +9,10 @@ export async function runNotificationAction(services: Services, choice: string |
     await vscode.commands.executeCommand('sailfish.selectTarget');
   } else if (choice === 'Open Devices view') {
     await vscode.commands.executeCommand('sailfish.devices.focus');
+  } else if (choice === 'Install on device') {
+    await vscode.commands.executeCommand('sailfish.device.installTools');
+  } else if (choice === 'Select device') {
+    await vscode.commands.executeCommand('sailfish.device.setDefault');
   } else if (choice === 'Build') {
     await vscode.commands.executeCommand('sailfish.build');
   }

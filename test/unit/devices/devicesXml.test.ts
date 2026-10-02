@@ -2,124 +2,52 @@ import * as assert from 'assert';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { parseDevicesXml, serializeDevicesXml, writeDevicesXmlFile, readDevicesXmlFile, type DevicesXmlDocument } from '../../../src/devices/devicesXml';
+import {
+  bumpUserSettingsVersion,
+  parseDevicesXml,
+  serializeDevicesXml,
+  writeDevicesXmlFile,
+  readDevicesXmlFile,
+  type DevicesXmlDocument,
+} from '../../../src/devices/devicesXml';
 
-const SAMPLE_XML = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE QtCreatorSfdkDevices>
-<!-- Written by Qt Creator 4.15.1, 2026-01-01T00:00:00. -->
-<qtcreator>
-    <data>
-        <variable>Version</variable>
-        <value type="int">1</value>
-    </data>
-    <data>
-        <variable>Devices.Count</variable>
-        <value type="int">1</value>
-    </data>
-    <data>
-        <variable>Device.0.Id</variable>
-        <value type="QString">{11111111-1111-1111-1111-111111111111}</value>
-    </data>
-    <data>
-        <variable>Device.0.Name</variable>
-        <value type="QString">Xperia 10 IV</value>
-    </data>
-    <data>
-        <variable>Device.0.Autodetected</variable>
-        <value type="bool">false</value>
-    </data>
-    <data>
-        <variable>Device.0.Architecture</variable>
-        <value type="int">0</value>
-    </data>
-    <data>
-        <variable>Device.0.WordWidth</variable>
-        <value type="int">64</value>
-    </data>
-    <data>
-        <variable>Device.0.MachineType</variable>
-        <value type="int">0</value>
-    </data>
-    <data>
-        <variable>Device.0.Host</variable>
-        <value type="QString">192.168.2.15</value>
-    </data>
-    <data>
-        <variable>Device.0.Port</variable>
-        <value type="int">22</value>
-    </data>
-    <data>
-        <variable>Device.0.UserName</variable>
-        <value type="QString">defaultuser</value>
-    </data>
-    <data>
-        <variable>Device.0.AuthenticationType</variable>
-        <value type="int">1</value>
-    </data>
-    <data>
-        <variable>Device.0.PrivateKeyFile</variable>
-        <value type="QString">/Users/mersdk/.ssh/sdk_hw</value>
-    </data>
-    <data>
-        <variable>Device.0.Timeout</variable>
-        <value type="int">0</value>
-    </data>
-    <data>
-        <variable>Device.0.HostKeyChecking</variable>
-        <value type="int">2</value>
-    </data>
-    <data>
-        <variable>Device.0.FreePorts</variable>
-        <value type="QString">10000-10009</value>
-    </data>
-    <data>
-        <variable>Device.0.QmlLivePorts</variable>
-        <value type="QString">10234-10243</value>
-    </data>
-    <data>
-        <variable>DeviceModel.0.Name</variable>
-        <value type="QString">Xperia 10 IV</value>
-    </data>
-</qtcreator>
-`;
+// Compiled to out/test/unit/devices/*.js; fixtures live only under the repo's test/fixtures.
+const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+/** The real file sfdk wrote on SDK 3.13.5: emulator (Device.0) + Jolla Phone (2026) (Device.1). */
+const SAMPLE_XML = fs.readFileSync(path.join(REPO_ROOT, 'test', 'fixtures', 'sfdk', 'captured', '3.13.5', 'libsfdk_devices.xml'), 'utf8');
 
 describe('parseDevicesXml (FR-7.3)', () => {
-  it('parses a real-shaped file into a device with all known fields', () => {
+  it('parses the real nested layout: an emulator and a hardware device with all known fields', () => {
     const doc = parseDevicesXml(SAMPLE_XML);
-    assert.strictEqual(doc.devices.length, 1);
-    const d = doc.devices[0];
-    assert.strictEqual(d.id, '{11111111-1111-1111-1111-111111111111}');
-    assert.strictEqual(d.name, 'Xperia 10 IV');
-    assert.strictEqual(d.autodetected, false);
-    assert.strictEqual(d.architecture, 0);
-    assert.strictEqual(d.wordWidth, 64);
-    assert.strictEqual(d.machineType, 0);
-    assert.strictEqual(d.host, '192.168.2.15');
-    assert.strictEqual(d.port, 22);
-    assert.strictEqual(d.userName, 'defaultuser');
-    assert.strictEqual(d.authenticationType, 1);
-    assert.strictEqual(d.privateKeyFile, '/Users/mersdk/.ssh/sdk_hw');
-    assert.strictEqual(d.timeout, 0);
-    assert.strictEqual(d.hostKeyChecking, 2);
-    assert.strictEqual(d.freePorts, '10000-10009');
-    assert.strictEqual(d.qmlLivePorts, '10234-10243');
+    assert.deepStrictEqual(doc.devices.map((d) => [d.index, d.name]), [[0, 'Sailfish OS Emulator 5.1.0.11'], [1, 'Jolla Phone 2026']]);
+    const emulator = doc.devices[0];
+    assert.strictEqual(emulator.autodetected, true);
+    assert.strictEqual(emulator.machineType, 1);
+    assert.strictEqual(emulator.architecture, 1);
+    assert.deepStrictEqual(emulator.unknownKeys.EmulatorUri, { type: 'QString', raw: 'sfdkvm:VirtualBox#SailfishOS-5.1.0.11' });
+    const phone = doc.devices[1];
+    assert.strictEqual(phone.autodetected, false);
+    assert.strictEqual(phone.machineType, 0);
+    assert.strictEqual(phone.architecture, 0);
+    assert.strictEqual(phone.wordWidth, 64);
+    assert.strictEqual(phone.host, '192.168.2.16');
+    assert.strictEqual(phone.port, 22);
+    assert.strictEqual(phone.userName, 'defaultuser');
+    assert.strictEqual(phone.authenticationType, 1);
+    assert.ok(phone.privateKeyFile?.endsWith('/SailfishOS/vmshare/ssh/private_keys/jolla-phone-2026'));
+    assert.match(phone.id, /^\{[0-9a-f-]{36}\}$/);
+    assert.deepStrictEqual(phone.unknownKeys, {});
   });
 
-  it('preserves Version and DeviceModel.* as opaque otherEntries, in order, and drops Devices.Count', () => {
+  it('keeps Sfdk.UserSettings.Version as an opaque entry and drops Devices.Count', () => {
     const doc = parseDevicesXml(SAMPLE_XML);
-    const variables = doc.otherEntries.map((e) => e.variable);
-    assert.deepStrictEqual(variables, ['Version', 'DeviceModel.0.Name']);
-    assert.strictEqual(doc.otherEntries[0].type, 'int');
-    assert.strictEqual(doc.otherEntries[0].raw, '1');
+    assert.deepStrictEqual(doc.otherEntries.map((e) => e.variable), ['Sfdk.UserSettings.Version']);
   });
 
-  it('an unknown Device.<N>.* field is preserved verbatim, not dropped', () => {
-    const xml = SAMPLE_XML.replace(
-      '<data>\n        <variable>Device.0.QmlLivePorts</variable>',
-      '<data>\n        <variable>Device.0.SomeFutureKey</variable>\n        <value type="QString">mystery</value>\n    </data>\n    <data>\n        <variable>Device.0.QmlLivePorts</variable>',
-    );
-    const doc = parseDevicesXml(xml);
-    assert.deepStrictEqual(doc.devices[0].unknownKeys.SomeFutureKey, { type: 'QString', raw: 'mystery' });
+  it('writes the real file back byte-identical apart from the "Written by" comment', () => {
+    const roundTrip = serializeDevicesXml(parseDevicesXml(SAMPLE_XML), '2026-10-02T00:00:00.000Z');
+    const strip = (xml: string) => xml.split('\n').filter((l) => !l.startsWith('<!--')).join('\n');
+    assert.strictEqual(strip(roundTrip), strip(SAMPLE_XML));
   });
 
   it('returns an empty document (never throws) on garbage input', () => {
@@ -128,9 +56,20 @@ describe('parseDevicesXml (FR-7.3)', () => {
   });
 
   it('unescapes XML entities in values', () => {
-    const xml = SAMPLE_XML.replace('Xperia 10 IV</value>\n    </data>\n    <data>\n        <variable>Device.0.Autodetected', 'Xperia &amp; Co &lt;IV&gt;</value>\n    </data>\n    <data>\n        <variable>Device.0.Autodetected');
-    const doc = parseDevicesXml(xml);
-    assert.strictEqual(doc.devices[0].name, 'Xperia & Co <IV>');
+    const doc = parseDevicesXml(SAMPLE_XML.replace('>Jolla Phone 2026<', '>Jolla &amp; Co &lt;IV&gt;<'));
+    assert.strictEqual(doc.devices[1].name, 'Jolla & Co <IV>');
+  });
+
+  it('bumps Sfdk.UserSettings.Version by one, as libsfdk does on every save', () => {
+    const version = (doc: DevicesXmlDocument) => Number(/<value type="int">(\d+)</.exec(doc.otherEntries[0].xml)?.[1]);
+    const doc = parseDevicesXml(SAMPLE_XML);
+    assert.strictEqual(version(bumpUserSettingsVersion(doc)), version(doc) + 1);
+    assert.deepStrictEqual(bumpUserSettingsVersion({ otherEntries: [], devices: [] }), { otherEntries: [], devices: [] });
+  });
+
+  it('never yields the old flat Device.N.Key layout as devices', () => {
+    const flat = '<qtcreator><data><variable>Device.0.Name</variable><value type="QString">X</value></data></qtcreator>';
+    assert.deepStrictEqual(parseDevicesXml(flat).devices, []);
   });
 });
 
@@ -142,12 +81,21 @@ describe('serializeDevicesXml (FR-7.3/7.5)', () => {
     assert.deepStrictEqual(reparsed, parsed);
   });
 
-  it('emits Devices.Count matching the actual device count', () => {
+  it('emits Devices.Count matching the actual device count, and a settings version for a new file', () => {
     const doc: DevicesXmlDocument = { otherEntries: [], devices: [] };
     const serialized = serializeDevicesXml(doc, '2026-09-28T00:00:00.000Z');
     const reparsed = parseDevicesXml(serialized);
     assert.match(serialized, /<variable>Devices\.Count<\/variable>\s*<value type="int">0<\/value>/);
+    assert.match(serialized, /<variable>Sfdk\.UserSettings\.Version<\/variable>\s*<value type="int">7<\/value>/);
     assert.strictEqual(reparsed.devices.length, 0);
+  });
+
+  it('renumbers devices contiguously as Device.0..n-1', () => {
+    const doc = parseDevicesXml(SAMPLE_XML);
+    doc.devices = [doc.devices[1]];
+    const serialized = serializeDevicesXml(doc, '2026-09-28T00:00:00.000Z');
+    assert.match(serialized, /<variable>Device\.0<\/variable>\s*<valuemap type="QVariantMap">[\s\S]*?Jolla Phone 2026/);
+    assert.ok(!serialized.includes('<variable>Device.1</variable>'));
   });
 
   it('escapes XML-special characters in values', () => {
@@ -192,7 +140,7 @@ describe('writeDevicesXmlFile (FR-7.5: atomic write + backup)', () => {
     assert.ok(result.backupPath && fs.existsSync(result.backupPath));
     assert.ok(!fs.existsSync(`${filePath}.tmp`));
     const reread = readDevicesXmlFile(filePath);
-    assert.strictEqual(reread.devices.length, 1);
+    assert.strictEqual(reread.devices.length, 2);
   });
 
   it('keeps only the last 5 backups', () => {

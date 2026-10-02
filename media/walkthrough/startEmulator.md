@@ -6,7 +6,7 @@ without a physical device.
 
 The Devices view in the Sailfish OS activity bar shows the emulator's status
 once it starts. See
-[docs.sailfishos.org](https://docs.sailfishos.org/Develop/SDK/Sailfish_OS_Emulator/)
+[docs.sailfishos.org](https://docs.sailfishos.org/Tools/Sailfish_SDK/)
 for emulator setup details.
 
 If the emulator image isn't installed yet, use

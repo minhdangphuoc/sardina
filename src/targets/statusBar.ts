@@ -8,7 +8,7 @@ export type { StatusBarState } from './statusBarCore';
 export { computeStatusBarState } from './statusBarCore';
 
 /** The workspace folder whose `sailfish.target` this status bar reflects (mirrors contextKeys.ts's scopeFolder). */
-function scopeFolder(services: Services): vscode.WorkspaceFolder | undefined {
+export function scopeFolder(services: Services): vscode.WorkspaceFolder | undefined {
   const activeUri = vscode.window.activeTextEditor?.document.uri;
   if (activeUri) {
     const folder = vscode.workspace.getWorkspaceFolder(activeUri);

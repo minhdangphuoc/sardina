@@ -6,17 +6,22 @@ import type { Services } from '../core/services';
 import { resolveDevicesXmlPath } from './devicesXmlLocation';
 import { readDevicesXmlFile, writeDevicesXmlFile, serializeDevicesXml } from './devicesXml';
 import { buildNewDeviceEntry, removeDeviceByIndex, sanitizeForFilename, type NewDeviceAnswers } from './deviceWizard';
-import { conflictingProcessesRunning } from './concurrencyGuard';
+import { qtCreatorRunning, sfdkRunning } from './concurrencyGuard';
+import { addEngineDevice, editEngineDevicesFile, findSharedConfigDir, removeEngineDevice } from './engineDevices';
 import { parseDeviceRecords } from './listParsing';
 import type { SfdkArch } from './devicesXmlConstants';
 import { missingTools, installHint } from '../core/externalTools';
 import { shQuote } from './shQuote';
+import { ASKPASS_PASSWORD_ENV, ASKPASS_SCRIPT, buildKeyPushInvocation, classifyKeyPushFailure } from './keyPush';
 
 const GENERATE_KEY = 'Generate new key (recommended)';
 const USE_EXISTING_KEY = 'Use existing private key';
 const WRITE_ANYWAY = 'Write anyway';
 const CANCEL = 'Cancel';
 const CONTINUE = 'Continue';
+const USE_TERMINAL = 'Use terminal instead';
+const KEY_PUSH_TIMEOUT_MS = 60_000;
+const MAX_PASSWORD_ATTEMPTS = 3;
 const CONFIRM_CREATE = 'Create devices.xml here';
 const OPEN_QTC_INSTEAD = 'Register in Qt Creator instead';
 const REVEAL_XML = 'Show attempted XML';
@@ -28,9 +33,17 @@ function execFileP(cmd: string, args: string[]): Promise<{ ok: boolean; stderr: 
   });
 }
 
-async function generateKey(ctx: vscode.ExtensionContext, deviceName: string): Promise<string | null> {
-  const dir = vscode.Uri.joinPath(ctx.globalStorageUri, 'ssh').fsPath;
-  fs.mkdirSync(dir, { recursive: true });
+/** The build engine reads device keys only from its shared folder, so keys live in `<SharedConfig>/ssh/private_keys`. */
+function engineKeyDir(sharedConfigDir: string): string {
+  return path.join(sharedConfigDir, 'ssh', 'private_keys');
+}
+
+const QT_CREATOR_RUNNING_MESSAGE =
+  'Sailfish: close Qt Creator first. While it runs it keeps its own copy of the SDK device list and rewrites the file, ' +
+  'which would undo this change. Then run the command again.';
+
+async function generateKey(dir: string, deviceName: string): Promise<string | null> {
+  fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
   const keyPath = path.join(dir, sanitizeForFilename(deviceName));
   if (fs.existsSync(keyPath)) {
     fs.rmSync(keyPath);
@@ -65,6 +78,102 @@ function openKeyPushTerminal(keyPath: string, host: string, port: number, user: 
   terminal.show();
   const cmd = ['ssh-copy-id', '-i', shQuote(`${keyPath}.pub`), '-p', shQuote(String(port)), '--', shQuote(`${user}@${host}`)].join(' ');
   terminal.sendText(cmd, true);
+}
+
+function writeAskpassHelper(ctx: vscode.ExtensionContext): string {
+  const dir = vscode.Uri.joinPath(ctx.globalStorageUri, 'ssh').fsPath;
+  fs.mkdirSync(dir, { recursive: true });
+  const helper = path.join(dir, 'askpass.sh');
+  fs.writeFileSync(helper, ASKPASS_SCRIPT, { mode: 0o700 });
+  fs.chmodSync(helper, 0o700);
+  return helper;
+}
+
+function runKeyPush(
+  invocation: { cmd: string; args: string[]; env: Record<string, string> },
+  password: string,
+): Promise<{ ok: boolean; stderr: string }> {
+  return new Promise((resolve) => {
+    execFile(
+      invocation.cmd,
+      invocation.args,
+      { env: { ...process.env, ...invocation.env, [ASKPASS_PASSWORD_ENV]: password }, timeout: KEY_PUSH_TIMEOUT_MS },
+      (error, _stdout, stderr) => resolve({ ok: !error, stderr: stderr?.toString() ?? '' }),
+    );
+  });
+}
+
+/**
+ * FR-7.8: asks for the Developer Mode password in a masked input box and pushes the key in the
+ * background via SSH_ASKPASS (see keyPush.ts). Wrong passwords re-prompt; anything unexpected
+ * offers the interactive terminal fallback. Returns whether the key is now installed.
+ */
+async function pushKeyInApp(
+  services: Services,
+  ctx: vscode.ExtensionContext,
+  keyPath: string,
+  host: string,
+  port: number,
+  user: string,
+): Promise<boolean> {
+  const invocation = buildKeyPushInvocation({
+    pubKeyPath: `${keyPath}.pub`,
+    host,
+    port,
+    user,
+    askpassPath: writeAskpassHelper(ctx),
+    display: process.env.DISPLAY,
+  });
+  let prompt = `Developer Mode password for ${user}@${host} (Settings → Developer tools on the device)`;
+  for (let attempt = 1; attempt <= MAX_PASSWORD_ATTEMPTS; attempt++) {
+    const password = await services.prompts.showInputBox({ prompt, password: true, ignoreFocusOut: true });
+    if (password === undefined) return false;
+
+    const result = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Sailfish: installing SSH key on ${host}…` },
+      () => runKeyPush(invocation, password),
+    );
+    if (result.ok) {
+      services.output.log('info', `devices: SSH key installed on ${user}@${host}:${port}`);
+      return true;
+    }
+
+    const failure = classifyKeyPushFailure(result.stderr);
+    services.output.log('warn', `devices: ssh-copy-id to ${user}@${host}:${port} failed (${failure}): ${result.stderr.trim()}`);
+    if (failure === 'auth') {
+      prompt = `Wrong password for ${user}@${host}, try again (attempt ${attempt + 1} of ${MAX_PASSWORD_ATTEMPTS})`;
+      continue;
+    }
+    if (failure === 'unreachable') {
+      void services.prompts.showErrorMessage(
+        `Sailfish: cannot reach ${host}:${port}. Check the USB/WLAN connection and that Developer Mode is on.`,
+      );
+      return false;
+    }
+    return pushKeyInTerminal(services, keyPath, host, port, user, `Sailfish: installing the SSH key failed: ${result.stderr.trim().split(/\r?\n/).pop() ?? ''}`);
+  }
+  void services.prompts.showErrorMessage(`Sailfish: wrong password ${MAX_PASSWORD_ATTEMPTS} times; the device was not added.`);
+  return false;
+}
+
+/** Fallback when the background push fails for a reason other than a wrong password or an unreachable device. */
+async function pushKeyInTerminal(
+  services: Services,
+  keyPath: string,
+  host: string,
+  port: number,
+  user: string,
+  reason: string,
+): Promise<boolean> {
+  const choice = await services.prompts.showWarningMessage(reason, USE_TERMINAL, CANCEL);
+  if (choice !== USE_TERMINAL) return false;
+  openKeyPushTerminal(keyPath, host, port, user);
+  const proceed = await services.prompts.showInformationMessage(
+    `Type the device's Developer Mode password in the opened terminal to finish the key push, then come back here.`,
+    { modal: true },
+    CONTINUE,
+  );
+  return proceed === CONTINUE;
 }
 
 async function verifyDeviceRegistered(services: Services, deviceName: string): Promise<boolean | null> {
@@ -111,7 +220,26 @@ async function pickArchitecture(services: Services): Promise<SfdkArch | undefine
 /** "Sailfish: Add Device" (FR-7.1). */
 export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
   return async (): Promise<void> => {
-    const name = await services.prompts.showInputBox({ prompt: 'Device name', placeHolder: 'Xperia 10 IV' });
+    if (await qtCreatorRunning()) {
+      void services.prompts.showErrorMessage(QT_CREATOR_RUNNING_MESSAGE);
+      return;
+    }
+    const resolved = resolveDevicesXmlPath(services.settings.get('devicesXmlPath'));
+    const sharedConfig = findSharedConfigDir(path.dirname(resolved.path), services.sdk.current()?.root);
+    if (!sharedConfig) {
+      void services.prompts.showErrorMessage(
+        "Sailfish: could not find the build engine's shared folder (SharedConfig in buildengines.xml, usually ~/SailfishOS/vmshare). Is the SDK installed?",
+      );
+      return;
+    }
+
+    const existingNames = new Set(readDevicesXmlFile(resolved.path).devices.map((d) => d.name));
+    const name = await services.prompts.showInputBox({
+      prompt: 'Device name',
+      placeHolder: 'Jolla Phone',
+      validateInput: (v) =>
+        !v.trim() ? 'Enter a name' : existingNames.has(v) ? `"${v}" is already registered; remove it first or pick another name` : undefined,
+    });
     if (!name) return;
     const host = await services.prompts.showInputBox({ prompt: 'Host (IP or hostname)', placeHolder: '192.168.50.125' });
     if (!host) return;
@@ -140,25 +268,23 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
         void services.prompts.showErrorMessage(`Sailfish: missing required tool(s):\n${hints}`);
         return;
       }
-      privateKeyFile = await generateKey(ctx, name);
+      privateKeyFile = await generateKey(engineKeyDir(sharedConfig), name);
       if (!privateKeyFile) {
         void services.prompts.showErrorMessage('Sailfish: ssh-keygen failed unexpectedly.');
         return;
       }
-      openKeyPushTerminal(privateKeyFile, host, Number(portStr), user);
-      const proceed = await services.prompts.showInformationMessage(
-        `Type the device's Developer Mode password in the opened terminal to finish the key push, then come back here.`,
-        CONTINUE,
-        CANCEL,
-      );
-      if (proceed !== CONTINUE) return;
+      if (!(await pushKeyInApp(services, ctx, privateKeyFile, host, Number(portStr), user))) return;
     } else {
       const uris = await services.prompts.showOpenDialog({ canSelectFiles: true, canSelectMany: false, openLabel: 'Select private key' });
       if (!uris?.[0]) return;
-      privateKeyFile = uris[0].fsPath;
+      // Copy it where the build engine can read it.
+      const copy = path.join(engineKeyDir(sharedConfig), sanitizeForFilename(name));
+      fs.mkdirSync(path.dirname(copy), { recursive: true, mode: 0o700 });
+      fs.copyFileSync(uris[0].fsPath, copy);
+      fs.chmodSync(copy, 0o600);
+      privateKeyFile = copy;
     }
 
-    const resolved = resolveDevicesXmlPath(services.settings.get('devicesXmlPath'));
     if (!resolved.confirmed) {
       const confirm = await services.prompts.showWarningMessage(
         `Sailfish: no existing SDK devices.xml found. Create one at ${resolved.path}?`,
@@ -168,9 +294,13 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
       if (confirm !== CONFIRM_CREATE) return;
     }
 
-    if (await conflictingProcessesRunning()) {
+    if (await qtCreatorRunning()) {
+      void services.prompts.showErrorMessage(QT_CREATOR_RUNNING_MESSAGE);
+      return;
+    }
+    if (await sfdkRunning()) {
       const choice = await services.prompts.showWarningMessage(
-        'Sailfish: Qt Creator or sfdk appears to be running and may overwrite this file.',
+        'Sailfish: an sfdk command is running and may rewrite the SDK device list.',
         WRITE_ANYWAY,
         CANCEL,
       );
@@ -184,11 +314,23 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
 
     const nowIso = new Date().toISOString();
     const writeResult = writeDevicesXmlFile(resolved.path, doc, nowIso);
+    const engineBackup = editEngineDevicesFile(sharedConfig, (xml) =>
+      addEngineDevice(xml, {
+        name,
+        host,
+        port: Number(portStr),
+        user,
+        keyPath: path.relative(sharedConfig, privateKeyFile),
+      }),
+    );
 
     const verified = await verifyDeviceRegistered(services, name);
     if (verified === false) {
       if (writeResult.backupPath) {
         fs.copyFileSync(writeResult.backupPath, resolved.path);
+      }
+      if (engineBackup) {
+        fs.copyFileSync(engineBackup, path.join(sharedConfig, 'devices.xml'));
       }
       showFallbackDialog(services, serializeDevicesXml(doc, nowIso));
       return;
@@ -221,9 +363,13 @@ export function removeDevice(services: Services) {
     const confirm = await services.prompts.showWarningMessage(`Sailfish: remove "${picked.label}"?`, 'Remove', CANCEL);
     if (confirm !== 'Remove') return;
 
-    if (await conflictingProcessesRunning()) {
+    if (await qtCreatorRunning()) {
+      void services.prompts.showErrorMessage(QT_CREATOR_RUNNING_MESSAGE);
+      return;
+    }
+    if (await sfdkRunning()) {
       const choice = await services.prompts.showWarningMessage(
-        'Sailfish: Qt Creator or sfdk appears to be running and may overwrite this file.',
+        'Sailfish: an sfdk command is running and may rewrite the SDK device list.',
         WRITE_ANYWAY,
         CANCEL,
       );
@@ -232,6 +378,10 @@ export function removeDevice(services: Services) {
 
     const updated = removeDeviceByIndex(doc, picked.index);
     writeDevicesXmlFile(resolved.path, updated, new Date().toISOString());
+    const sharedConfig = findSharedConfigDir(path.dirname(resolved.path), services.sdk.current()?.root);
+    if (sharedConfig) {
+      editEngineDevicesFile(sharedConfig, (xml) => removeEngineDevice(xml, picked.label));
+    }
     void services.prompts.showInformationMessage(`Sailfish: removed "${picked.label}".`);
     void vscode.commands.executeCommand('sailfish.devices.refresh');
   };

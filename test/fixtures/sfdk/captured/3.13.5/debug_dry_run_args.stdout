@@ -1,0 +1,9 @@
+gdbserver --multi --once :10000
+/home/minhdang/SailfishOS/bin/gdb \
+	--init-eval-command 'set substitute-path /home/minhdang /home/minhdang' \
+	--init-eval-command 'set sysroot /home/minhdang/SailfishOS/mersdk/targets/SailfishOS-5.1.0.11-aarch64.default' \
+	--init-eval-command 'set substitute-path /usr/src /home/minhdang/SailfishOS/mersdk/targets/SailfishOS-5.1.0.11-aarch64.default/usr/src' \
+	--init-eval-command 'target extended-remote tcp:192.168.2.16:10000' \
+	--init-eval-command 'set remote exec-file /usr/bin/harbour-vscsmoke' \
+	--init-eval-command 'file /home/minhdang/Work/harbour-vscsmoke/harbour-vscsmoke' \
+	--init-eval-command 'set args '\''it'\''\'\'''\''s a'\'' b'

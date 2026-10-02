@@ -2,6 +2,21 @@ import * as assert from 'assert';
 import { mapBuildError, mapDeployError } from '../../../src/tasks/errors';
 
 describe('errors.mapDeployError (M1.17)', () => {
+  it('maps real "bash: rsync: not found" (deploy exit 12) to an Install on device action', () => {
+    const mapped = mapDeployError('bash: rsync: not found\nrsync: connection unexpectedly closed (0 bytes received so far) [sender]');
+    assert.strictEqual(mapped?.actionLabel, 'Install on device');
+  });
+
+  it('maps real "Installing untrusted software disabled" to guidance about the device setting', () => {
+    const mapped = mapDeployError('Installing harbour-x-0-1.aarch64.rpm\nInstalling untrusted software disabled\nInstallation failed');
+    assert.match(mapped?.message ?? '', /untrusted software/);
+  });
+
+  it('maps real sfdk 3.13.5 "device is not set" (exit 120) to a Select device action', () => {
+    const mapped = mapDeployError("The required configuration option 'device' is not set\nUsage: sfdk deploy {--pkcon|--rsync|--sdk}");
+    assert.strictEqual(mapped?.actionLabel, 'Select device');
+  });
+
   it('maps "No route to host" to Device unreachable + action', () => {
     const mapped = mapDeployError('ssh: connect to host 10.0.0.1 port 22: No route to host');
     assert.strictEqual(mapped?.message, 'Device unreachable');

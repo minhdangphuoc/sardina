@@ -143,19 +143,91 @@ export function parseDeviceRecords(raw: string): ParseResult<SfdkDeviceInfo[]> {
 }
 
 export const parseDeviceList = parseDeviceRecords;
-export const parseEmulatorList = parseDeviceRecords;
+
+const EMULATOR_ROW_RE = /^(\S+)(?:\s+(\S+))?\s*$/;
+const EMULATOR_NAME_PREFIX = 'SailfishOS-';
+
+/**
+ * Parses the `<name>  <flag,flag,...>` table that `sfdk emulator list [-a]`
+ * prints (captured from SDK 3.13.5, see test/fixtures/sfdk/captured). Rows
+ * not starting with the `SailfishOS-` emulator name prefix (e.g. a
+ * `[D] SOFT ASSERT` debug line) are surfaced as warnings, never parsed.
+ */
+function parseEmulatorTable(raw: string): ParseResult<SfdkDeviceInfo[]> {
+  const warnings: string[] = [];
+  const value: SfdkDeviceInfo[] = [];
+  for (const line of raw.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    if (!trimmed) continue;
+    const row = EMULATOR_ROW_RE.exec(trimmed);
+    if (!row || !row[1].startsWith(EMULATOR_NAME_PREFIX)) {
+      warnings.push(`Ignoring unrecognized emulator list line: ${JSON.stringify(trimmed)}`);
+      continue;
+    }
+    // `default` here is sfdk's default emulator, not the default deploy device isDefaultDevice() marks.
+    const flags = (row[2] ?? '').split(',').filter(Boolean).map((f) => (f === 'default' ? 'default-emulator' : f));
+    value.push({
+      index: value.length,
+      name: row[1],
+      kind: 'emulator',
+      origin: flags.includes('sdk-provided') ? 'autodetected' : 'unknown',
+      flags,
+      extra: [],
+    });
+  }
+  if (value.length === 0 && warnings.length > 0) {
+    return { ok: false, reason: warnings.join('; '), raw };
+  }
+  return { ok: true, value, warnings };
+}
+
+/** `sfdk emulator list` is a name/flags table; `#N "Name"` records are still accepted for older output. */
+export function parseEmulatorList(raw: string): ParseResult<SfdkDeviceInfo[]> {
+  return /^#\d+\s+"/m.test(raw) ? parseDeviceRecords(raw) : parseEmulatorTable(raw);
+}
+
+/** `SailfishOS-5.1.0.11` -> `5.1.0.11`; `Sailfish OS Emulator 5.1.0.11` -> `5.1.0.11`. */
+function emulatorVersionToken(name: string): string {
+  return name.startsWith(EMULATOR_NAME_PREFIX)
+    ? name.slice(EMULATOR_NAME_PREFIX.length)
+    : (name.trim().split(/\s+/).pop() ?? '');
+}
+
+/**
+ * Joins each `emulator list` row to the one `device list` entry of kind
+ * `emulator` carrying the same version token, copying its ssh endpoint.
+ * Ambiguous or missing matches are left unjoined rather than guessed.
+ */
+export function attachEmulatorEndpoints(emulators: SfdkDeviceInfo[], devices: SfdkDeviceInfo[]): SfdkDeviceInfo[] {
+  const emulatorDevices = devices.filter((d) => d.kind === 'emulator');
+  return emulators.map((emu) => {
+    if (emu.host !== undefined) return emu;
+    const version = emulatorVersionToken(emu.name);
+    const matches = emulatorDevices.filter((d) => emulatorVersionToken(d.name) === version);
+    if (matches.length !== 1) return emu;
+    const [dev] = matches;
+    return { ...emu, user: dev.user, host: dev.host, port: dev.port, privateKey: dev.privateKey, deviceName: dev.name };
+  });
+}
+
+/** The name sfdk's device options (`-c device=`, `device exec`) address this entry by. */
+export function sfdkDeviceName(device: SfdkDeviceInfo): string {
+  return device.deviceName ?? device.name;
+}
 
 /** FR-6.2: default = status flag `default`, or an exact match on `sailfish.device`. */
 export function isDefaultDevice(device: SfdkDeviceInfo, defaultDeviceName: string | undefined): boolean {
-  return device.flags.includes('default') || (!!defaultDeviceName && device.name === defaultDeviceName);
+  return device.flags.includes('default') || (!!defaultDeviceName && sfdkDeviceName(device) === defaultDeviceName);
 }
 
-export function formatDeviceLabel(device: SfdkDeviceInfo, isDefault: boolean): string {
-  const quoted = `"${device.name}"`;
-  return isDefault ? `${quoted} $(check)` : quoted;
+export function formatDeviceLabel(device: SfdkDeviceInfo): string {
+  return `"${device.name}"`;
 }
 
 export function formatDeviceDescription(device: SfdkDeviceInfo): string {
+  if (device.host === undefined) {
+    return device.flags.join(', ');
+  }
   return `${device.kind} ${device.origin} ${device.user ?? '?'}@${device.host ?? '?'}:${device.port ?? '?'}`;
 }
 

@@ -5,6 +5,8 @@ import { detectProjectAt, type DetectIO } from './detectCore';
 import { resolveActiveProject } from './active';
 
 const SPEC_GLOB = 'rpm/*.spec';
+/** Also matches the `rpm` directory itself: creating or deleting it with its specs inside only reports the directory. */
+const SPEC_WATCH_GLOB = '{rpm,rpm/*.spec}';
 const SPEC_EXCLUDE = '**/node_modules/**';
 const SPEC_MAX_RESULTS = 10;
 
@@ -70,10 +72,7 @@ export class ProjectRegistry {
 
   constructor(private readonly services: Services) {
     this.reconcileWatchers();
-    this.pollTimer = setInterval(() => {
-      this.reconcileWatchers();
-      void this.refresh();
-    }, 1000);
+    this.pollTimer = setInterval(() => this.reconcileWatchers(), 1000);
   }
 
   projects(): ProjectDescriptor[] {
@@ -88,29 +87,31 @@ export class ProjectRegistry {
     return resolveActiveProject(this);
   }
 
-  /** FR-2.3-watcher: creates a per-folder watcher for any folder not yet covered (polled, since some hosts never fire onDidChangeWorkspaceFolders). */
+  /** FR-2.3-watcher: keeps one watcher per folder (polled, since some hosts never fire onDidChangeWorkspaceFolders); refreshes only when the folder set changed. */
   private reconcileWatchers(): void {
     const folders = vscode.workspace.workspaceFolders ?? [];
     const current = new Set(folders.map((f) => f.uri.toString()));
+    let changed = false;
     for (const [key, watcher] of this.watchers) {
       if (!current.has(key)) {
         watcher.dispose();
         this.watchers.delete(key);
+        changed = true;
       }
     }
-    let added = false;
     for (const folder of folders) {
       const key = folder.uri.toString();
       if (this.watchers.has(key)) {
         continue;
       }
-      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, SPEC_GLOB));
+      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(folder, SPEC_WATCH_GLOB));
       watcher.onDidCreate(() => void this.refresh());
+      watcher.onDidChange(() => void this.refresh());
       watcher.onDidDelete(() => void this.refresh());
       this.watchers.set(key, watcher);
-      added = true;
+      changed = true;
     }
-    if (added) {
+    if (changed) {
       void this.refresh();
     }
   }

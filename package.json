@@ -15,6 +15,13 @@
     "Other"
   ],
   "main": "./dist/extension.js",
+  "icon": "media/icon.png",
+  "capabilities": {
+    "untrustedWorkspaces": {
+      "supported": false,
+      "description": "Sailfish OS Tools runs the SDK's sfdk on workspace build files, so it needs a trusted workspace."
+    }
+  },
   "extensionDependencies": ["theqtcompany.qt-qml"],
   "extensionPack": [],
   "activationEvents": [
@@ -24,8 +31,11 @@
     "onCommand:sailfish.newProject",
     "onCommand:sailfish.setSdkPath",
     "onCommand:sailfish.downloadSdk",
+    "onCommand:sailfish.sdk.install",
     "onCommand:sailfish.device.add",
     "onCommand:sailfish.device.remove",
+    "onView:sailfish.sdk",
+    "onView:sailfish.emulators",
     "onView:sailfish.devices",
     "onLanguage:qml"
   ],
@@ -54,6 +64,27 @@
         "category": "Sailfish"
       },
       {
+        "command": "sailfish.sdk.install",
+        "title": "Sailfish: Install SDK",
+        "category": "Sailfish",
+        "icon": "$(cloud-download)",
+        "enablement": "sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.engine.start",
+        "title": "Sailfish: Start Build Engine",
+        "category": "Sailfish",
+        "icon": "$(debug-start)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.engine.stop",
+        "title": "Sailfish: Stop Build Engine",
+        "category": "Sailfish",
+        "icon": "$(debug-stop)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
         "command": "sailfish.newProject",
         "title": "Sailfish: New Project",
         "category": "Sailfish",
@@ -68,6 +99,25 @@
       {
         "command": "sailfish.setSfdkDefaultTarget",
         "title": "Sailfish: Set sfdk Default Target",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.debugOnDevice",
+        "title": "Sailfish: Debug on Device",
+        "category": "Sailfish",
+        "icon": "$(debug-alt)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.selectBuildType",
+        "title": "Sailfish: Select Build Type",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.selectDeployMethod",
+        "title": "Sailfish: Select Deploy Method",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
@@ -110,18 +160,21 @@
       {
         "command": "sailfish.devices.refresh",
         "title": "Sailfish: Refresh Devices",
+        "icon": "$(refresh)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.emulator.start",
         "title": "Sailfish: Start Emulator",
+        "icon": "$(debug-start)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.emulator.stop",
         "title": "Sailfish: Stop Emulator",
+        "icon": "$(debug-stop)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
@@ -140,6 +193,7 @@
       {
         "command": "sailfish.emulator.installAvailable",
         "title": "Sailfish: Install Available Emulator",
+        "icon": "$(cloud-download)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
@@ -170,8 +224,16 @@
       {
         "command": "sailfish.device.add",
         "title": "Sailfish: Add Device",
+        "icon": "$(add)",
         "category": "Sailfish",
         "enablement": "sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.device.installTools",
+        "title": "Sailfish: Install Deploy & Debug Tools on Device",
+        "category": "Sailfish",
+        "icon": "$(cloud-download)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.remove",
@@ -239,6 +301,26 @@
           "scope": "resource",
           "markdownDescription": "Extra arguments appended to every `sfdk build` invocation for this workspace."
         },
+        "sailfish.build.type": {
+          "type": "string",
+          "enum": [
+            "release",
+            "debug"
+          ],
+          "enumDescriptions": [
+            "Release build (`sfdk build`).",
+            "Debug build (`sfdk build --enable-debug`)."
+          ],
+          "default": "release",
+          "scope": "resource",
+          "markdownDescription": "Build type used by the build, deploy and run tasks. Also selectable from the status bar."
+        },
+        "sailfish.build.cleanOnArchChange": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "markdownDescription": "Clean the build output without asking when the target's architecture changes (e.g. `i486` → `aarch64`). In-source builds otherwise reuse objects compiled for the previous architecture and produce a broken package."
+        },
         "sailfish.deploy.method": {
           "type": "string",
           "enum": [
@@ -248,6 +330,14 @@
             "zypper",
             "zypper-dup",
             "manual"
+          ],
+          "enumDescriptions": [
+            "Deploy as RPM package (the SDK's native method; needs Developer Mode).",
+            "Install the RPM with pkcon.",
+            "Deploy by copying binaries: transfers the RPM buildroot to /opt/sdk/<name> without installing an RPM.",
+            "Install the RPM with zypper (needs zypper and root on the device).",
+            "Install the RPM with zypper dup (needs zypper and root on the device).",
+            "Copy the RPM to ~/RPMS on the device for manual installation; Run does not launch the app."
           ],
           "default": "sdk",
           "scope": "resource",
@@ -280,7 +370,7 @@
         "sailfish.qtqml.silenceQmlls": {
           "type": "boolean",
           "default": true,
-          "scope": "window",
+          "scope": "resource",
           "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this Sailfish project folder. Sailfish OS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
         },
         "sailfish.logLevel": {
@@ -450,9 +540,19 @@
     "views": {
       "sailfish": [
         {
+          "id": "sailfish.sdk",
+          "name": "SDK",
+          "when": "sailfish.platformSupported"
+        },
+        {
+          "id": "sailfish.emulators",
+          "name": "Emulators",
+          "when": "sailfish.platformSupported && sailfish.sdkAvailable"
+        },
+        {
           "id": "sailfish.devices",
-          "name": "Devices & Emulators",
-          "when": "sailfish.sdkAvailable"
+          "name": "Devices",
+          "when": "sailfish.platformSupported && sailfish.sdkAvailable"
         }
       ]
     },
@@ -460,32 +560,67 @@
       "view/title": [
         {
           "command": "sailfish.devices.refresh",
+          "when": "view == sailfish.sdk",
+          "group": "navigation@9"
+        },
+        {
+          "command": "sailfish.sdk.install",
+          "when": "view == sailfish.sdk && !sailfish.sdkAvailable",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailfish.downloadSdk",
+          "when": "view == sailfish.sdk",
+          "group": "1_sdk@1"
+        },
+        {
+          "command": "sailfish.setSdkPath",
+          "when": "view == sailfish.sdk",
+          "group": "1_sdk@2"
+        },
+        {
+          "command": "sailfish.emulator.installAvailable",
+          "when": "view == sailfish.emulators",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailfish.devices.refresh",
+          "when": "view == sailfish.emulators",
+          "group": "navigation@9"
+        },
+        {
+          "command": "sailfish.device.add",
           "when": "view == sailfish.devices",
-          "group": "navigation"
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailfish.devices.refresh",
+          "when": "view == sailfish.devices",
+          "group": "navigation@9"
         }
       ],
       "view/item/context": [
         {
           "command": "sailfish.emulator.start",
-          "when": "view == sailfish.devices && viewItem == emulator",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.stopped)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.emulator.stop",
-          "when": "view == sailfish.devices && viewItem == emulator",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.running)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.emulator.status",
-          "when": "view == sailfish.devices && viewItem == emulator"
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/"
         },
         {
           "command": "sailfish.emulator.show",
-          "when": "view == sailfish.devices && viewItem == emulator"
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/"
         },
         {
           "command": "sailfish.device.setDefault",
-          "when": "view == sailfish.devices && viewItem == emulator"
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/"
         },
         {
           "command": "sailfish.device.setDefault",
@@ -496,30 +631,35 @@
           "when": "view == sailfish.devices && viewItem == hardware-device"
         },
         {
+          "command": "sailfish.device.installTools",
+          "when": "view == sailfish.devices && viewItem == hardware-device"
+        },
+        {
           "command": "sailfish.device.remove",
           "when": "view == sailfish.devices && viewItem == hardware-device"
         },
         {
-          "command": "sailfish.device.add",
-          "when": "view == sailfish.devices && viewItem == devices-root-devices",
+          "command": "sailfish.emulator.installAvailable",
+          "when": "view == sailfish.emulators && viewItem == emulator-available",
           "group": "inline"
         },
         {
-          "command": "sailfish.emulator.installAvailable",
-          "when": "view == sailfish.devices && viewItem == emulator-available",
+          "command": "sailfish.engine.start",
+          "when": "view == sailfish.sdk && viewItem =~ /^sdk-engine(\\.stopped)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.emulator.installAvailable",
-          "when": "view == sailfish.devices && viewItem == devices-root-emulators"
+          "command": "sailfish.engine.stop",
+          "when": "view == sailfish.sdk && viewItem =~ /^sdk-engine(\\.running)?$/",
+          "group": "inline"
         },
         {
-          "command": "sailfish.emulator.installAvailable",
-          "when": "view == sailfish.devices && viewItem == devices-root-available"
+          "command": "sailfish.selectTarget",
+          "when": "view == sailfish.sdk && viewItem == sdk-targets-root"
         },
         {
-          "command": "sailfish.devices.refresh",
-          "when": "view == sailfish.devices && viewItem =~ /^devices-root-/"
+          "command": "sailfish.setSfdkDefaultTarget",
+          "when": "view == sailfish.sdk && viewItem == sdk-targets-root"
         }
       ]
     },

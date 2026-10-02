@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE QtCreatorSfdkDevices>
+<!-- Written by sfdk , 2026-10-02T12:11:41. -->
+<qtcreator>
+ <data>
+  <variable>Device.0</variable>
+  <valuemap type="QVariantMap">
+   <value type="int" key="Architecture">1</value>
+   <value type="bool" key="Autodetected">true</value>
+   <value type="QString" key="EmulatorUri">sfdkvm:VirtualBox#SailfishOS-5.1.0.11</value>
+   <value type="QString" key="Id">sfdkvm:VirtualBox#SailfishOS-5.1.0.11</value>
+   <value type="int" key="MachineType">1</value>
+   <value type="QString" key="Name">Sailfish OS Emulator 5.1.0.11</value>
+   <value type="int" key="WordWidth">32</value>
+  </valuemap>
+ </data>
+ <data>
+  <variable>Device.1</variable>
+  <valuemap type="QVariantMap">
+   <value type="int" key="Architecture">0</value>
+   <value type="int" key="AuthenticationType">1</value>
+   <value type="bool" key="Autodetected">false</value>
+   <value type="QString" key="FreePorts">10000-10019</value>
+   <value type="QString" key="Host">192.168.2.16</value>
+   <value type="int" key="HostKeyChecking">0</value>
+   <value type="QString" key="Id">{9003d0b3-f090-47c7-86cc-08bbf7944333}</value>
+   <value type="int" key="MachineType">0</value>
+   <value type="QString" key="Name">Jolla Phone 2026</value>
+   <value type="int" key="Port">22</value>
+   <value type="QString" key="PrivateKeyFile">/home/minhdang/SailfishOS/vmshare/ssh/private_keys/jolla-phone-2026</value>
+   <value type="QString" key="QmlLivePorts">10234-10243</value>
+   <value type="int" key="Timeout">10</value>
+   <value type="QString" key="UserName">defaultuser</value>
+   <value type="int" key="WordWidth">64</value>
+  </valuemap>
+ </data>
+ <data>
+  <variable>Devices.Count</variable>
+  <value type="int">2</value>
+ </data>
+ <data>
+  <variable>Sfdk.UserSettings.Version</variable>
+  <value type="int">10</value>
+ </data>
+</qtcreator>

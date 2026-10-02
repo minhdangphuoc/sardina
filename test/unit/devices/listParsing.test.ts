@@ -2,11 +2,13 @@ import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
 import {
+  attachEmulatorEndpoints,
   formatDeviceDescription,
   formatDeviceLabel,
   isDefaultDevice,
   parseDeviceList,
   parseEmulatorList,
+  sfdkDeviceName,
 } from '../../../src/devices/listParsing';
 
 // Compiled to out/test/unit/devices/*.js; fixtures live only under the
@@ -16,6 +18,12 @@ const SCENARIOS = path.join(REPO_ROOT, 'test', 'fixtures', 'sfdk', 'scenarios');
 
 function fixture(scenario: string, name: string): string {
   return fs.readFileSync(path.join(SCENARIOS, scenario, name), 'utf8');
+}
+
+const CAPTURED = path.join(REPO_ROOT, 'test', 'fixtures', 'sfdk', 'captured', '3.13.5');
+
+function captured(name: string): string {
+  return fs.readFileSync(path.join(CAPTURED, name), 'utf8');
 }
 
 describe('parseDeviceList / parseEmulatorList (FR-16.4, AC-1.8)', () => {
@@ -34,7 +42,7 @@ describe('parseDeviceList / parseEmulatorList (FR-16.4, AC-1.8)', () => {
     assert.strictEqual(emulator.host, '127.0.0.1');
     assert.strictEqual(emulator.port, 2223);
     assert.strictEqual(emulator.privateKey, '/Users/mersdk/.ssh/sdk');
-    assert.strictEqual(formatDeviceLabel(emulator, false), '"Sailfish OS Emulator 4.4.0.58"');
+    assert.strictEqual(formatDeviceLabel(emulator), '"Sailfish OS Emulator 4.4.0.58"');
     assert.strictEqual(formatDeviceDescription(emulator), 'emulator autodetected defaultuser@127.0.0.1:2223');
 
     const hw = result.value[1];
@@ -46,12 +54,12 @@ describe('parseDeviceList / parseEmulatorList (FR-16.4, AC-1.8)', () => {
     assert.strictEqual(unicode.name, 'Xperia 10 III – 日本語');
   });
 
-  it('$(check) suffix is applied only when isDefault is true', () => {
+  it('labels never carry $(icon) codes (tree labels render them literally); default detection is by flag or name', () => {
     const result = parseDeviceList(fixture('default', 'device_list.stdout'));
     assert.ok(result.ok);
     if (!result.ok) return;
     const device = result.value[0];
-    assert.strictEqual(formatDeviceLabel(device, true), '"Sailfish OS Emulator 4.4.0.58" $(check)');
+    assert.strictEqual(formatDeviceLabel(device), '"Sailfish OS Emulator 4.4.0.58"');
     assert.strictEqual(isDefaultDevice(device, device.name), true);
     assert.strictEqual(isDefaultDevice(device, 'something-else'), false);
   });
@@ -118,5 +126,62 @@ describe('parseDeviceList / parseEmulatorList (FR-16.4, AC-1.8)', () => {
   it('empty string input never throws and is a clean empty state', () => {
     assert.deepStrictEqual(parseDeviceList(''), { ok: true, value: [], warnings: [] });
     assert.deepStrictEqual(parseDeviceList('   \n  \n'), { ok: true, value: [], warnings: [] });
+  });
+});
+
+describe('real SDK 3.13.5 emulator/device lists (captured)', () => {
+  it('emulator list: the name/flags table parses to one installed emulator', () => {
+    const result = parseEmulatorList(captured('emulator_list.stdout'));
+    assert.ok(result.ok, 'expected ok:true');
+    if (!result.ok) return;
+    assert.deepStrictEqual(
+      result.value.map((d) => [d.name, d.kind, d.origin, d.flags]),
+      [['SailfishOS-5.1.0.11', 'emulator', 'autodetected', ['sdk-provided', 'latest', 'default-emulator']]],
+    );
+    assert.deepStrictEqual(result.warnings, []);
+  });
+
+  it('emulator list -a: available and installed rows keep their flags', () => {
+    const result = parseEmulatorList(captured('emulator_list_a.stdout'));
+    assert.ok(result.ok, 'expected ok:true');
+    if (!result.ok) return;
+    assert.strictEqual(result.value.length, 19);
+    const installed = result.value.filter((d) => !d.flags.includes('available'));
+    assert.deepStrictEqual(installed.map((d) => [d.name, d.flags]), [['SailfishOS-5.1.0.11', ['installed', 'latest']]]);
+    const ea = result.value.find((d) => d.name === 'SailfishOS-5.1.0.11EA');
+    assert.deepStrictEqual(ea?.flags, ['available', 'early-access']);
+  });
+
+  it('a stray non-emulator line is a warning, not an entry', () => {
+    const result = parseEmulatorList('[D] SOFT ASSERT: "x" in file y, line 1\nSailfishOS-5.1.0.11  sdk-provided\n');
+    assert.ok(result.ok);
+    if (!result.ok) return;
+    assert.deepStrictEqual(result.value.map((d) => d.name), ['SailfishOS-5.1.0.11']);
+    assert.strictEqual(result.warnings.length, 1);
+  });
+
+  it('joins the emulator to its device list entry so device options address the device name', () => {
+    const emulators = parseEmulatorList(captured('emulator_list.stdout'));
+    const devices = parseDeviceList(captured('device_list.stdout'));
+    assert.ok(emulators.ok && devices.ok);
+    if (!emulators.ok || !devices.ok) return;
+    const [emu] = attachEmulatorEndpoints(emulators.value, devices.value);
+    assert.strictEqual(emu.name, 'SailfishOS-5.1.0.11');
+    assert.strictEqual(sfdkDeviceName(emu), 'Sailfish OS Emulator 5.1.0.11');
+    assert.deepStrictEqual([emu.user, emu.host, emu.port], ['defaultuser', '127.0.0.1', 2223]);
+    assert.strictEqual(formatDeviceDescription(emu), 'emulator autodetected defaultuser@127.0.0.1:2223');
+    assert.strictEqual(isDefaultDevice(emu, undefined), false, "sfdk's default emulator is not the default device");
+    assert.strictEqual(isDefaultDevice(emu, 'Sailfish OS Emulator 5.1.0.11'), true);
+  });
+
+  it('does not join on a version prefix (5.1.0.11EA is not 5.1.0.11) or on hardware devices', () => {
+    const emu = { index: 0, name: 'SailfishOS-5.1.0.11EA', kind: 'emulator' as const, origin: 'unknown' as const, flags: [], extra: [] };
+    const devices = [
+      { ...emu, name: 'Sailfish OS Emulator 5.1.0.11', host: '127.0.0.1', port: 2223 },
+      { ...emu, name: 'Phone 5.1.0.11EA', kind: 'hardware-device' as const, host: '192.168.2.15', port: 22 },
+    ];
+    const [joined] = attachEmulatorEndpoints([emu], devices);
+    assert.strictEqual(joined.host, undefined);
+    assert.strictEqual(sfdkDeviceName(joined), 'SailfishOS-5.1.0.11EA');
   });
 });

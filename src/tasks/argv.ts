@@ -16,6 +16,8 @@ export interface SailfishTaskDefinitionLike {
 export interface BuildArgvSettings {
   runHarbourCheck: boolean;
   jobs: number;
+  /** The `sailfish.build.type` selector; a task definition's own `debug` wins. */
+  buildType?: 'release' | 'debug';
 }
 
 /** FR-5.3. `-c target=`/`-c device=` are passed to SfdkRunner as options, not included here. */
@@ -28,7 +30,7 @@ export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSe
   if (noCheck) {
     args.push('--no-check');
   }
-  if (def.debug) {
+  if (def.debug ?? settings.buildType === 'debug') {
     args.push('-d');
   }
   const jobs = def.jobs !== undefined && def.jobs > 0 ? def.jobs : settings.jobs > 0 ? settings.jobs : undefined;

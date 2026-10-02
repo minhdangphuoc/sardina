@@ -4,9 +4,9 @@ import * as path from 'node:path';
 import { XML } from './devicesXmlConstants';
 
 /**
- * FR-7.2: probes for the real libsfdk devices.xml, never the unrelated legacy
- * `~/SailfishOS/vmshare/devices.xml` VirtualBox NIC file (a past source of confusion —
- * see the Phase 2 plan). A directory is accepted as confirmation if it holds a sibling
+ * FR-7.2: probes for the real libsfdk devices.xml, never `~/SailfishOS/vmshare/devices.xml`.
+ * That one is a different file: the build engine's own device list (deploy reads it), with
+ * its own format, which only Qt Creator's device dialog keeps in sync. A directory is accepted as confirmation if it holds a sibling
  * `emulators.xml` or `buildengines.xml` (both real sfdkconstants.h file names).
  */
 export function candidateDevicesXmlPaths(homeDir: string, sdkRoot: string | undefined, env: NodeJS.ProcessEnv): string[] {

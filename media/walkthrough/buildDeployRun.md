@@ -8,5 +8,5 @@ You can also run each stage on its own with **Sailfish: Build**,
 **Sailfish: Deploy** and **Sailfish: Run**, which is useful while iterating on
 just one part of the cycle.
 
-See [docs.sailfishos.org](https://docs.sailfishos.org/Develop/Apps/Building_And_Packaging/)
+See [docs.sailfishos.org](https://docs.sailfishos.org/Tools/Sailfish_SDK/Deploying_packages/)
 for details on how Sailfish OS builds and packages applications.

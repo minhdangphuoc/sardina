@@ -102,7 +102,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
   test('FR-6.7: a list failure never yields an empty root (holds even against the current SfdkRunner stub)', async () => {
     await refreshAndWait(provider());
     const roots = await provider().getChildren();
-    assert.ok(roots && roots.length === 2, 'expected Emulators and Devices roots');
+    assert.ok(roots && roots.length === 3, 'expected Emulators, Devices and SDK roots');
 
     const emulatorsChildren = await provider().getChildren(roots[0]);
     assert.ok(emulatorsChildren && emulatorsChildren.length >= 1, 'root must never render with zero children unexplained');
@@ -112,6 +112,29 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         'expected a "Could not list" child while SfdkRunner is unimplemented',
       );
     }
+  });
+
+  test('SDK root lists location, sfdk, build engine and build targets from the fake sfdk', async function () {
+    if (!ready) {
+      this.skip();
+      return;
+    }
+    await withScenario('default', async () => {
+      const p = provider();
+      await refreshAndWait(p);
+      const roots = (await p.getChildren()) ?? [];
+      const sdkRoot = roots[2];
+      assert.strictEqual(sdkRoot.label, 'SDK');
+      assert.strictEqual(sdkRoot.contextValue, 'devices-root-sdk');
+      const children = (await p.getChildren(sdkRoot)) ?? [];
+      assert.deepStrictEqual(
+        children.map((c) => c.label),
+        ['Build engine', 'Build targets'],
+      );
+      assert.strictEqual(children[0].contextValue, 'sdk-engine.running');
+      const targets = (await p.getChildren(children[1])) ?? [];
+      assert.ok(targets.length > 0 && targets.every((t) => t.contextValue === 'sdk-target'));
+    });
   });
 
   test('AC-1.8: Emulators/Devices roots render exact labels/descriptions from the fake sfdk', async function () {
@@ -135,7 +158,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       assert.strictEqual(installed[0].description, 'emulator autodetected defaultuser@127.0.0.1:2223');
       const tooltip = installed[0].tooltip;
       assert.ok(typeof tooltip === 'string' && tooltip.includes('private-key: /Users/mersdk/.ssh/sdk'));
-      assert.strictEqual(installed[0].contextValue, 'emulator');
+      assert.match(String(installed[0].contextValue), /^emulator(\.(running|stopped))?$/);
 
       const availableRoot = emulatorChildren.find((c) => isAvailableRootItem(c));
       assert.ok(availableRoot, 'expected the collapsed "Available to install" node');

@@ -36,6 +36,15 @@ async function showMissingQtQmlNoticeOnce(ctx: vscode.ExtensionContext, services
   void services.prompts.showInformationMessage(MISSING_QT_QML_MESSAGE);
 }
 
+/** qt-qml 1.16 declares `doNotAskForQmllsDownload` without folder scope, so a folder write throws; the workspace is the narrowest scope left. */
+async function updateFolderOrWorkspace(config: vscode.WorkspaceConfiguration, key: string, value: unknown): Promise<void> {
+  try {
+    await config.update(key, value, vscode.ConfigurationTarget.WorkspaceFolder);
+  } catch {
+    await config.update(key, value, vscode.ConfigurationTarget.Workspace);
+  }
+}
+
 /** FR-8.1: silences qmlls for one Sailfish folder; only writes WorkspaceFolder scope, never `qmlls.additionalImportPaths` (FR-8.8). */
 async function silenceFolder(
   folder: vscode.WorkspaceFolder,
@@ -77,7 +86,7 @@ async function silenceFolder(
 
   try {
     await config.update(QT_QML_ENABLED_KEY, false, vscode.ConfigurationTarget.WorkspaceFolder);
-    await config.update(QT_QML_DO_NOT_ASK_KEY, true, vscode.ConfigurationTarget.WorkspaceFolder);
+    await updateFolderOrWorkspace(config, QT_QML_DO_NOT_ASK_KEY, true);
   } catch (err) {
     services.output.log('warn', `failed to silence qmlls for folder "${folder.name}": ${String(err)}`);
     return;

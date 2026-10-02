@@ -12,6 +12,8 @@ export interface SailfishSettings {
   'build.jobs': number;
   'build.runHarbourCheck': boolean;
   'build.extraArgs': string[];
+  'build.type': 'release' | 'debug';
+  'build.cleanOnArchChange': boolean;
   'deploy.method': 'sdk' | 'pkcon' | 'rsync' | 'zypper' | 'zypper-dup' | 'manual';
   'run.launcher': 'auto' | 'invoker-silica' | 'sailfish-qml' | 'custom';
   'run.customCommand': string;
@@ -31,6 +33,8 @@ export const DEFAULTS: SailfishSettings = {
   'build.jobs': 0,
   'build.runHarbourCheck': false,
   'build.extraArgs': [],
+  'build.type': 'release',
+  'build.cleanOnArchChange': false,
   'deploy.method': 'sdk',
   'run.launcher': 'auto',
   'run.customCommand': '',

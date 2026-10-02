@@ -2,11 +2,10 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { XML } from './devicesXmlConstants';
 
-/** One flat `<data><variable>K</variable><value type="T">V</value></data>` entry, in file order. */
+/** A top-level `<data>` block other than a device or `Devices.Count`, kept verbatim. */
 interface RawEntry {
   variable: string;
-  type: string;
-  raw: string;
+  xml: string;
 }
 
 export interface DeviceEntry {
@@ -26,12 +25,12 @@ export interface DeviceEntry {
   hostKeyChecking?: number;
   freePorts?: string;
   qmlLivePorts?: string;
-  /** Any Device.<N>.* key not in the known set above, preserved verbatim (type + raw text). */
+  /** Any valuemap key not in the known set above (e.g. an emulator's `EmulatorUri`), preserved (type + raw text). */
   unknownKeys: Record<string, { type: string; raw: string }>;
 }
 
 export interface DevicesXmlDocument {
-  /** Every non-`Device.*`/`Devices.Count` entry (e.g. `DeviceModel.*`, `Version`), in original order. */
+  /** Every top-level entry other than `Device.<N>`/`Devices.Count` (e.g. `Sfdk.UserSettings.Version`), in original order. */
   otherEntries: RawEntry[];
   devices: DeviceEntry[];
 }
@@ -44,37 +43,47 @@ function unescapeXml(value: string): string {
   return value.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&apos;/g, "'").replace(/&amp;/g, '&');
 }
 
-const DATA_BLOCK_RE = /<data>\s*<variable>([\s\S]*?)<\/variable>\s*<value type="([^"]*)"(?:\s+key="[^"]*")?>([\s\S]*?)<\/value>\s*<\/data>/g;
+/**
+ * libsfdk's real layout (captured from SDK 3.13.5, test/fixtures/sfdk/captured/3.13.5):
+ *   <data><variable>Device.0</variable>
+ *     <valuemap type="QVariantMap"><value type="int" key="Architecture">1</value>…</valuemap></data>
+ *   <data><variable>Devices.Count</variable><value type="int">1</value></data>
+ *   <data><variable>Sfdk.UserSettings.Version</variable><value type="int">7</value></data>
+ * Valuemaps hold no nested <data>, so a lazy match to the next </data> is one block.
+ */
+const DATA_BLOCK_RE = /<data>\s*<variable>([\s\S]*?)<\/variable>([\s\S]*?)<\/data>/g;
+const MAP_VALUE_RE = /<value type="([^"]*)" key="([^"]*)"(?:\s*\/>|>([\s\S]*?)<\/value>)/g;
+const DEVICE_VARIABLE_RE = /^Device\.(\d+)$/;
+const USER_SETTINGS_VERSION = { variable: 'Sfdk.UserSettings.Version', value: 7 };
 
 /** Fail-soft: an empty document (no file, or unparseable content) is a valid "no devices yet" state, never a throw. */
 export function parseDevicesXml(xml: string): DevicesXmlDocument {
   const doc: DevicesXmlDocument = { otherEntries: [], devices: [] };
-  const byIndex = new Map<number, DeviceEntry>();
-
   for (const match of xml.matchAll(DATA_BLOCK_RE)) {
-    const variable = unescapeXml(match[1]);
-    const type = match[2];
-    const raw = unescapeXml(match[3]);
-
+    const variable = unescapeXml(match[1].trim());
     if (variable === XML.countKey) {
       continue; // recomputed from devices.length on write
     }
-    const deviceMatch = /^Device\.(\d+)\.(.+)$/.exec(variable);
+    const deviceMatch = DEVICE_VARIABLE_RE.exec(variable);
     if (!deviceMatch) {
-      doc.otherEntries.push({ variable, type, raw });
+      doc.otherEntries.push({ variable, xml: match[0] });
       continue;
     }
-    const index = Number(deviceMatch[1]);
-    const field = deviceMatch[2];
-    let device = byIndex.get(index);
-    if (!device) {
-      device = { index, id: '', name: '', autodetected: false, architecture: 0, wordWidth: 32, machineType: 0, unknownKeys: {} };
-      byIndex.set(index, device);
-      doc.devices.push(device);
+    const device: DeviceEntry = {
+      index: Number(deviceMatch[1]),
+      id: '',
+      name: '',
+      autodetected: false,
+      architecture: 0,
+      wordWidth: 32,
+      machineType: 0,
+      unknownKeys: {},
+    };
+    for (const value of match[2].matchAll(MAP_VALUE_RE)) {
+      applyField(device, unescapeXml(value[2]), value[1], unescapeXml(value[3] ?? ''));
     }
-    applyField(device, field, type, raw);
+    doc.devices.push(device);
   }
-
   doc.devices.sort((a, b) => a.index - b.index);
   return doc;
 }
@@ -132,53 +141,64 @@ function applyField(device: DeviceEntry, field: string, type: string, raw: strin
   }
 }
 
-function writeEntry(variable: string, type: string, value: string): string {
-  return `    <data>\n        <variable>${escapeXml(variable)}</variable>\n        <value type="${type}">${escapeXml(value)}</value>\n    </data>\n`;
+/** All of a device's keys as (key, type, raw), sorted by key as Qt's QVariantMap writes them. */
+function deviceValues(device: DeviceEntry): Array<[string, string, string]> {
+  const k = XML.keys;
+  const values: Array<[string, string, string]> = [
+    [k.id, 'QString', device.id],
+    [k.name, 'QString', device.name],
+    [k.autodetected, 'bool', String(device.autodetected)],
+    [k.architecture, 'int', String(device.architecture)],
+    [k.wordWidth, 'int', String(device.wordWidth)],
+    [k.machineType, 'int', String(device.machineType)],
+  ];
+  const optional: Array<[string, string, string | number | undefined]> = [
+    [k.host, 'QString', device.host],
+    [k.port, 'int', device.port],
+    [k.userName, 'QString', device.userName],
+    [k.authenticationType, 'int', device.authenticationType],
+    [k.privateKeyFile, 'QString', device.privateKeyFile],
+    [k.timeout, 'int', device.timeout],
+    [k.hostKeyChecking, 'int', device.hostKeyChecking],
+    [k.freePorts, 'QString', device.freePorts],
+    [k.qmlLivePorts, 'QString', device.qmlLivePorts],
+  ];
+  for (const [key, type, value] of optional) {
+    if (value !== undefined) values.push([key, type, String(value)]);
+  }
+  for (const [key, { type, raw }] of Object.entries(device.unknownKeys)) {
+    values.push([key, type, raw]);
+  }
+  return values.sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0));
 }
 
-function deviceEntries(device: DeviceEntry): string {
-  const k = XML.keys;
-  const prefix = `${XML.dataKeyPrefix}${device.index}.`;
-  let out = '';
-  out += writeEntry(`${prefix}${k.id}`, 'QString', device.id);
-  out += writeEntry(`${prefix}${k.name}`, 'QString', device.name);
-  out += writeEntry(`${prefix}${k.autodetected}`, 'bool', String(device.autodetected));
-  out += writeEntry(`${prefix}${k.architecture}`, 'int', String(device.architecture));
-  out += writeEntry(`${prefix}${k.wordWidth}`, 'int', String(device.wordWidth));
-  out += writeEntry(`${prefix}${k.machineType}`, 'int', String(device.machineType));
-  if (device.host !== undefined) out += writeEntry(`${prefix}${k.host}`, 'QString', device.host);
-  if (device.port !== undefined) out += writeEntry(`${prefix}${k.port}`, 'int', String(device.port));
-  if (device.userName !== undefined) out += writeEntry(`${prefix}${k.userName}`, 'QString', device.userName);
-  if (device.authenticationType !== undefined)
-    out += writeEntry(`${prefix}${k.authenticationType}`, 'int', String(device.authenticationType));
-  if (device.privateKeyFile !== undefined) out += writeEntry(`${prefix}${k.privateKeyFile}`, 'QString', device.privateKeyFile);
-  if (device.timeout !== undefined) out += writeEntry(`${prefix}${k.timeout}`, 'int', String(device.timeout));
-  if (device.hostKeyChecking !== undefined)
-    out += writeEntry(`${prefix}${k.hostKeyChecking}`, 'int', String(device.hostKeyChecking));
-  if (device.freePorts !== undefined) out += writeEntry(`${prefix}${k.freePorts}`, 'QString', device.freePorts);
-  if (device.qmlLivePorts !== undefined) out += writeEntry(`${prefix}${k.qmlLivePorts}`, 'QString', device.qmlLivePorts);
-  for (const [field, { type, raw }] of Object.entries(device.unknownKeys)) {
-    out += writeEntry(`${prefix}${field}`, type, raw);
-  }
-  return out;
+function deviceBlock(device: DeviceEntry, index: number): string {
+  const values = deviceValues(device)
+    .map(([key, type, raw]) => `   <value type="${type}" key="${escapeXml(key)}">${escapeXml(raw)}</value>\n`)
+    .join('');
+  return (
+    ` <data>\n  <variable>${XML.dataKeyPrefix}${index}</variable>\n` +
+    `  <valuemap type="QVariantMap">\n${values}  </valuemap>\n </data>\n`
+  );
+}
+
+function scalarBlock(variable: string, type: string, value: string): string {
+  return ` <data>\n  <variable>${escapeXml(variable)}</variable>\n  <value type="${type}">${escapeXml(value)}</value>\n </data>\n`;
 }
 
 /**
- * Serializes per the real writer (src/libs/utils/persistentsettings.cpp): XML decl, a
- * `<!DOCTYPE QtCreatorSfdkDevices>` DTD, a comment, `<qtcreator>` root, one `<data>` per
- * flat key. Byte-identical parity with a real Qt-Creator-written file is not attempted —
- * Qt Creator's own writer embeds a fresh app-name/version/timestamp comment on every save,
- * so even its own output isn't byte-stable across writes; this only needs to be valid,
- * correctly-keyed XML that Qt Creator/sfdk can read back.
+ * Serializes in libsfdk's layout and order: devices (renumbered 0..n-1), `Devices.Count`, then
+ * the other entries verbatim (adding `Sfdk.UserSettings.Version` for a new file). The comment
+ * line differs from sfdk's own; sfdk rewrites and normalizes the file on its next save anyway.
  */
 export function serializeDevicesXml(doc: DevicesXmlDocument, writtenAtIso: string): string {
-  let body = '';
-  for (const entry of doc.otherEntries) {
-    body += writeEntry(entry.variable, entry.type, entry.raw);
-  }
-  body += writeEntry(XML.countKey, 'int', String(doc.devices.length));
-  for (const device of doc.devices) {
-    body += deviceEntries(device);
+  let body = doc.devices.map((device, i) => deviceBlock(device, i)).join('');
+  body += scalarBlock(XML.countKey, 'int', String(doc.devices.length));
+  const others = doc.otherEntries.length
+    ? doc.otherEntries
+    : [{ variable: USER_SETTINGS_VERSION.variable, xml: scalarBlock(USER_SETTINGS_VERSION.variable, 'int', String(USER_SETTINGS_VERSION.value)).trim() }];
+  for (const entry of others) {
+    body += ` ${entry.xml.trim()}\n`;
   }
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
@@ -195,6 +215,19 @@ export interface DevicesXmlWriteResult {
 
 const MAX_BACKUPS = 5;
 
+/**
+ * libsfdk increments `Sfdk.UserSettings.Version` on every save (observed 7 → 10 → 11 on SDK 3.13.5);
+ * bumping it too marks the file as newer than any running sfdk's in-memory copy.
+ */
+export function bumpUserSettingsVersion(doc: DevicesXmlDocument): DevicesXmlDocument {
+  const otherEntries = doc.otherEntries.map((entry) => {
+    if (entry.variable !== USER_SETTINGS_VERSION.variable) return entry;
+    const xml = entry.xml.replace(/(<value type="int">)(\d+)(<\/value>)/, (_m, open: string, n: string, close: string) => `${open}${Number(n) + 1}${close}`);
+    return { ...entry, xml };
+  });
+  return { ...doc, otherEntries };
+}
+
 /** FR-7.5: read-modify-write with a timestamped backup (kept to the last 5) and an atomic rename. */
 export function writeDevicesXmlFile(filePath: string, doc: DevicesXmlDocument, nowIso: string): DevicesXmlWriteResult {
   const dir = path.dirname(filePath);
@@ -209,7 +242,7 @@ export function writeDevicesXmlFile(filePath: string, doc: DevicesXmlDocument, n
   }
 
   const tmpPath = `${filePath}.tmp`;
-  fs.writeFileSync(tmpPath, serializeDevicesXml(doc, nowIso), 'utf8');
+  fs.writeFileSync(tmpPath, serializeDevicesXml(bumpUserSettingsVersion(doc), nowIso), 'utf8');
   fs.renameSync(tmpPath, filePath);
   return { path: filePath, backupPath };
 }

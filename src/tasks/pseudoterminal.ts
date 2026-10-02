@@ -8,6 +8,8 @@ import { chooseLauncher } from './launcher';
 import { PathMapCache, mapEngineLine, normalizeSeverity, prefixSpecLine } from './pathMap';
 import { mapBuildError, mapDeployError, type MappedError } from './errors';
 import { runNotificationAction } from './notify';
+import { NO_TIMEOUT } from '../sfdk/runner';
+import { deployInstallsApp } from './buildConfig';
 
 const SHOW_OUTPUT_ACTION = 'Show output';
 
@@ -43,6 +45,7 @@ function stepsFor(project: ProjectDescriptor, def: SailfishTaskDefinitionLike, s
             {
               runHarbourCheck: services.settings.get('build.runHarbourCheck', folderUri),
               jobs: services.settings.get('build.jobs', folderUri),
+              buildType: services.settings.get('build.type', folderUri),
             },
           ),
           ensureEngine: true,
@@ -63,6 +66,10 @@ function stepsFor(project: ProjectDescriptor, def: SailfishTaskDefinitionLike, s
         killBeforeLaunch: services.settings.get('run.killBeforeLaunch', folderUri),
       });
       const steps: Step[] = [...stepsFor(project, { command: 'deploy' }, services)];
+      if (!deployInstallsApp(services.settings.get('deploy.method', folderUri))) {
+        // A manual deploy only copies the RPM to ~/RPMS; there is nothing installed to launch.
+        return steps;
+      }
       if (pkillArgs) {
         steps.push({ argv: pkillArgs, ignoreFailure: true, usesDevice: true });
       }
@@ -154,6 +161,7 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
         device: step.usesDevice ? device : undefined,
         cwd: folder.uri.fsPath,
         token: this.cts.token,
+        timeoutMs: step.isLaunch ? NO_TIMEOUT : undefined,
         ensureEngine: step.ensureEngine,
         onLine: (line, stream) => {
           this.emitLine(line, engineMapping, prefixSpec);

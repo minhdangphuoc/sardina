@@ -41,6 +41,8 @@ export interface SfdkDeviceInfo {
   flags: string[];
   extra: string[];
   vmName?: string;
+  /** For an `emulator list` row: the joined `device list` entry's name, which `-c device=` and `device exec` expect. */
+  deviceName?: string;
 }
 
 /** TRD FR-16.1 */
