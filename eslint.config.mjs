@@ -26,7 +26,7 @@ export default tseslint.config(
             'test/unit/sfdk/*.ts',
             'test/fuzz/*.ts',
           ],
-          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 50,
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 200,
         },
         tsconfigRootDir: import.meta.dirname,
       },

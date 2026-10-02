@@ -18,7 +18,6 @@ import { parseEngineStatus, type EngineRunningStatus } from '../sfdk/parsers/eng
 import { parseTargetList } from '../targets/parseTargetList';
 import { scopeFolder } from '../targets/statusBar';
 import {
-  abbreviateHome,
   engineItemState,
   type EngineOutcome,
   sdkRootState,

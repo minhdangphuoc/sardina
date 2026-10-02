@@ -1,0 +1,71 @@
+name: Build VSIX
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Type check
+        run: npm run check:types
+
+      - name: Lint
+        run: npm run lint
+
+      - name: Unit and fuzz tests
+        run: |
+          npm run test:unit
+          npm run test:fuzz
+
+      - name: Manifest and licence checks
+        run: |
+          npm run check:manifest
+          npm run check:proprietary
+
+      - name: Build
+        run: npm run build
+
+      - name: Package VSIX
+        id: package
+        run: |
+          VERSION=$(node -p "require('./package.json').version")
+          npx vsce package --no-dependencies --out "sailfish-tools-${VERSION}.vsix"
+          echo "file=sailfish-tools-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: sailfish-tools-vsix
+          path: ${{ steps.package.outputs.file }}
+          if-no-files-found: error
+
+  release:
+    # Tagging vX.Y.Z attaches the built VSIX to a GitHub release.
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: sailfish-tools-vsix
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: '*.vsix'
