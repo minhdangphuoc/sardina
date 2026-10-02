@@ -29,7 +29,7 @@ tasks, project scaffolding and a getting-started walkthrough.
 | [Sailfish SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/) | 3.10 or newer | Tested with **3.13.5**. Older versions are not blocked; a warning is written to the Sailfish OS output channel. |
 | [VS Code](https://code.visualstudio.com/) | 1.94 or newer | |
 | [Qt QML](https://marketplace.visualstudio.com/items?itemName=theqtcompany.qt-qml) extension | any | Required: VS Code installs it together with this extension (needs internet access to the Marketplace; VSCodium users install it from Open VSX first). |
-| git and [Node.js](https://nodejs.org/) | Node.js 20 or newer recommended | Only to build this extension from source. Tested with Node.js 22.23.3. |
+| git and [Node.js](https://nodejs.org/) | Node.js 22 or newer | Only to build this extension from source. CI builds with Node.js 22; some build tools in `package-lock.json` require it. Tested with 22.23.3. |
 | OpenSSH client | 8.4 or newer | `ssh`, `ssh-keygen` and `ssh-copy-id`, used when adding a phone. The extension checks for them once when it starts and shows a notice if any are missing. |
 
 ## Setup
@@ -98,7 +98,7 @@ variable, to that folder. The extension looks in this order: `sailfish.sdkPath`,
 The extension is not on the Marketplace yet, so you build it from source.
 
 1. Install VS Code from <https://code.visualstudio.com/>, git, and Node.js
-   (20 or newer). **Check:** `code --version`, `git --version` and
+   (22 or newer). **Check:** `code --version`, `git --version` and
    `node --version` each print a version.
 2. Build and install the extension:
 
@@ -107,7 +107,7 @@ The extension is not on the Marketplace yet, so you build it from source.
    cd sailfish-dev-extension
    npm ci                                         # install build tools
    npm run build                                  # compile into dist/
-   npx vsce package --allow-missing-repository    # creates sailfish-tools-0.1.0.vsix
+   npx vsce package                               # creates sailfish-tools-0.1.0.vsix
    code --install-extension sailfish-tools-0.1.0.vsix
    ```
 
