@@ -103,8 +103,8 @@ The extension is not on the Marketplace yet, so you build it from source.
 2. Build and install the extension:
 
    ```sh
-   git clone https://github.com/minhdangphuoc/sailfish-dev-extension.git
-   cd sailfish-dev-extension
+   git clone https://github.com/minhdangphuoc/vscode-sailfish.git
+   cd vscode-sailfish
    npm ci                                         # install build tools
    npm run build                                  # compile into dist/
    npx vsce package                               # creates sailfish-tools-0.1.0.vsix
