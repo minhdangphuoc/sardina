@@ -18,11 +18,27 @@ export interface BuildArgvSettings {
   jobs: number;
   /** The `sailfish.build.type` selector; a task definition's own `debug` wins. */
   buildType?: 'release' | 'debug';
+  /** `sailfish.build.sign`: adds `--sign`; the user and passphrase file go in as session `-c` options. */
+  sign?: boolean;
+  signingUser?: string;
+  signingPassphraseFile?: string;
 }
 
 /** FR-5.3. `-c target=`/`-c device=` are passed to SfdkRunner as options, not included here. */
 export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSettings): string[] {
-  const args: string[] = ['build'];
+  const args: string[] = [];
+  if (settings.sign) {
+    if (settings.signingUser) {
+      args.push('-c', `package.signing.user=${settings.signingUser}`);
+    }
+    if (settings.signingPassphraseFile) {
+      args.push('-c', `package.signing-passphrase-file=${settings.signingPassphraseFile}`);
+    }
+  }
+  args.push('build');
+  if (settings.sign) {
+    args.push('--sign');
+  }
   if (def.prepare) {
     args.push('--prepare');
   }

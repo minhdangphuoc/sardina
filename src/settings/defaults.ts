@@ -14,6 +14,9 @@ export interface SailfishSettings {
   'build.extraArgs': string[];
   'build.type': 'release' | 'debug';
   'build.cleanOnArchChange': boolean;
+  'build.sign': boolean;
+  'build.signingUser': string;
+  'build.signingPassphraseFile': string;
   'deploy.method': 'sdk' | 'pkcon' | 'rsync' | 'zypper' | 'zypper-dup' | 'manual';
   'run.launcher': 'auto' | 'invoker-silica' | 'sailfish-qml' | 'custom';
   'run.customCommand': string;
@@ -35,6 +38,9 @@ export const DEFAULTS: SailfishSettings = {
   'build.extraArgs': [],
   'build.type': 'release',
   'build.cleanOnArchChange': false,
+  'build.sign': false,
+  'build.signingUser': '',
+  'build.signingPassphraseFile': '',
   'deploy.method': 'sdk',
   'run.launcher': 'auto',
   'run.customCommand': '',

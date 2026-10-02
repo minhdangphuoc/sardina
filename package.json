@@ -319,6 +319,24 @@
           "scope": "resource",
           "markdownDescription": "Build type used by the build, deploy and run tasks. Also selectable from the status bar."
         },
+        "sailfish.build.sign": {
+          "type": "boolean",
+          "default": false,
+          "scope": "resource",
+          "markdownDescription": "Sign the RPM packages produced by the build, deploy and run tasks (`sfdk build --sign`). Needs a GPG key; see `sailfish.build.signingUser`."
+        },
+        "sailfish.build.signingUser": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "Name of the GPG key's user, passed to sfdk as `package.signing.user`. Leave empty to use the value from `sfdk config`."
+        },
+        "sailfish.build.signingPassphraseFile": {
+          "type": "string",
+          "default": "",
+          "scope": "resource",
+          "markdownDescription": "Path to a file (mode 600) holding the key's passphrase, passed to sfdk as `package.signing-passphrase-file`. Leave empty to use the value from `sfdk config`. The passphrase itself is never stored in settings."
+        },
         "sailfish.build.cleanOnArchChange": {
           "type": "boolean",
           "default": false,

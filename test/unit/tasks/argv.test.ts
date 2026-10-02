@@ -50,6 +50,34 @@ describe('argv.buildArgs (FR-5.3)', () => {
     assert.deepStrictEqual(argv, ['build', '--', '--define', 'x 1']);
   });
 
+  it('sign adds --sign and the signing -c options before the command', () => {
+    const argv = buildArgs(
+      { command: 'build' },
+      { runHarbourCheck: true, jobs: 0, sign: true, signingUser: 'Jane Doe', signingPassphraseFile: '/home/jane/pass.txt' },
+    );
+    assert.deepStrictEqual(argv, [
+      '-c',
+      'package.signing.user=Jane Doe',
+      '-c',
+      'package.signing-passphrase-file=/home/jane/pass.txt',
+      'build',
+      '--sign',
+    ]);
+  });
+
+  it('sign with no user or passphrase file leaves them to sfdk config', () => {
+    const argv = buildArgs({ command: 'build' }, { runHarbourCheck: true, jobs: 0, sign: true });
+    assert.deepStrictEqual(argv, ['build', '--sign']);
+  });
+
+  it('signing user and passphrase file are ignored while sign is off', () => {
+    const argv = buildArgs(
+      { command: 'build' },
+      { runHarbourCheck: true, jobs: 0, sign: false, signingUser: 'Jane Doe', signingPassphraseFile: '/p' },
+    );
+    assert.deepStrictEqual(argv, ['build']);
+  });
+
   it('never emits -c target=/-c device= (SfdkRunner options do that)', () => {
     const argv = buildArgs(
       { command: 'build', target: 'SailfishOS-4.4.0.58-aarch64', device: 'Emulator' },

@@ -39,6 +39,15 @@ const LONG_RUNNING_COMMANDS = new Set(['build', 'deploy', 'qmake', 'make', 'pack
 const SERIALIZED_FAMILIES = new Set(['tools', 'emulator']);
 const SIGKILL_GRACE_MS = 5000;
 
+/** The sfdk subcommand, skipping leading `-c key=value` session options. */
+function commandName(args: string[]): string {
+  let i = 0;
+  while (args[i] === '-c') {
+    i += 2;
+  }
+  return args[i] ?? '';
+}
+
 function splitLines(buffer: string): { lines: string[]; rest: string } {
   const parts = buffer.split(/\r?\n/);
   const rest = parts.pop() ?? '';
@@ -60,7 +69,7 @@ export class SfdkRunner {
       }
     }
     const args = this.buildArgv(opts);
-    if (!SERIALIZED_FAMILIES.has(opts.args[0] ?? '')) {
+    if (!SERIALIZED_FAMILIES.has(commandName(opts.args))) {
       return this.execRaw(args, opts, cwd);
     }
     const result = this.serialQueue.then(() => this.execRaw(args, opts, cwd));
@@ -116,7 +125,7 @@ export class SfdkRunner {
       });
     }
     const timeoutMs =
-      opts.timeoutMs ?? (LONG_RUNNING_COMMANDS.has(opts.args[0]) ? DEFAULT_BUILD_TIMEOUT_MS : DEFAULT_LIST_TIMEOUT_MS);
+      opts.timeoutMs ?? (LONG_RUNNING_COMMANDS.has(commandName(opts.args)) ? DEFAULT_BUILD_TIMEOUT_MS : DEFAULT_LIST_TIMEOUT_MS);
 
     return new Promise((resolve) => {
       const start = Date.now();

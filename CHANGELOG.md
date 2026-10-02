@@ -11,3 +11,4 @@
 - Disable the Qt QML extension's `qmlls` language server per Sailfish project folder, since it requires Qt 6.8+ while Sailfish targets ship Qt 5.6 (`sailfish.qtqml.silenceQmlls`).
 - Add 21 Silica QML snippets (`sfpage`, `sfdialog`, `sflistview`, `sfflickable`, `sfpulldown`, `sfpushup`, `sfcover`, `sfremorseitem`, `sfremorsepopup`, `sfbutton`, `sftextfield`, `sfswitch`, `sfslider`, `sfcombobox`, `sfsectionheader`, `sfdetailitem`, `sfbusy`, `sfviewplaceholder`, `sfappwindow`, `sfattached`, `sfnotification`).
 - Add a "Get started with Sailfish OS" walkthrough covering SDK setup, project creation, target selection, the emulator and build/deploy/run.
+- Optional RPM signing: `sailfish.build.sign` adds `sfdk build --sign` to the build, deploy and run tasks, with `sailfish.build.signingUser` and `sailfish.build.signingPassphraseFile` passed to sfdk as session options.
