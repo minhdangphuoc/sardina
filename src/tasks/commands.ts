@@ -9,6 +9,7 @@ import { runNotificationAction } from './notify';
 import { launchInAppTerminal } from './appTerminal';
 import { deployInstallsApp, deployMethodLabel } from './buildConfig';
 import { ensureBuildMatchesTargetArch } from './archGuard';
+import { whitespacePathWarning } from './pathGuard';
 
 async function ensureTarget(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
   const target = services.settings.get('target', folder.uri);
@@ -116,6 +117,11 @@ export async function buildDeployThen(
 
   const folderUri = project.folder.uri;
   const cwd = folderUri.fsPath;
+  const pathWarning = whitespacePathWarning(cwd);
+  if (pathWarning) {
+    services.output.log('warn', pathWarning);
+    void services.prompts.showWarningMessage(`Sailfish: ${pathWarning}`);
+  }
   const target = services.settings.get('target', folderUri) || undefined;
   const device = services.settings.get('device', folderUri) || undefined;
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Warn when a project path contains whitespace (including a trailing space in a folder name), which breaks sfdk's build engine with a confusing "Cannot find real …" error. The warning shows in the task terminal, and as a notification for Run and Debug.
+
 ## v0.1.1
 
 - Optional RPM signing: `sailfish.build.sign` adds `sfdk build --sign` to the build, deploy and run tasks, with `sailfish.build.signingUser` and `sailfish.build.signingPassphraseFile` passed to sfdk as session options.

@@ -10,6 +10,7 @@ import { mapBuildError, mapDeployError, type MappedError } from './errors';
 import { runNotificationAction } from './notify';
 import { NO_TIMEOUT } from '../sfdk/runner';
 import { deployInstallsApp } from './buildConfig';
+import { whitespacePathWarning } from './pathGuard';
 
 const SHOW_OUTPUT_ACTION = 'Show output';
 
@@ -140,6 +141,11 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
     const target = this.def.target || this.services.settings.get('target', folder.uri) || undefined;
     const device = this.def.device || this.services.settings.get('device', folder.uri) || undefined;
     const prefixSpec = this.def.command === 'build' || this.def.command === 'check';
+
+    const pathWarning = whitespacePathWarning(folder.uri.fsPath);
+    if (pathWarning) {
+      this.write(`warning: ${pathWarning}\n`);
+    }
 
     let engineMapping: string | null = null;
     if (prefixSpec) {
