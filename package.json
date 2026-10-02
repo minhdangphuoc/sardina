@@ -60,200 +60,200 @@
     "commands": [
       {
         "command": "sailfish.setSdkPath",
-        "title": "Sailfish: Set SDK Path",
+        "title": "Set SDK Path",
         "category": "Sailfish"
       },
       {
         "command": "sailfish.downloadSdk",
-        "title": "Sailfish: Download SDK",
+        "title": "Download SDK",
         "category": "Sailfish"
       },
       {
         "command": "sailfish.sdk.install",
-        "title": "Sailfish: Install SDK",
+        "title": "Install SDK",
         "category": "Sailfish",
         "icon": "$(cloud-download)",
         "enablement": "sailfish.platformSupported"
       },
       {
         "command": "sailfish.engine.start",
-        "title": "Sailfish: Start Build Engine",
+        "title": "Start Build Engine",
         "category": "Sailfish",
         "icon": "$(debug-start)",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.engine.stop",
-        "title": "Sailfish: Stop Build Engine",
+        "title": "Stop Build Engine",
         "category": "Sailfish",
         "icon": "$(debug-stop)",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.newProject",
-        "title": "Sailfish: New Project",
+        "title": "New Project",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.selectTarget",
-        "title": "Sailfish: Select Target",
+        "title": "Select Target",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.setSfdkDefaultTarget",
-        "title": "Sailfish: Set sfdk Default Target",
+        "title": "Set sfdk Default Target",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.debugOnDevice",
-        "title": "Sailfish: Debug on Device",
+        "title": "Debug on Device",
         "category": "Sailfish",
         "icon": "$(debug-alt)",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.setupSigning",
-        "title": "Sailfish: Set Up Package Signing",
+        "title": "Set Up Package Signing",
         "category": "Sailfish"
       },
       {
         "command": "sailfish.selectBuildType",
-        "title": "Sailfish: Select Build Type",
+        "title": "Select Build Type",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.selectDeployMethod",
-        "title": "Sailfish: Select Deploy Method",
+        "title": "Select Deploy Method",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.build",
-        "title": "Sailfish: Build",
+        "title": "Build",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.deploy",
-        "title": "Sailfish: Deploy",
+        "title": "Deploy",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.run",
-        "title": "Sailfish: Run",
+        "title": "Run",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.buildDeployRun",
-        "title": "Sailfish: Build, Deploy and Run",
+        "title": "Build, Deploy and Run",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.package",
-        "title": "Sailfish: Package",
+        "title": "Package",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.clean",
-        "title": "Sailfish: Clean",
+        "title": "Clean",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.devices.refresh",
-        "title": "Sailfish: Refresh Devices",
+        "title": "Refresh Devices",
         "icon": "$(refresh)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.emulator.start",
-        "title": "Sailfish: Start Emulator",
+        "title": "Start Emulator",
         "icon": "$(debug-start)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.emulator.stop",
-        "title": "Sailfish: Stop Emulator",
+        "title": "Stop Emulator",
         "icon": "$(debug-stop)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.emulator.status",
-        "title": "Sailfish: Emulator Status",
+        "title": "Emulator Status",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.emulator.show",
-        "title": "Sailfish: Show Emulator",
+        "title": "Show Emulator",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.emulator.installAvailable",
-        "title": "Sailfish: Install Available Emulator",
+        "title": "Install Available Emulator",
         "icon": "$(cloud-download)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.setDefault",
-        "title": "Sailfish: Set Default Device",
+        "title": "Set Default Device",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.setSfdkDefault",
-        "title": "Sailfish: Set sfdk Default Device",
+        "title": "Set sfdk Default Device",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.openSsh",
-        "title": "Sailfish: Open SSH to Device",
+        "title": "Open SSH to Device",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.connectWlan",
-        "title": "Sailfish: Connect to Device (WLAN)",
+        "title": "Connect to Device (WLAN)",
         "category": "Sailfish",
         "enablement": "sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.add",
-        "title": "Sailfish: Add Device",
+        "title": "Add Device",
         "icon": "$(add)",
         "category": "Sailfish",
         "enablement": "sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.installTools",
-        "title": "Sailfish: Install Deploy & Debug Tools on Device",
+        "title": "Install Deploy & Debug Tools on Device",
         "category": "Sailfish",
         "icon": "$(cloud-download)",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.remove",
-        "title": "Sailfish: Remove Device",
+        "title": "Remove Device",
         "category": "Sailfish",
         "enablement": "sailfish.platformSupported"
       },
       {
         "command": "sailfish.showOutput",
-        "title": "Sailfish: Show Output",
+        "title": "Show Output",
         "category": "Sailfish"
       }
     ],

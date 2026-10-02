@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Fix command names showing as "Sailfish: Sailfish: …" in the Command Palette: command titles no longer repeat the `Sailfish` category prefix.
+
 ## v0.1.2
 
 - Warn when a project path contains whitespace (including a trailing space in a folder name), which breaks sfdk's build engine with a confusing "Cannot find real …" error. The warning shows in the task terminal, and as a notification for Run and Debug.
