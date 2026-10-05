@@ -13,3 +13,4 @@ esbuild.mjs
 eslint.config.mjs
 .gitignore
 .git/**
+device-agent/**

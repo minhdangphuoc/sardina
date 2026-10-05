@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
 import { NO_TIMEOUT } from '../sfdk/runner';
-import { buildDeployThen, type DeployedApp } from '../tasks/commands';
+import { buildDeployThen, installedAppThen, type DeployedApp } from '../tasks/commands';
 import { parseDebugRecipe, type DebugRecipe } from './recipe';
 import { INSTALL_ON_DEVICE, installOnDevice } from '../devices/devicePackages';
 
@@ -10,7 +10,7 @@ const INSTALL_CPPTOOLS = 'Install C/C++ extension';
 const SWITCH_TO_DEBUG = 'Switch to Debug';
 const DEBUG_ANYWAY = 'Debug anyway';
 const LISTEN_TIMEOUT_MS = 30_000;
-const GDBSERVER_INSTALL_HINT = 'devel-su pkcon install gdb-gdbserver';
+const GDBSERVER_INSTALL_HINT = 'devel-su sh -c "pkcon refresh && pkcon install -y gdb-gdbserver"';
 const RUN_WITHOUT_DEBUGGER = 'Run without debugger';
 
 /** C++ debugging goes through the C/C++ extension's `cppdbg` debugger driving the SDK's GDB. */
@@ -183,50 +183,80 @@ export async function debugOnDevice(services: Services): Promise<void> {
   if (gdbserver === 'cancel') return;
   if (!(await ensureDebugBuild(services, project.folder))) return;
 
-  await buildDeployThen(services, 'Sailfish: Debug on Device', async (app, progress, token) => {
-    progress.report({ message: 'starting debugger…' });
-    if (app.pkillArgs) {
-      await services.runner.run({ args: app.pkillArgs, target: app.target, device: app.device, cwd: app.cwd, token });
-    }
-    const remoteExe = app.project.appBinaryPath;
-    const dryRun = await services.runner.run({
-      args: ['debug', '--dry-run', remoteExe],
-      target: app.target,
-      device: app.device,
-      cwd: app.cwd,
-      token,
-    });
-    const recipe = dryRun.exitCode === 0 ? parseDebugRecipe(dryRun.stdout) : undefined;
-    if (!recipe || !recipe.program) {
-      services.output.log('error', `sfdk debug --dry-run gave no usable GDB setup (exit ${dryRun.exitCode}): ${dryRun.stdout}${dryRun.stderr}`);
-      void services.prompts.showErrorMessage('Sailfish: could not prepare the debugger (see the Sailfish OS output).');
-      return;
-    }
+  await buildDeployThen(services, 'Sailfish: Debug on Device', (app, progress, token) => attachDebugger(services, app, progress, token), project);
+}
 
-    let stopGdbserver: () => void;
-    try {
-      stopGdbserver = await startGdbserver(services, app, recipe, token);
-    } catch (err) {
-      void services.prompts.showErrorMessage(`Sailfish: ${err instanceof Error ? err.message : String(err)}`);
-      return;
-    }
+/** "Sailfish: Debug Installed App": the app already on the device, under the debugger, without building or deploying. */
+export async function debugInstalled(services: Services): Promise<void> {
+  if (!(await ensureCppTools(services))) return;
+  const project = await services.projects.resolveActive();
+  if (!project) {
+    void services.prompts.showWarningMessage('Sailfish: no Sailfish project found in this workspace.');
+    return;
+  }
+  const gdbserver = await ensureGdbserver(services, project.folder);
+  if (gdbserver === 'run-instead') {
+    await vscode.commands.executeCommand('sailfish.runInstalled');
+    return;
+  }
+  if (gdbserver === 'cancel') return;
+  // No Release-to-Debug offer here: nothing is rebuilt, so switching the build type would not help this session.
+  await installedAppThen(services, 'Sailfish: Debug Installed App', 'sailfish.debugOnDevice', (app, progress, token) =>
+    attachDebugger(services, app, progress, token), project);
+}
 
-    const config = cppdbgConfiguration(app, recipe);
-    const started = await vscode.debug.startDebugging(app.project.folder, config);
-    if (!started) {
+/** Starts the installed app under gdbserver and attaches VS Code's debugger to it. */
+async function attachDebugger(
+  services: Services,
+  app: DeployedApp,
+  progress: vscode.Progress<{ message?: string }>,
+  token: vscode.CancellationToken,
+): Promise<void> {
+  progress.report({ message: 'starting debugger…' });
+  if (app.pkillArgs) {
+    await services.runner.run({ args: app.pkillArgs, target: app.target, device: app.device, cwd: app.cwd, token });
+  }
+  const remoteExe = app.project.appBinaryPath;
+  const dryRun = await services.runner.run({
+    args: ['debug', '--dry-run', remoteExe],
+    target: app.target,
+    device: app.device,
+    cwd: app.cwd,
+    token,
+  });
+  const recipe = dryRun.exitCode === 0 ? parseDebugRecipe(dryRun.stdout) : undefined;
+  if (!recipe || !recipe.program) {
+    services.output.log('error', `sfdk debug --dry-run gave no usable GDB setup (exit ${dryRun.exitCode}): ${dryRun.stdout}${dryRun.stderr}`);
+    void services.prompts.showErrorMessage('Sailfish: could not prepare the debugger (see the Sailfish OS output).');
+    return;
+  }
+
+  let stopGdbserver: () => void;
+  try {
+    stopGdbserver = await startGdbserver(services, app, recipe, token);
+  } catch (err) {
+    void services.prompts.showErrorMessage(`Sailfish: ${err instanceof Error ? err.message : String(err)}`);
+    return;
+  }
+
+  const config = cppdbgConfiguration(app, recipe);
+  const started = await vscode.debug.startDebugging(app.project.folder, config);
+  if (!started) {
+    stopGdbserver();
+    void services.prompts.showErrorMessage('Sailfish: VS Code could not start the debug session.');
+    return;
+  }
+  const sub = vscode.debug.onDidTerminateDebugSession((session) => {
+    if (session.configuration.name === config.name) {
       stopGdbserver();
-      void services.prompts.showErrorMessage('Sailfish: VS Code could not start the debug session.');
-      return;
+      sub.dispose();
     }
-    const sub = vscode.debug.onDidTerminateDebugSession((session) => {
-      if (session.configuration.name === config.name) {
-        stopGdbserver();
-        sub.dispose();
-      }
-    });
-  }, project);
+  });
 }
 
 export function activateDebug(ctx: vscode.ExtensionContext, services: Services): void {
-  ctx.subscriptions.push(vscode.commands.registerCommand('sailfish.debugOnDevice', () => debugOnDevice(services)));
+  ctx.subscriptions.push(
+    vscode.commands.registerCommand('sailfish.debugOnDevice', () => debugOnDevice(services)),
+    vscode.commands.registerCommand('sailfish.debugInstalled', () => debugInstalled(services)),
+  );
 }

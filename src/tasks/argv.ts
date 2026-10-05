@@ -13,28 +13,37 @@ export interface SailfishTaskDefinitionLike {
   targets?: string[];
 }
 
-export interface BuildArgvSettings {
-  runHarbourCheck: boolean;
-  jobs: number;
-  /** The `sailfish.build.type` selector; a task definition's own `debug` wins. */
-  buildType?: 'release' | 'debug';
+export interface SigningSettings {
   /** `sailfish.build.sign`: adds `--sign`; the user and passphrase file go in as session `-c` options. */
   sign?: boolean;
   signingUser?: string;
   signingPassphraseFile?: string;
 }
 
-/** FR-5.3. `-c target=`/`-c device=` are passed to SfdkRunner as options, not included here. */
-export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSettings): string[] {
+/** Leading `-c` options naming the key; empty values are left to `sfdk config`. Only when signing. */
+function signingConfigArgs(settings: SigningSettings): string[] {
   const args: string[] = [];
   if (settings.sign) {
     if (settings.signingUser) {
-      args.push('-c', `package.signing.user=${settings.signingUser}`);
+      args.push('-c', `package.signing-user=${settings.signingUser}`);
     }
     if (settings.signingPassphraseFile) {
       args.push('-c', `package.signing-passphrase-file=${settings.signingPassphraseFile}`);
     }
   }
+  return args;
+}
+
+export interface BuildArgvSettings extends SigningSettings {
+  runHarbourCheck: boolean;
+  jobs: number;
+  /** The `sailfish.build.type` selector; a task definition's own `debug` wins. */
+  buildType?: 'release' | 'debug';
+}
+
+/** FR-5.3. `-c target=`/`-c device=` are passed to SfdkRunner as options, not included here. */
+export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSettings): string[] {
+  const args: string[] = signingConfigArgs(settings);
   args.push('build');
   if (settings.sign) {
     args.push('--sign');
@@ -74,8 +83,11 @@ export function deployArgs(def: SailfishTaskDefinitionLike, settings: DeployArgv
 }
 
 /** FR-5.6 package. */
-export function packageArgs(def: SailfishTaskDefinitionLike): string[] {
-  const args: string[] = ['package'];
+export function packageArgs(def: SailfishTaskDefinitionLike, settings: SigningSettings = {}): string[] {
+  const args: string[] = [...signingConfigArgs(settings), 'package'];
+  if (settings.sign) {
+    args.push('--sign');
+  }
   if (def.noCheck) {
     args.push('--no-check');
   }

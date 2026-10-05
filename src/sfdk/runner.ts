@@ -13,6 +13,13 @@ export interface SfdkRunOptions {
   timeoutMs?: number;
   onLine?: (line: string, stream: 'stdout' | 'stderr') => void;
   ensureEngine?: boolean;
+  /** Written to the child's stdin, which is then closed (e.g. a file for `device exec -- sh -c 'base64 -d > …'`). */
+  stdin?: string | Buffer;
+  /**
+   * Default true. False for endless streams (device logs): lines still reach `onLine`, but
+   * `SfdkResult.stdout`/`stderr` stay empty so memory does not grow with the stream.
+   */
+  collectOutput?: boolean;
 }
 
 export interface SfdkResult {
@@ -111,7 +118,7 @@ export class SfdkRunner {
     return this.services.sdk.current()?.sfdkPath;
   }
 
-  private execRaw(argv: string[], opts: Pick<SfdkRunOptions, 'token' | 'timeoutMs' | 'onLine' | 'args'>, cwd?: string): Promise<SfdkResult> {
+  private execRaw(argv: string[], opts: Pick<SfdkRunOptions, 'token' | 'timeoutMs' | 'onLine' | 'args' | 'stdin' | 'collectOutput'>, cwd?: string): Promise<SfdkResult> {
     const bin = this.sfdkPath();
     if (!bin) {
       return Promise.resolve({
@@ -155,6 +162,13 @@ export class SfdkRunner {
         return;
       }
 
+      if (opts.stdin !== undefined && child.stdin) {
+        // The child may exit before reading everything (EPIPE); the exit code tells the story.
+        child.stdin.on('error', () => undefined);
+        child.stdin.end(opts.stdin);
+      }
+
+      const collect = opts.collectOutput !== false;
       const emit = (chunk: string, stream: 'stdout' | 'stderr') => {
         const buffered = (stream === 'stdout' ? stdoutRest : stderrRest) + chunk;
         const { lines, rest } = splitLines(buffered);
@@ -170,12 +184,12 @@ export class SfdkRunner {
 
       child.stdout?.on('data', (d: Buffer) => {
         const text = d.toString('utf8');
-        stdout += text;
+        if (collect) stdout += text;
         emit(text, 'stdout');
       });
       child.stderr?.on('data', (d: Buffer) => {
         const text = d.toString('utf8');
-        stderr += text;
+        if (collect) stderr += text;
         emit(text, 'stderr');
       });
 

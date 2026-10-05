@@ -11,6 +11,15 @@ import type { Services } from '../../src/core/services';
  * when TEST_MODE != 'bare'.
  */
 
+/** `process.env.X = undefined` would store the string "undefined", so an unset variable must be deleted. */
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) {
+    delete process.env[name];
+  } else {
+    process.env[name] = value;
+  }
+}
+
 function services(): Services {
   return extensionApi().__test.getServices() as unknown as Services;
 }
@@ -62,8 +71,14 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sailfish-empty-sdk-'));
     const prevPath = process.env.PATH;
     const prevRoot = process.env.SAILFISH_SDK_ROOT;
+    // Discovery also tries ~/SailfishOS, so a machine with a real SDK installed there would still find one.
+    // Point the home directory at an empty folder for the duration of this test only.
+    const prevHome = process.env.HOME;
+    const prevUserProfile = process.env.USERPROFILE;
     await setSdkPathSetting(emptyDir);
     process.env.PATH = '';
+    process.env.HOME = emptyDir;
+    process.env.USERPROFILE = emptyDir;
     delete process.env.SAILFISH_SDK_ROOT;
     try {
       await services().sdk.refresh();
@@ -74,8 +89,10 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
       await services().sdk.refresh();
       assert.strictEqual(messages.calls.filter((c) => c.kind === 'warning').length, 1);
     } finally {
-      process.env.PATH = prevPath;
-      process.env.SAILFISH_SDK_ROOT = prevRoot;
+      restoreEnv('PATH', prevPath);
+      restoreEnv('SAILFISH_SDK_ROOT', prevRoot);
+      restoreEnv('HOME', prevHome);
+      restoreEnv('USERPROFILE', prevUserProfile);
     }
   });
 

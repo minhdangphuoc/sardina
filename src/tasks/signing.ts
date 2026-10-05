@@ -4,7 +4,7 @@ import * as path from 'node:path';
 import type { Services } from '../core/services';
 import { spawnCapture } from '../sfdk/runner';
 import { sanitizeForFilename } from '../devices/deviceWizard';
-import { buildKeyParams, parseSecretKeys, validateKeyEmail, validateKeyName, validatePassphrase } from './signingCore';
+import { buildKeyParams, parseSecretKeys, signingUserFor, validateKeyEmail, validateKeyName, validatePassphrase } from './signingCore';
 
 const CREATE_KEY = 'Create a new key';
 
@@ -27,8 +27,35 @@ async function listKeys(): Promise<{ missing: boolean; keys: ReturnType<typeof p
   return { missing: listed.exitCode === -1, keys: parseSecretKeys(listed.stdout) };
 }
 
+/**
+ * Signs a throwaway file with the key. An empty passphrase must not unlock a protected key (pinentry
+ * is disabled), so "the key has none" and "the passphrase is wrong" both fail here, before a build does.
+ * Caveat: gpg-agent may still have the passphrase cached from earlier use.
+ */
+async function verifyKey(ctx: vscode.ExtensionContext, keyName: string, passphrase: string): Promise<{ ok: boolean; detail: string }> {
+  const dir = signingDir(ctx);
+  const probe = path.join(dir, 'probe.txt');
+  const out = path.join(dir, 'probe.sig');
+  const passFile = path.join(dir, 'probe.pass');
+  try {
+    fs.writeFileSync(probe, 'sailfish signing probe\n');
+    const args = ['--batch', '--yes', '--pinentry-mode', passphrase === '' ? 'error' : 'loopback'];
+    if (passphrase !== '') {
+      fs.writeFileSync(passFile, `${passphrase}\n`, { mode: 0o600 });
+      args.push('--passphrase-file', passFile);
+    }
+    args.push('--local-user', keyName, '--output', out, '--detach-sign', probe);
+    const result = await spawnCapture('gpg', args, { timeoutMs: 30000 });
+    return { ok: result.exitCode === 0, detail: result.stderr.trim().split('\n').pop() ?? '' };
+  } finally {
+    for (const f of [probe, out, passFile]) fs.rmSync(f, { force: true });
+  }
+}
+
 interface CreatedKey {
   name: string;
+  /** What to save as `signingUser`: the new key's fingerprint, so a similarly named key cannot be picked up instead. */
+  signingUser: string;
   passphrase: string;
 }
 
@@ -59,21 +86,23 @@ async function createKey(ctx: vscode.ExtensionContext, services: Services): Prom
 
   // The parameter file holds the passphrase, so it is private and removed straight after gpg is done.
   const paramsFile = path.join(signingDir(ctx), 'keygen.params');
+  let created: string | undefined;
   try {
     fs.writeFileSync(paramsFile, buildKeyParams(name, email, passphrase), { mode: 0o600 });
     const result = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Sailfish: generating the signing key (this can take a minute)…' },
-      () => spawnCapture('gpg', ['--batch', '--generate-key', paramsFile], { timeoutMs: 5 * 60 * 1000 }),
+      () => spawnCapture('gpg', ['--batch', '--status-fd', '1', '--generate-key', paramsFile], { timeoutMs: 5 * 60 * 1000 }),
     );
     if (result.exitCode !== 0) {
       services.output.log('error', `gpg key generation failed (exit ${result.exitCode}): ${result.stderr.trim()}`);
       void services.prompts.showErrorMessage(`Sailfish: gpg could not create the key: ${result.stderr.trim().split('\n').pop() ?? `exit ${result.exitCode}`}`);
       return undefined;
     }
+    created = /\[GNUPG:\] KEY_CREATED \w ([0-9A-Fa-f]{40})/.exec(result.stdout)?.[1];
   } finally {
     fs.rmSync(paramsFile, { force: true });
   }
-  return { name: name.trim(), passphrase };
+  return { name: name.trim(), signingUser: created ?? name.trim(), passphrase };
 }
 
 /** `Sailfish: Set Up Package Signing`: picks (or creates) a GPG key and fills in the sailfish.build.sign* settings for the active project. */
@@ -91,10 +120,11 @@ async function setupSigning(ctx: vscode.ExtensionContext, services: Services): P
   }
 
   let keyName: string | undefined;
+  let keyRef: string | undefined; // what sfdk and gpg are told to use: the fingerprint when there is one
   let passphrase: string | undefined; // undefined: not asked yet / keep the current setting
   const items = [
-    ...keys.map((k) => ({ label: k.name, description: k.userId === k.name ? undefined : k.userId, create: false })),
-    { label: `$(add) ${CREATE_KEY}…`, description: undefined, create: true },
+    ...keys.map((k) => ({ label: k.name, description: [k.userId === k.name ? undefined : k.userId, k.fingerprint.slice(-16)].filter(Boolean).join(' · ') || undefined, key: k, create: false })),
+    { label: `$(add) ${CREATE_KEY}…`, description: undefined, key: undefined, create: true },
   ];
   const picked = keys.length === 0 ? items[0] : await services.prompts.showQuickPick(items, { title: 'Select the key to sign packages with', placeHolder: 'GPG key' });
   if (!picked) return;
@@ -102,22 +132,37 @@ async function setupSigning(ctx: vscode.ExtensionContext, services: Services): P
     const created = await createKey(ctx, services);
     if (!created) return;
     keyName = created.name;
+    keyRef = created.signingUser;
     passphrase = created.passphrase;
   } else {
     keyName = picked.label;
+    keyRef = picked.key ? signingUserFor(picked.key) : picked.label;
     passphrase = await services.prompts.showInputBox({
       title: 'Key passphrase',
       prompt:
-        'Saved in a private file (mode 600) because sfdk reads it from a file. Leave empty if the key has no passphrase. Press Escape to keep the current setting.',
+        'Saved in a private file (mode 600) because sfdk reads it from a file. Leave empty ONLY if the key has no passphrase. Press Escape to keep the current setting.',
       password: true,
       validateInput: validatePassphrase,
       ignoreFocusOut: true,
     });
   }
 
+  if (passphrase !== undefined) {
+    const check = await verifyKey(ctx, keyRef, passphrase);
+    if (!check.ok) {
+      services.output.log('warn', `gpg could not sign with "${keyName}": ${check.detail}`);
+      void services.prompts.showErrorMessage(
+        passphrase === ''
+          ? `Sailfish: "${keyName}" is protected by a passphrase, but none was entered. Run the command again and enter it. Nothing was saved.`
+          : `Sailfish: gpg could not sign with "${keyName}" and that passphrase (${check.detail || 'wrong passphrase?'}). Nothing was saved.`,
+      );
+      return;
+    }
+  }
+
   const config = vscode.workspace.getConfiguration('sailfish', project.folder.uri);
   const target = vscode.ConfigurationTarget.WorkspaceFolder;
-  await config.update('build.signingUser', keyName, target);
+  await config.update('build.signingUser', keyRef, target);
   if (passphrase !== undefined) {
     const file = passphrase === '' ? '' : savePassphrase(ctx, keyName, passphrase);
     await config.update('build.signingPassphraseFile', file, target);
@@ -125,8 +170,8 @@ async function setupSigning(ctx: vscode.ExtensionContext, services: Services): P
   await config.update('build.sign', true, target);
 
   void services.prompts.showInformationMessage(
-    `Sailfish: packages will be signed with "${keyName}". To verify one, import the public key once: ` +
-      `gpg --export --armor "${keyName}" | rpm --import /dev/stdin, then run rpm -K on the RPM.`,
+    `Sailfish: packages will be signed with "${keyName}" (${keyRef.slice(-16)}). To verify one, import the public key once: ` +
+      `gpg --export --armor ${keyRef} | rpm --import /dev/stdin, then run rpm -K on the RPM.`,
   );
 }
 

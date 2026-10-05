@@ -1,0 +1,5 @@
+{"ok":true,"stream":"mirror","fps":4,"width":360,"quality":60}
+{"frame":1,"ts":1791199286824,"screen":[720,1600],"size":[1,1],"format":"png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"}
+{"frame":2,"ts":1791199287074,"screen":[720,1600],"size":[1,1],"format":"png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"}
+{"frame":3,"ts":1791199287324,"screen":[720,1600],"size":[1,1],"format":"png","data":"iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC"}
+{"frame":4,"ts":1791199287074,"same":true}

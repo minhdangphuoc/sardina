@@ -1,5 +1,5 @@
 import * as assert from 'node:assert';
-import { buildKeyParams, nameFromUserId, parseSecretKeys, validateKeyEmail, validateKeyName, validatePassphrase } from '../../../src/tasks/signingCore';
+import { buildKeyParams, decideSigningUser, looksLikeKeyId, nameFromUserId, parseSecretKeys, signingProblemMessage, signingUserFor, validateKeyEmail, validateKeyName, validatePassphrase } from '../../../src/tasks/signingCore';
 
 describe('signingCore', () => {
   it('strips the email and comment from a user ID', () => {
@@ -15,7 +15,9 @@ describe('signingCore', () => {
       'uid:u::::1700000000::HASH::Jane Doe (work) <jane@example.com>::::::::::0:',
       'ssb:u:3072:1:BBBB:1700000000::::::e:::+:::23:',
     ].join('\n');
-    assert.deepStrictEqual(parseSecretKeys(out), [{ name: 'Jane Doe', userId: 'Jane Doe (work) <jane@example.com>' }]);
+    assert.deepStrictEqual(parseSecretKeys(out), [
+      { name: 'Jane Doe', userId: 'Jane Doe (work) <jane@example.com>', fingerprint: '0123456789ABCDEF0123456789ABCDEF01234567' },
+    ]);
   });
 
   it('skips revoked and expired user IDs and duplicates', () => {
@@ -29,6 +31,32 @@ describe('signingCore', () => {
       parseSecretKeys(out).map((k) => k.name),
       ['Jane Doe'],
     );
+  });
+
+  it('keeps two keys with overlapping names apart by fingerprint, using the primary key\'s fingerprint', () => {
+    const out = [
+      'sec:u:3072:1:AAAA:1700000000:::u:::scESC:::+:::23::0:',
+      'fpr:::::::::E067F7A78B1D3DCB1C0A4DDBC961D80E223D0BA9:',
+      'uid:u::::1700000000::H1::Minh Dang Dev:',
+      'ssb:u:3072:1:BBBB:1700000000::::::e:::+:::23:',
+      'fpr:::::::::1111111111111111111111111111111111111111:',
+      'sec:u:3072:1:CCCC:1700000001:::u:::scESC:::+:::23::0:',
+      'fpr:::::::::CF32678AC48A0467CD93BA5617C0B1A925805484:',
+      'uid:u::::1700000001::H2::Minh Dang <minh.dang@jolla.com>:',
+    ].join('\n');
+    const keys = parseSecretKeys(out);
+    assert.deepStrictEqual(
+      keys.map((k) => [k.name, k.fingerprint]),
+      [
+        ['Minh Dang Dev', 'E067F7A78B1D3DCB1C0A4DDBC961D80E223D0BA9'],
+        ['Minh Dang', 'CF32678AC48A0467CD93BA5617C0B1A925805484'],
+      ],
+    );
+  });
+
+  it('signingUserFor prefers the fingerprint and falls back to the name', () => {
+    assert.strictEqual(signingUserFor({ name: 'Jane Doe', userId: 'Jane Doe', fingerprint: 'ABCD' }), 'ABCD');
+    assert.strictEqual(signingUserFor({ name: 'Jane Doe', userId: 'Jane Doe', fingerprint: '' }), 'Jane Doe');
   });
 
   it('decodes escaped colons and returns nothing for empty output', () => {
@@ -54,5 +82,44 @@ describe('signingCore', () => {
     );
     const open = buildKeyParams('Jane Doe', '', '');
     assert.ok(open.includes('%no-protection') && !open.includes('Name-Email') && !open.includes('Passphrase:'));
+  });
+
+  describe('decideSigningUser', () => {
+    const dev = { name: 'Minh Dang Dev', userId: 'Minh Dang Dev', fingerprint: 'E067F7A78B1D3DCB1C0A4DDBC961D80E223D0BA9' };
+    const main = { name: 'Minh Dang', userId: 'Minh Dang <m@x.org>', fingerprint: 'CF32678AC48A0467CD93BA5617C0B1A925805484' };
+
+    it('recognises key IDs and fingerprints', () => {
+      assert.ok(looksLikeKeyId('CF32678AC48A0467CD93BA5617C0B1A925805484'));
+      assert.ok(looksLikeKeyId('0x17C0B1A925805484'));
+      assert.ok(looksLikeKeyId('25805484'));
+      assert.ok(!looksLikeKeyId('Minh Dang'));
+      assert.ok(!looksLikeKeyId('Jane'));
+    });
+
+    it('passes a key ID through without needing any matches', () => {
+      assert.deepStrictEqual(decideSigningUser('17C0B1A925805484', []), { kind: 'use', user: '17C0B1A925805484' });
+    });
+
+    it('pins a name that matches exactly one key to its fingerprint', () => {
+      assert.deepStrictEqual(decideSigningUser('Minh Dang Dev', [dev]), { kind: 'use', user: dev.fingerprint });
+    });
+
+    it('reports a name that matches several keys, and names them', () => {
+      const decision = decideSigningUser('Minh Dang', [dev, main]);
+      assert.strictEqual(decision.kind, 'ambiguous');
+      if (decision.kind !== 'ambiguous') return;
+      const message = signingProblemMessage('Minh Dang', decision);
+      assert.match(message, /matches 2 GPG keys/);
+      assert.match(message, /Minh Dang Dev \(…223D0BA9\)/);
+      assert.match(message, /Minh Dang \(…25805484\)/);
+      assert.match(message, /Set Up Package Signing/);
+    });
+
+    it('reports a name that matches no key', () => {
+      const decision = decideSigningUser('Nobody Here', []);
+      assert.strictEqual(decision.kind, 'none');
+      if (decision.kind !== 'none') return;
+      assert.match(signingProblemMessage('Nobody Here', decision), /no GPG secret key matches the signing user "Nobody Here"/);
+    });
   });
 });

@@ -10,6 +10,7 @@ import { launchInAppTerminal } from './appTerminal';
 import { deployInstallsApp, deployMethodLabel } from './buildConfig';
 import { ensureBuildMatchesTargetArch } from './archGuard';
 import { whitespacePathWarning } from './pathGuard';
+import { resolveSigningUser } from './signingGuard';
 
 async function ensureTarget(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
   const target = services.settings.get('target', folder.uri);
@@ -122,6 +123,11 @@ export async function buildDeployThen(
     services.output.log('warn', pathWarning);
     void services.prompts.showWarningMessage(`Sailfish: ${pathWarning}`);
   }
+  const signing = await resolveSigningUser(services, folderUri);
+  if (!signing.ok) {
+    reportFailure(services, 'build', { message: `Sailfish: ${signing.message}`, actionLabel: 'Set up signing' });
+    return;
+  }
   const target = services.settings.get('target', folderUri) || undefined;
   const device = services.settings.get('device', folderUri) || undefined;
 
@@ -137,12 +143,12 @@ export async function buildDeployThen(
             jobs: services.settings.get('build.jobs', folderUri),
             buildType: services.settings.get('build.type', folderUri),
             sign: services.settings.get('build.sign', folderUri),
-            signingUser: services.settings.get('build.signingUser', folderUri),
+            signingUser: signing.user,
             signingPassphraseFile: services.settings.get('build.signingPassphraseFile', folderUri),
           },
         ),
         target,
-        device,
+        // No `device`: building needs none (AC-1.5), and a device that is no longer registered would fail it.
         cwd,
         token,
         ensureEngine: true,
@@ -178,34 +184,109 @@ export async function buildDeployThen(
         return;
       }
 
-      const launcherTokens = chooseLauncher(project, {
-        mode: services.settings.get('run.launcher', folderUri),
-        customCommand: services.settings.get('run.customCommand', folderUri),
-      });
-      const { pkillArgs, launchArgs } = runArgs(project.appBinaryPath, launcherTokens, {
-        killBeforeLaunch: services.settings.get('run.killBeforeLaunch', folderUri),
-      });
-      await then({ project, target, device, cwd, pkillArgs, launchArgs }, progress, token);
+      await then({ project, target, device, cwd, ...launchPlan(services, project) }, progress, token);
     },
   );
 }
 
+/** The `pkill` (unless run.killBeforeLaunch is off) and launch argv for the project's app, per the launcher settings. */
+function launchPlan(services: Services, project: ProjectDescriptor): Pick<DeployedApp, 'pkillArgs' | 'launchArgs'> {
+  const folderUri = project.folder.uri;
+  const launcherTokens = chooseLauncher(project, {
+    mode: services.settings.get('run.launcher', folderUri),
+    customCommand: services.settings.get('run.customCommand', folderUri),
+  });
+  const { pkillArgs, launchArgs } = runArgs(project.appBinaryPath, launcherTokens, {
+    killBeforeLaunch: services.settings.get('run.killBeforeLaunch', folderUri),
+  });
+  return { pkillArgs, launchArgs };
+}
+
+/** true/false when the device answered; undefined when it could not be asked (unreachable, no device…). */
+async function appIsInstalled(services: Services, project: ProjectDescriptor, device: string, cwd: string): Promise<boolean | undefined> {
+  const result = await services.runner.run({ args: ['device', 'exec', '--', 'test', '-e', project.appBinaryPath], device, cwd, timeoutMs: 30_000 });
+  if (result.exitCode === 0) return true;
+  if (result.exitCode === 1) return false;
+  return undefined;
+}
+
+/**
+ * Shared by Run Installed App and Debug Installed App: like buildDeployThen without the build and
+ * deploy steps, for an app already on the device. When the device says the app is missing, offers
+ * `fullCommand` (the matching build-deploy-launch command) instead.
+ */
+export async function installedAppThen(
+  services: Services,
+  title: string,
+  fullCommand: 'sailfish.buildDeployRun' | 'sailfish.debugOnDevice',
+  then: (app: DeployedApp, progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<void>,
+  resolvedProject?: ProjectDescriptor,
+): Promise<void> {
+  const project = resolvedProject ?? (await activeProjectOrWarn(services));
+  if (!project) {
+    return;
+  }
+  const folderUri = project.folder.uri;
+  const cwd = folderUri.fsPath;
+  const target = services.settings.get('target', folderUri) || undefined;
+  const device = services.settings.get('device', folderUri) || undefined;
+  if (!device) {
+    reportFailure(services, 'launch', { message: 'No device selected — pick a default device or emulator', actionLabel: 'Select device' });
+    return;
+  }
+  if (!deployInstallsApp(services.settings.get('deploy.method', folderUri))) {
+    void services.prompts.showInformationMessage(
+      'Sailfish: the deploy method only copies the RPM to the device, so there is no installed app to launch. Pick another deploy method.',
+    );
+    return;
+  }
+
+  const BUILD_AND_DEPLOY = 'Build & Deploy first';
+  if ((await appIsInstalled(services, project, device, cwd)) === false) {
+    const choice = await services.prompts.showWarningMessage(
+      `Sailfish: ${project.name} is not installed on "${device}" (${project.appBinaryPath} is missing).`,
+      BUILD_AND_DEPLOY,
+    );
+    if (choice === BUILD_AND_DEPLOY) await vscode.commands.executeCommand(fullCommand);
+    return;
+  }
+
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: true }, (progress, token) =>
+    then({ project, target, device, cwd, ...launchPlan(services, project) }, progress, token),
+  );
+}
+
+/** Stops a running instance (unless disabled), then launches the app in its own terminal. */
+async function launchApp(
+  services: Services,
+  app: DeployedApp,
+  progress: vscode.Progress<{ message?: string }>,
+  token: vscode.CancellationToken,
+): Promise<void> {
+  progress.report({ message: 'launching…' });
+  if (app.pkillArgs) {
+    await services.runner.run({ args: app.pkillArgs, target: app.target, device: app.device, cwd: app.cwd, token });
+  }
+  // The app outlives this progress notification: its output and stop control live in a terminal.
+  launchInAppTerminal(services, {
+    appName: app.project.name,
+    launchArgs: app.launchArgs,
+    target: app.target,
+    device: app.device,
+    cwd: app.cwd,
+  });
+}
+
 /** FR-5.10 exception: build -> deploy -> run via SfdkRunner directly. */
 function buildDeployRun(services: Services): Promise<void> {
-  return buildDeployThen(services, 'Sailfish: Build, Deploy & Run', async (app, progress, token) => {
-    progress.report({ message: 'launching…' });
-    if (app.pkillArgs) {
-      await services.runner.run({ args: app.pkillArgs, target: app.target, device: app.device, cwd: app.cwd, token });
-    }
-    // The app outlives this progress notification: its output and stop control live in a terminal.
-    launchInAppTerminal(services, {
-      appName: app.project.name,
-      launchArgs: app.launchArgs,
-      target: app.target,
-      device: app.device,
-      cwd: app.cwd,
-    });
-  });
+  return buildDeployThen(services, 'Sailfish: Build, Deploy & Run', (app, progress, token) => launchApp(services, app, progress, token));
+}
+
+/** Launches the app already on the device, without building or deploying. */
+function runInstalled(services: Services): Promise<void> {
+  return installedAppThen(services, 'Sailfish: Run Installed App', 'sailfish.buildDeployRun', (app, progress, token) =>
+    launchApp(services, app, progress, token),
+  );
 }
 
 /** FR-5.6 clean: non-critical, fails soft with manual instructions. */
@@ -238,6 +319,7 @@ export function activateTasks(ctx: vscode.ExtensionContext, services: Services):
     vscode.commands.registerCommand('sailfish.deploy', makeExecuteTaskCommand(services, 'deploy')),
     vscode.commands.registerCommand('sailfish.run', makeExecuteTaskCommand(services, 'run')),
     vscode.commands.registerCommand('sailfish.buildDeployRun', () => buildDeployRun(services)),
+    vscode.commands.registerCommand('sailfish.runInstalled', () => runInstalled(services)),
     vscode.commands.registerCommand('sailfish.package', makeExecuteTaskCommand(services, 'package')),
     vscode.commands.registerCommand('sailfish.clean', () => clean(services)),
   );

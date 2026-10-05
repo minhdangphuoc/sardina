@@ -153,6 +153,11 @@ export function stubOpenDialog(uris: vscode.Uri[] | undefined): sinon.SinonStub 
   return sandbox().stub(livePrompts(), 'showOpenDialog').resolves(uris);
 }
 
+/** Example: `stubSaveDialog(vscode.Uri.file('/tmp/shot.png'))`; `undefined` simulates a cancelled dialog. */
+export function stubSaveDialog(uri: vscode.Uri | undefined): sinon.SinonStub {
+  return sandbox().stub(livePrompts(), 'showSaveDialog').resolves(uri);
+}
+
 export interface RecordedMessage {
   kind: 'information' | 'warning' | 'error';
   message: string;

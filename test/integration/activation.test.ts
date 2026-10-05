@@ -45,6 +45,15 @@ suite('activation/bare', () => {
       'sailfish.device.setSfdkDefault',
       'sailfish.device.openSsh',
       'sailfish.showOutput',
+      'sailfish.setupSigning',
+      'sailfish.runInstalled',
+      'sailfish.debugInstalled',
+      'sailfish.agent.install',
+      'sailfish.agent.uninstall',
+      'sailfish.agent.status',
+      'sailfish.agent.screenshot',
+      'sailfish.agent.mirror',
+      'sailfish.agent.logs',
     ];
     const registered = await vscode.commands.getCommands(true);
     const missing = expected.filter((c) => !registered.includes(c));

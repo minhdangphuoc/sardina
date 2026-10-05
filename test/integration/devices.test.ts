@@ -153,9 +153,13 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       assert.ok(emulatorChildren);
       const installed = emulatorChildren.filter((c) => deviceOf(c));
       assert.strictEqual(installed.length, 2, 'the "available" superset entry must not appear at the top level');
-      // the default fixture carries no `default` flag and sailfish.device is unset, so no $(check) yet.
+      // The default fixture carries no `default` flag and sailfish.device is unset, so no "✓ default" yet.
+      // The state marker depends on whether anything answers on the emulator's SSH port, so it is optional.
       assert.strictEqual(installed[0].label, '"Sailfish OS Emulator 4.4.0.58"');
-      assert.strictEqual(installed[0].description, 'emulator autodetected defaultuser@127.0.0.1:2223');
+      assert.match(
+        String(installed[0].description),
+        /^(?:(?:● running|○ stopped) · )?emulator autodetected defaultuser@127\.0\.0\.1:2223$/,
+      );
       const tooltip = installed[0].tooltip;
       assert.ok(typeof tooltip === 'string' && tooltip.includes('private-key: /Users/mersdk/.ssh/sdk'));
       assert.match(String(installed[0].contextValue), /^emulator(\.(running|stopped))?$/);
@@ -176,12 +180,15 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       const hw = deviceChildren.find((c) => deviceOf(c)?.kind === 'hardware-device');
       assert.ok(hw);
       assert.strictEqual(hw.label, '"Xperia 10 - Dual SIM (ARM)"');
-      assert.strictEqual(hw.description, 'hardware-device user-defined defaultuser@192.168.2.15:22');
+      assert.match(
+        String(hw.description),
+        /^(?:(?:● connected|○ offline) · )?hardware-device user-defined defaultuser@192\.168\.2\.15:22$/,
+      );
       assert.strictEqual(hw.contextValue, 'hardware-device');
     });
   });
 
-  test('AC-1.8: $(check) suffix appears once sailfish.device matches the emulator name', async function () {
+  test('AC-1.8: "✓ default" appears in the description once sailfish.device matches the emulator name', async function () {
     if (!ready) {
       this.skip();
       return;
@@ -197,7 +204,10 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         await refreshAndWait(p);
         const emulatorChildren = await p.getChildren((await p.getChildren())![0]);
         const target = emulatorChildren!.find((c) => deviceOf(c));
-        assert.strictEqual(target!.label, '"Sailfish OS Emulator 4.4.0.58" $(check)');
+        assert.strictEqual(target!.label, '"Sailfish OS Emulator 4.4.0.58"');
+        assert.match(String(target!.description), /^(?:(?:● running|○ stopped) · )?✓ default · emulator autodetected /);
+        const others = emulatorChildren!.filter((c) => deviceOf(c) && c !== target);
+        assert.ok(others.every((c) => !String(c.description).includes('✓ default')), 'only the matching emulator is marked default');
       } finally {
         await config.update('device', undefined, vscode.ConfigurationTarget.Global);
       }

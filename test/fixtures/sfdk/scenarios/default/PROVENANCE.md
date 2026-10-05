@@ -25,3 +25,4 @@ TRD verified against a live sfdk, not the literal bytes.
 - emulator_show.stdout: reconstructed: FR-16.7 [U] key/value shape
 - emulator_install.stdout: reconstructed: synthesized (FR-6.4 installAvailable)
 - device_exec*.stdout: reconstructed: synthesized
+- device_exec.sailfish-devagent.mirror.{stdout,stream,hang}: hand-written from the agent 1.1.0 protocol (device-agent/PLAN-phase2a-mirror.md section 2): status line, three frames (the 1x1 PNG of device_exec.base64), one "same" line; `.hang` keeps the fake alive after the lines, like the live stream

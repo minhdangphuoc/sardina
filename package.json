@@ -3,7 +3,7 @@
   "displayName": "Sailfish OS Tools",
   "description": "Build, deploy, run and manage Sailfish OS applications from VS Code.",
   "publisher": "sailfish-tools-dev",
-  "version": "0.1.2",
+  "version": "0.1.6",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -156,6 +156,18 @@
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
+        "command": "sailfish.runInstalled",
+        "title": "Run Installed App",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.debugInstalled",
+        "title": "Debug Installed App",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
         "command": "sailfish.package",
         "title": "Package",
         "category": "Sailfish",
@@ -246,6 +258,46 @@
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
+        "command": "sailfish.agent.install",
+        "title": "Install Device Agent",
+        "category": "Sailfish",
+        "icon": "$(cloud-download)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.agent.uninstall",
+        "title": "Uninstall Device Agent",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.agent.status",
+        "title": "Device Agent Status",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.agent.screenshot",
+        "title": "Take Device Screenshot",
+        "category": "Sailfish",
+        "icon": "$(device-camera)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.agent.mirror",
+        "title": "Mirror Device Screen",
+        "category": "Sailfish",
+        "icon": "$(device-mobile)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.agent.logs",
+        "title": "Show Device Logs",
+        "category": "Sailfish",
+        "icon": "$(output)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
         "command": "sailfish.device.remove",
         "title": "Remove Device",
         "category": "Sailfish",
@@ -329,19 +381,19 @@
           "type": "boolean",
           "default": false,
           "scope": "resource",
-          "markdownDescription": "Sign the RPM packages produced by the build, deploy and run tasks (`sfdk build --sign`). Needs a GPG key; see `sailfish.build.signingUser`."
+          "markdownDescription": "Sign the RPM packages produced by the build, deploy, run and package tasks (`sfdk build --sign`, `sfdk package --sign`). Needs a GPG key; see `sailfish.build.signingUser`."
         },
         "sailfish.build.signingUser": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "markdownDescription": "Name of the GPG key's user, passed to sfdk as `package.signing.user`. Leave empty to use the value from `sfdk config`."
+          "markdownDescription": "The GPG key to sign with, passed to sfdk as `package.signing-user`: a user name, or a key ID or fingerprint. A name matches every key that contains it (`Jane Doe` also matches `Jane Doe Dev`), so the setup command saves the fingerprint. Leave empty to use the value from `sfdk config`."
         },
         "sailfish.build.signingPassphraseFile": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "markdownDescription": "Path to a file (mode 600) holding the key's passphrase, passed to sfdk as `package.signing-passphrase-file`. Leave empty to use the value from `sfdk config`. The passphrase itself is never stored in settings."
+          "markdownDescription": "Path to a file (mode 600) holding the key's passphrase, passed to sfdk as `package.signing-passphrase-file`. sfdk only reads the first line, and the file must be under the Sailfish SDK workspace (your home directory by default). Leave empty to use the value from `sfdk config`. The passphrase itself is never stored in settings."
         },
         "sailfish.build.cleanOnArchChange": {
           "type": "boolean",
@@ -665,6 +717,66 @@
         {
           "command": "sailfish.device.remove",
           "when": "view == sailfish.devices && viewItem == hardware-device"
+        },
+        {
+          "command": "sailfish.agent.screenshot",
+          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.agent.mirror",
+          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.agent.screenshot",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.running)?$/",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.agent.mirror",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.running)?$/",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.agent.logs",
+          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.agent.logs",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.agent.status",
+          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.agent.status",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.agent.install",
+          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.agent.install",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.agent.uninstall",
+          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.agent.uninstall",
+          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "group": "2_agent"
         },
         {
           "command": "sailfish.emulator.installAvailable",

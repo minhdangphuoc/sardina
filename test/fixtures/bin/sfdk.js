@@ -88,6 +88,9 @@ function dottedExecKey(prefix, argv) {
     const cmd = argv[dashIdx + 1];
     const base = cmd.split('/').pop();
     if (base) {
+      if (argv[dashIdx + 2] === '--request' && argv.length > dashIdx + 3) {
+        return `${prefix}.${base}.${argv[dashIdx + 3]}`;
+      }
       return `${prefix}.${base}`;
     }
   }

@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
  * Test seam: every UI prompt in src/ goes through this object instead of
  * calling `vscode.window.*` directly, so integration tests can sinon-stub
  * these properties (see test/integration/helpers.ts: stubQuickPick,
- * stubInputBox, stubOpenDialog, stubMessages). These are plain function
+ * stubInputBox, stubOpenDialog, stubSaveDialog, stubMessages). These are plain function
  * references (not bound methods), which is safe because `vscode.window`'s
  * prompt functions do not depend on `this`.
  */
@@ -37,6 +37,7 @@ export const prompts = {
   showQuickPick: vscode.window.showQuickPick,
   showInputBox: vscode.window.showInputBox,
   showOpenDialog: vscode.window.showOpenDialog,
+  showSaveDialog: vscode.window.showSaveDialog,
   showInformationMessage: recordingWrapper('information', vscode.window.showInformationMessage),
   showWarningMessage: recordingWrapper('warning', vscode.window.showWarningMessage),
   showErrorMessage: recordingWrapper('error', vscode.window.showErrorMessage),

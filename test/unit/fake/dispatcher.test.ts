@@ -30,6 +30,7 @@ const sfdk = require(FAKE_SFDK_JS) as {
 // eslint-disable-next-line @typescript-eslint/no-require-imports -- test fixtures are plain JS, not compiled TS
 const core = require(FAKE_CORE_JS) as {
   stripGlobalOptions: (argv: string[]) => string[];
+  candidateKeys: (key: string) => string[];
 };
 
 describe('fake sfdk: keyFn', () => {
@@ -74,6 +75,32 @@ describe('fake sfdk: keyFn', () => {
       sfdk.keyFn(['device', 'exec', 'MyDevice', '--', '/usr/bin/invoker', '-o']),
       'device_exec.invoker',
     );
+  });
+
+  it('device exec -- <cmd> --request <req> -> device_exec.<basename>.<req>', () => {
+    assert.strictEqual(
+      sfdk.keyFn(['device', 'exec', 'X', '--', 'sailfish-devagent', '--request', 'ping']),
+      'device_exec.sailfish-devagent.ping',
+    );
+    assert.strictEqual(
+      sfdk.keyFn(['device', 'exec', '--', '/usr/bin/sailfish-devagent', '--request', 'logs']),
+      'device_exec.sailfish-devagent.logs',
+    );
+    // --request with nothing after it, or not directly after the command: no request level.
+    assert.strictEqual(
+      sfdk.keyFn(['device', 'exec', '--', 'sailfish-devagent', '--request']),
+      'device_exec.sailfish-devagent',
+    );
+    assert.strictEqual(
+      sfdk.keyFn(['device', 'exec', '--', 'sailfish-devagent', '--status']),
+      'device_exec.sailfish-devagent',
+    );
+  });
+
+  it('candidateKeys returns every dotted prefix, longest first', () => {
+    assert.deepStrictEqual(core.candidateKeys('a.b.c'), ['a.b.c', 'a.b', 'a']);
+    assert.deepStrictEqual(core.candidateKeys('device_exec.pkill'), ['device_exec.pkill', 'device_exec']);
+    assert.deepStrictEqual(core.candidateKeys('version'), ['version']);
   });
 
   it('device exec with no -- falls back to device_exec', () => {

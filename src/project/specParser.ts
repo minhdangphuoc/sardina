@@ -44,10 +44,14 @@ function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-/** Whether `%{_bindir}/<name>` appears in `%files` as its own whitespace-delimited token, not as a substring of a longer path. */
+/**
+ * Whether `%files` installs the app's binary: `%{_bindir}/<name>`, `%{_bindir}/*`, or the bare `%{_bindir}`
+ * directory (what the stock Sailfish app template lists), each as its own whitespace-delimited token, not as a
+ * substring of a longer path. `/usr/bin` spellings count too.
+ */
 function hasBindirEntry(filesText: string, name: string): boolean {
-  const token = escapeRegExp(`%{_bindir}/${name}`);
-  return new RegExp(`(^|\\s)${token}(\\s|$)`, 'm').test(filesText);
+  const bindir = '(?:%\\{_bindir\\}|/usr/bin)';
+  return new RegExp(`(^|\\s)${bindir}(?:/(?:${escapeRegExp(name)}|\\*))?(\\s|$)`, 'm').test(filesText);
 }
 
 /** Expands `%{name}`/`%{version}` from already-parsed fields; other macros are left verbatim (FR-2.4). */

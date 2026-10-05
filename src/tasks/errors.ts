@@ -36,6 +36,20 @@ export function mapDeployError(stderr: string): MappedError | undefined {
 
 /** Build-time stderr mapping (FR-5.3/M1.17). */
 export function mapBuildError(stderr: string): MappedError | undefined {
+  if (/Failed to import GPG key from file|Failed to share GnuPG key/i.test(stderr) && !/passphrase/i.test(stderr)) {
+    return {
+      message:
+        'sfdk could not hand the signing key to the build engine. This usually means several keys match the configured name. Run "Sailfish: Set Up Package Signing" to select the key by its fingerprint',
+      actionLabel: 'Set up signing',
+    };
+  }
+  if (/passphrase protected and no passphrase was specified/i.test(stderr)) {
+    return {
+      message:
+        'The signing key is protected by a passphrase, but none is set. Run "Sailfish: Set Up Package Signing" and enter it, or turn off sailfish.build.sign',
+      actionLabel: 'Set up signing',
+    };
+  }
   if (/no build target|no default target|no such target|target .* not found/i.test(stderr)) {
     return { message: stderr.trim(), actionLabel: 'Select target' };
   }

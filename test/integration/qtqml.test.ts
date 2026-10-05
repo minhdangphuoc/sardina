@@ -225,6 +225,12 @@ suite('Silica snippets language wiring (AC-1.11, FR-8.2)', () => {
     this.timeout(10000);
     const doc = await vscode.workspace.openTextDocument({ language: 'qml', content: 'sfpage' });
     await vscode.window.showTextDocument(doc);
+    // VS Code creates its snippets service lazily (on first use, or when the window goes idle), and only
+    // then registers the snippet completion provider. A test window that never idles (hidden or covered)
+    // would never offer snippets. Asking insertSnippet for a name that does not exist creates the service
+    // and waits for the snippet files to load, without editing the document.
+    await vscode.commands.executeCommand('editor.action.insertSnippet', { langId: 'qml', name: 'no such snippet' });
+    assert.strictEqual(doc.getText(), 'sfpage');
     const position = new vscode.Position(0, 6);
     const list = await vscode.commands.executeCommand<vscode.CompletionList>(
       'vscode.executeCompletionItemProvider',

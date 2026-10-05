@@ -18,7 +18,7 @@ import {
 /**
  * Device, build type and deploy method selectors, shown to the right of the target
  * item (priority 100) in the same order as Qt Creator's kit / build / deploy selectors,
- * followed by Build / Run / Debug action buttons.
+ * followed by Build / Deploy / Run / Debug action buttons.
  */
 export class BuildConfigStatusBar {
   private readonly device = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
@@ -26,8 +26,9 @@ export class BuildConfigStatusBar {
   private readonly deployMethod = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
   private readonly actions = [
     actionItem(95, '$(tools)', 'sailfish.build', 'Sailfish: Build'),
-    actionItem(94, '$(play) Run', 'sailfish.buildDeployRun', 'Sailfish: Build, Deploy & Run (Ctrl+Alt+R)'),
-    actionItem(93, '$(debug-alt) Debug', 'sailfish.debugOnDevice', 'Sailfish: Build, Deploy & Debug on the device'),
+    actionItem(94, '$(package) Deploy', 'sailfish.deploy', 'Sailfish: Build & Deploy to the device, without launching'),
+    actionItem(93, '$(play) Run', 'sailfish.buildDeployRun', 'Sailfish: Build, Deploy & Run (Ctrl+Alt+R). To launch without rebuilding: "Sailfish: Run Installed App"'),
+    actionItem(92, '$(debug-alt) Debug', 'sailfish.debugOnDevice', 'Sailfish: Build, Deploy & Debug on the device. To debug without rebuilding: "Sailfish: Debug Installed App"'),
   ];
 
   /** Names `-c device=` accepts -> connected/offline, from the Devices view's last list load; undefined until loaded. */

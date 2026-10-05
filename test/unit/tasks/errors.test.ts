@@ -51,6 +51,22 @@ describe('errors.mapDeployError (M1.17)', () => {
 });
 
 describe('errors.mapBuildError (M1.17)', () => {
+  it('maps a key hand-off failure (overlapping key names) to a Set up signing action', () => {
+    const mapped = mapBuildError(
+      "gpg: key 223D0BA9: already in secret keyring\nFatal: Cannot sign packages: Internal error: Failed to import GPG key from file '/etc/mersdk/share/gnupg/Minh Dang.key'.",
+    );
+    assert.strictEqual(mapped?.actionLabel, 'Set up signing');
+    assert.match(mapped?.message ?? '', /fingerprint/);
+  });
+
+  it('maps the passphrase-protected signing key failure to a Set up signing action', () => {
+    const mapped = mapBuildError(
+      'Pre-run routine failed: Failed to share GnuPG key with the build engine: The selected GPG key is passphrase protected and no passphrase was specified.',
+    );
+    assert.strictEqual(mapped?.actionLabel, 'Set up signing');
+    assert.match(mapped?.message ?? '', /passphrase/);
+  });
+
   it('maps "No build target selected" with the raw text + Select target action', () => {
     const mapped = mapBuildError('No build target selected');
     assert.strictEqual(mapped?.message, 'No build target selected');

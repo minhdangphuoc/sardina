@@ -50,7 +50,15 @@ function resolveScenarioAlias(name) {
 }
 
 function candidateKeys(key) {
-  return key.includes('.') ? [key, key.split('.')[0]] : [key];
+  const out = [];
+  let k = key;
+  for (;;) {
+    out.push(k);
+    const i = k.lastIndexOf('.');
+    if (i === -1) break;
+    k = k.slice(0, i);
+  }
+  return out;
 }
 
 /** Directories to search, in order, for a resolved scenario name. */
@@ -64,8 +72,7 @@ function dirsFor(scenario) {
 
 /**
  * Find `<candidateKey>.<ext>` under the scenario dir then the default dir,
- * trying the full key before falling back to its base key (the part before
- * the first '.').
+ * trying the full key, then each shorter dotted prefix (a.b.c, a.b, a).
  */
 function resolveFile(scenario, key, ext) {
   for (const k of candidateKeys(key)) {

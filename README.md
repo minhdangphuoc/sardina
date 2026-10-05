@@ -289,6 +289,56 @@ the view's **Refresh** button to see it. If no SDK is found, the group shows a
 
 QML/JavaScript debugging is not supported yet.
 
+### Part 9: Device agent (screenshots, logs and screen mirror)
+
+The device agent is a small helper you install on the phone once. After that,
+VS Code can take screenshots and show the phone's system log without asking for
+the developer-mode password each time.
+
+1. **Check the prerequisites.** The phone is registered (Part 7) and Developer
+   mode is on.
+2. **Install the agent.** In VS Code: **Ctrl+Shift+P** → **Sailfish: Install
+   Device Agent**. Read the dialog, then confirm. VS Code asks for the
+   developer-mode password once.
+   **Check:** **Sailfish: Device Agent Status** reports the agent as installed
+   and running, with Developer Mode on.
+3. **Take a screenshot.** **Ctrl+Shift+P** → **Sailfish: Take Device
+   Screenshot** (also the camera button on the phone in the Sailfish view).
+   Choose where to save the PNG. The picture opens in VS Code.
+   **Check:** the file exists and shows the phone's screen. If you cancel the
+   save dialog, nothing is saved.
+4. **Read the logs.** **Sailfish: Show Device Logs** opens the output panel
+   **Sailfish Device Log** and streams the phone's system log live. Stop the
+   command or close the panel to stop it.
+5. **Mirror the screen.** **Sailfish: Mirror Device Screen** (or the mirror
+   button on the device in the Sailfish view) opens a panel beside the editor
+   showing the phone's screen, refreshed a few times per second. It is view
+   only: you cannot tap or type on it. It pauses when the tab is hidden and
+   resumes when you show it again; closing the tab stops it. It needs agent
+   1.1.0; if the phone has an older agent, VS Code offers to upgrade it
+   (one password prompt).
+   **Check:** the panel shows the current screen and follows what you do on the
+   phone. If it says **disconnected**, press **Reconnect**.
+6. **Remove the agent.** **Sailfish: Uninstall Device Agent** (one password
+   prompt) removes it completely.
+
+If the agent is missing, Take Device Screenshot and Show Device Logs offer to
+install it.
+
+**What it can do:** take screenshots, read the system log and show a view-only live picture of the screen. That is all.
+
+**What it cannot do:** it cannot run commands, change settings or read your
+files. It cannot be reached from the network; it only answers over the SSH
+connection VS Code already uses. It runs as the normal phone user
+(`defaultuser`), not as root, with two extra groups that allow screenshots and
+reading the log. Like any `defaultuser` process it also belongs to that user's
+normal groups, including `input`, so it could write to input devices; the
+current version has no command that does.
+
+**Developer mode:** the agent only works while Developer mode is on. Turn it
+off and the agent refuses every request; turn it on again and it works again
+without reinstalling. The phone shows a notification when the agent starts.
+
 ## Troubleshooting
 
 | What you see | Cause | Fix |
@@ -307,6 +357,12 @@ QML/JavaScript debugging is not supported yet.
 | Add Device says to close Qt Creator | Qt Creator is running. | Close it and run the command again. |
 | `Auth failed: Authentication token manipulation error` from `devel-su` | It ran without an interactive terminal. | Run it in a terminal window (Part 7, step 3). |
 | Phone not visible at all (`lsusb` does not list it) | Cable or port problem. | Try another data cable or USB port. |
+| `Developer Mode is off` when taking a screenshot or reading logs | The agent refuses while Developer mode is off. | On the phone: **Settings → Developer tools** → turn on **Developer mode**. |
+| Device agent says it is not installed or not running | It was never installed, was removed, or the phone just restarted. | **Sailfish: Install Device Agent**, then **Device Agent Status** to confirm. |
+| Mirror says `disconnected: replaced` | Another mirror of the same phone started (for example in another VS Code window); the phone serves one at a time. | Press **Reconnect** here, or close the other mirror. |
+| Mirror shows an error strip, or stays blank | The phone screen is off or locked. | Wake and unlock the phone; the mirror recovers by itself. |
+| Screenshot is black or fails | The phone screen is off or locked. | Wake and unlock the phone, then try again. |
+| Install says the package is untrusted or refuses it | The phone only accepts store apps. | Part 7, step 4. |
 
 ## Known issues
 

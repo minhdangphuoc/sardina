@@ -8,3 +8,12 @@ test/fixtures/sfdk/unrecorded.log
 # shared fixture's settings instead of a per-test temp copy (known, unfixed).
 test/fixtures/workspaces/*/.vscode/settings.json
 test/fixtures/workspaces/*/devices.xml
+
+# In-source build outputs of the device agent (device-agent/build.sh); media/agent/**/*.rpm ship.
+device-agent/*.o
+device-agent/moc_*
+device-agent/Makefile
+device-agent/sailfish-devagent
+device-agent/documentation.list
+device-agent/RPMS/
+device-agent/.sfdk/

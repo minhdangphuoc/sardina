@@ -57,7 +57,7 @@ describe('argv.buildArgs (FR-5.3)', () => {
     );
     assert.deepStrictEqual(argv, [
       '-c',
-      'package.signing.user=Jane Doe',
+      'package.signing-user=Jane Doe',
       '-c',
       'package.signing-passphrase-file=/home/jane/pass.txt',
       'build',
@@ -111,6 +111,14 @@ describe('argv.deployArgs (FR-5.4)', () => {
 });
 
 describe('argv.packageArgs (FR-5.6)', () => {
+  it('sign adds --sign and the signing -c options before the command', () => {
+    assert.deepStrictEqual(
+      packageArgs({ command: 'package' }, { sign: true, signingUser: 'Jane Doe', signingPassphraseFile: '/home/jane/p.txt' }),
+      ['-c', 'package.signing-user=Jane Doe', '-c', 'package.signing-passphrase-file=/home/jane/p.txt', 'package', '--sign'],
+    );
+    assert.deepStrictEqual(packageArgs({ command: 'package' }, { sign: false, signingUser: 'Jane Doe' }), ['package']);
+  });
+
   it('bare package', () => {
     assert.deepStrictEqual(packageArgs({ command: 'package' }), ['package']);
   });

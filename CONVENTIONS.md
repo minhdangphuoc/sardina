@@ -137,11 +137,14 @@ auto-restored in a root `teardown`.
 | `tools target list` | `tools_target_list` |
 | `tools list` | `tools_list` |
 | `device exec [name] -- <cmd...>` | `device_exec.<basename of cmd[0]>` (fallback `device_exec`) |
+| `device exec [name] -- <cmd> --request <req>` | `device_exec.<basename>.<req>` (fallback `device_exec.<basename>`, then `device_exec`; every dotted prefix, longest first) |
 | `engine exec -- <cmd>` | `engine_exec.<cmd>` (fallback `engine_exec`) |
 | `emulator show <name>` | `emulator_show` |
 | other `tools|emulator|device|engine <sub>` | `<a>_<b>` |
 | `build|deploy|qmake|make|package|check|build-shell` | that word |
 | anything else | `unknown` |
+
+A `<key>.hang` file (empty) makes the fake stay alive after printing until SIGTERM/SIGINT and log a `killed` event; with `<key>.stream` (per-line delay in ms) it is a live stream, as for `device_exec.sailfish-devagent.mirror`.
 
 Unknown/un-fixtured key → stderr `sfdk: unrecognized command (fake key "<key>", scenario "<scenario>")`,
 exit 2, and the argv line is appended to `test/fixtures/sfdk/unrecorded.log`.

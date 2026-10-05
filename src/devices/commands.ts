@@ -13,7 +13,7 @@ import { sfdkDeviceName } from './listParsing';
 import { installDeviceTools } from './devicePackages';
 
 /** Structural check, not `instanceof DeviceTreeItem`: the item may come from a different copy of the `tree` module. */
-function deviceFrom(item: unknown): SfdkDeviceInfo | undefined {
+export function deviceFrom(item: unknown): SfdkDeviceInfo | undefined {
   if (!item || typeof item !== 'object' || !('device' in item)) {
     return undefined;
   }

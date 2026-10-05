@@ -11,8 +11,11 @@ import { runNotificationAction } from './notify';
 import { NO_TIMEOUT } from '../sfdk/runner';
 import { deployInstallsApp } from './buildConfig';
 import { whitespacePathWarning } from './pathGuard';
+import { resolveSigningUser } from './signingGuard';
 
 const SHOW_OUTPUT_ACTION = 'Show output';
+/** The tasks that can sign: they run `sfdk build` or `sfdk package`. */
+const SIGNED_COMMANDS = new Set<SailfishTaskDefinitionLike['command']>(['build', 'deploy', 'run', 'package']);
 
 /** One `sfdk engine exec -- pwd` probe cache per extension-host session (FR-5.9). */
 const sessionPathMapCache = new PathMapCache();
@@ -34,7 +37,12 @@ function specRelativePath(project: ProjectDescriptor): string {
 }
 
 /** Computes the sfdk invocations a task issues (FR-5.3..5.6); since the Task API has no `dependsOn`, deploy/run prepend their own prerequisite steps here. */
-function stepsFor(project: ProjectDescriptor, def: SailfishTaskDefinitionLike, services: Services): Step[] {
+function stepsFor(
+  project: ProjectDescriptor,
+  def: SailfishTaskDefinitionLike,
+  services: Services,
+  signingUser: string = services.settings.get('build.signingUser', project.folder.uri),
+): Step[] {
   const folderUri = project.folder.uri;
   switch (def.command) {
     case 'build': {
@@ -48,7 +56,7 @@ function stepsFor(project: ProjectDescriptor, def: SailfishTaskDefinitionLike, s
               jobs: services.settings.get('build.jobs', folderUri),
               buildType: services.settings.get('build.type', folderUri),
               sign: services.settings.get('build.sign', folderUri),
-              signingUser: services.settings.get('build.signingUser', folderUri),
+              signingUser,
               signingPassphraseFile: services.settings.get('build.signingPassphraseFile', folderUri),
             },
           ),
@@ -58,7 +66,7 @@ function stepsFor(project: ProjectDescriptor, def: SailfishTaskDefinitionLike, s
     }
     case 'deploy':
       return [
-        ...stepsFor(project, { command: 'build' }, services),
+        ...stepsFor(project, { command: 'build' }, services, signingUser),
         { argv: deployArgs(def, { method: services.settings.get('deploy.method', folderUri) }), usesDevice: true },
       ];
     case 'run': {
@@ -69,7 +77,7 @@ function stepsFor(project: ProjectDescriptor, def: SailfishTaskDefinitionLike, s
       const { pkillArgs, launchArgs } = runArgs(project.appBinaryPath, launcherTokens, {
         killBeforeLaunch: services.settings.get('run.killBeforeLaunch', folderUri),
       });
-      const steps: Step[] = [...stepsFor(project, { command: 'deploy' }, services)];
+      const steps: Step[] = [...stepsFor(project, { command: 'deploy' }, services, signingUser)];
       if (!deployInstallsApp(services.settings.get('deploy.method', folderUri))) {
         // A manual deploy only copies the RPM to ~/RPMS; there is nothing installed to launch.
         return steps;
@@ -81,7 +89,16 @@ function stepsFor(project: ProjectDescriptor, def: SailfishTaskDefinitionLike, s
       return steps;
     }
     case 'package':
-      return [{ argv: packageArgs(def), ensureEngine: true }];
+      return [
+        {
+          argv: packageArgs(def, {
+            sign: services.settings.get('build.sign', folderUri),
+            signingUser,
+            signingPassphraseFile: services.settings.get('build.signingPassphraseFile', folderUri),
+          }),
+          ensureEngine: true,
+        },
+      ];
     case 'check':
       return [{ argv: checkArgs(), ensureEngine: true }];
     case 'clean': {
@@ -152,9 +169,23 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
       engineMapping = await sessionPathMapCache.ensure(this.services, folder);
     }
 
+    // Resolve the signing key before any sfdk call, so a name that matches no key or several is explained here.
+    let signingUser = this.services.settings.get('build.signingUser', folder.uri);
+    if (SIGNED_COMMANDS.has(this.def.command)) {
+      const signing = await resolveSigningUser(this.services, folder.uri);
+      if (!signing.ok) {
+        this.write(`error: ${signing.message}\n`);
+        void this.notifyMappedError({ message: `Sailfish: ${signing.message}`, actionLabel: 'Set up signing' });
+        this.finished = true;
+        this.closeEmitter.fire(1);
+        return;
+      }
+      signingUser = signing.user;
+    }
+
     let steps: Step[];
     try {
-      steps = stepsFor(this.project, this.def, this.services);
+      steps = stepsFor(this.project, this.def, this.services, signingUser);
     } catch (err) {
       this.write(`error: ${err instanceof Error ? err.message : String(err)}\n`);
       this.finished = true;
@@ -180,7 +211,7 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
           const mapped =
             this.def.command === 'deploy'
               ? mapDeployError(line)
-              : this.def.command === 'build'
+              : this.def.command === 'build' || this.def.command === 'package'
                 ? mapBuildError(line)
                 : undefined;
           if (mapped) {

@@ -127,4 +127,24 @@ describe('parseSpec', () => {
   it('never throws on garbage input', () => {
     assert.doesNotThrow(() => parseSpec('\0\0\0 not a spec file at all {{{', { hasCMakeLists: false, hasProFile: false }));
   });
+
+  describe('native binary detection in %files', () => {
+    const spec = (files: string) => `Name: harbour-x\nVersion: 1\n\n%files\n${files}\n`;
+
+    it('recognises the bare %{_bindir} entry the stock Sailfish app template uses', () => {
+      assert.strictEqual(parseSpec(spec('%defattr(-,root,root,-)\n%{_datadir}/%{name}/qml\n%{_bindir}'), { hasProFile: true, hasCMakeLists: false }).hasNativeBinary, true);
+    });
+
+    it('recognises %{_bindir}/*, /usr/bin and an attr-prefixed entry', () => {
+      for (const files of ['%{_bindir}/*', '/usr/bin', '/usr/bin/%{name}', '%attr(755,root,root) %{_bindir}/%{name}']) {
+        assert.strictEqual(parseSpec(spec(files), { hasProFile: true, hasCMakeLists: false }).hasNativeBinary, true, files);
+      }
+    });
+
+    it('does not treat another binary or a longer path as this app\'s binary', () => {
+      for (const files of ['%{_bindir}/other-tool', '%{_bindir}/%{name}-helper', '%{_datadir}/%{name}/bin', '%{_bindirx}']) {
+        assert.strictEqual(parseSpec(spec(files), { hasProFile: true, hasCMakeLists: false }).hasNativeBinary, false, files);
+      }
+    });
+  });
 });

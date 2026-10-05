@@ -12,6 +12,7 @@ import { activateSigning } from './tasks/signing';
 import { activateBuildConfigStatusBar } from './tasks/statusBar';
 import { activateDebug } from './debug/debugOnDevice';
 import { activateDevices } from './devices/commands';
+import { activateDeviceAgent } from './agent/deviceAgent';
 import { activateQtQml } from './qtqml/silence';
 import { activateWalkthrough } from './walkthrough/index';
 import { getShownMessages } from './ui/prompts';
@@ -37,6 +38,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   const buildConfigStatusBar = activateBuildConfigStatusBar(ctx, services);
   const devicesProvider = activateDevices(ctx, services);
   ctx.subscriptions.push(buildConfigStatusBar.watchDevices(devicesProvider));
+  activateDeviceAgent(ctx, services);
   activateQtQml(ctx, services);
   activateWalkthrough(ctx, services);
 
