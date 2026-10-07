@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   clearFakeLog,
+  monitorView,
   readFakeLog,
   stubInputBox,
   stubMessages,
@@ -13,6 +14,7 @@ import {
   waitForContext,
   withScenario,
   type FakeInvocation,
+  type MonitorView,
 } from './helpers';
 
 /**
@@ -30,6 +32,15 @@ function keys(): string[] {
 
 function find(key: string): FakeInvocation | undefined {
   return readFakeLog().invocations.find((i) => i.key === key);
+}
+
+async function viewWhen(predicate: (v: MonitorView) => boolean, timeoutMs: number): Promise<MonitorView> {
+  let last: MonitorView | undefined;
+  await waitFor(() => {
+    void monitorView(DEVICE).then((v) => (last = v));
+    return last !== undefined && predicate(last);
+  }, timeoutMs);
+  return last as MonitorView;
 }
 
 function assertInOrder(actual: string[], expected: string[]): void {
@@ -176,17 +187,28 @@ suite('device agent (T4)', () => {
     });
   });
 
-  test('logs: streams from the agent with --lines 200 and ends cleanly', async function () {
+  test('logs: opens the monitor; the stream asks for 500 lines and a client, json only when the agent offers it', async function () {
     this.timeout(20000);
     const messages = stubMessages();
     clearFakeLog();
     await vscode.commands.executeCommand('sailfish.agent.logs');
-    await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 5000);
+    await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 8000);
     const logs = find('device_exec.sailfish-devagent.logs');
-    const at = logs?.argv.indexOf('--lines') ?? -1;
-    assert.ok(at >= 0 && logs?.argv[at + 1] === '200', JSON.stringify(logs?.argv));
-    // The fake stream ends on its own; give it time to finish and surface any error.
-    await new Promise((r) => setTimeout(r, 1500));
+    assert.ok(logs, JSON.stringify(keys()));
+    const at = logs.argv.indexOf('--lines');
+    assert.ok(at >= 0 && logs.argv[at + 1] === '500', JSON.stringify(logs.argv));
+    assert.ok(logs.argv.includes('--client'), JSON.stringify(logs.argv));
+    const ping = readFakeLog().invocations.find((i) => i.key === 'device_exec.sailfish-devagent.ping');
+    assert.ok(ping, JSON.stringify(keys()));
+    // The default scenario's ping has no logFormats, so no --format json.
+    assert.ok(!logs.argv.includes('--format'), JSON.stringify(logs.argv));
+    await withScenario('monitor-agent', async () => {
+      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 8000);
+      const argv = find('device_exec.sailfish-devagent.logs')?.argv ?? [];
+      assert.ok(argv.includes('--format') && argv[argv.indexOf('--format') + 1] === 'json', JSON.stringify(argv));
+    });
     assert.ok(!messages.calls.some((m) => m.kind === 'error'), JSON.stringify(messages.calls));
   });
 
@@ -202,24 +224,22 @@ suite('device agent (T4)', () => {
     });
   });
 
-  test('I24 logs: logs off on the phone is refused before streaming', async () => {
+  test('I24 logs: logs off on the phone shows the Allow system logs text in the monitor and streams nothing', async function () {
+    this.timeout(20000);
     await withScenario('agent-settings-logs-off', async () => {
-      const messages = stubMessages();
       await vscode.commands.executeCommand('sailfish.agent.logs');
-      const error = messages.calls.find((m) => m.kind === 'error');
-      assert.ok(error?.message.includes('System logs are turned off on the phone'), JSON.stringify(messages.calls));
+      const view = await viewWhen((v) => v.log.status === 'off', 10000);
+      assert.ok((view.log.reason ?? '').includes('Allow system logs'), JSON.stringify(view.log));
       assert.ok(!keys().includes('device_exec.sailfish-devagent.logs'), JSON.stringify(keys()));
     });
   });
 
-  test('I25 logs: a stream the phone stops reports "stopped from the phone" although the exit code is 0', async function () {
+  test('I25 logs: a stream the phone stops shows "stopped from the phone" although the exit code is 0', async function () {
     this.timeout(20000);
     await withScenario('agent-settings-stopped', async () => {
-      const messages = stubMessages();
       await vscode.commands.executeCommand('sailfish.agent.logs');
-      await waitFor(() => messages.calls.some((m) => m.kind === 'error'), 8000);
-      const error = messages.calls.find((m) => m.kind === 'error');
-      assert.ok(error?.message.includes('stopped from the phone'), JSON.stringify(messages.calls));
+      const view = await viewWhen((v) => v.log.status === 'stopped', 10000);
+      assert.ok((view.log.reason ?? '').includes('stopped from the phone'), JSON.stringify(view.log));
     });
   });
 
