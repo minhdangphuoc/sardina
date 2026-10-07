@@ -234,8 +234,10 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       assert.ok(logs && !logs.argv.includes('--format'), JSON.stringify(logs?.argv));
       const sh = all('device_exec.sh');
       for (const call of sh) {
-        const at = call.argv.indexOf('-c');
-        assert.ok(at >= 0 && call.argv[at + 1] === APP_STATS_SCRIPT, JSON.stringify(call.argv));
+        // The first `-c` is sfdk's own `-c device=…`; the script follows `sh -c`.
+        const at = call.argv.indexOf('sh') + 1;
+        assert.strictEqual(call.argv[at], '-c', JSON.stringify(call.argv));
+        assert.ok(call.argv[at + 1] === APP_STATS_SCRIPT, JSON.stringify(call.argv));
         assert.deepStrictEqual(call.argv.slice(at + 2), ['sh', APP_BINARY]);
       }
       const gap = sh[1].ts - sh[0].ts;

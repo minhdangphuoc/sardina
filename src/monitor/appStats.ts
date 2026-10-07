@@ -6,11 +6,27 @@
 
 /**
  * Run as `sh -c APP_STATS_SCRIPT sh <binary>`: the binary is a positional argument, never part of
- * the script text. `pgrep -x -f` matches the whole command line, so the remote shell that runs the
- * script is not matched.
+ * the script text. It matches like the agent's stats stream (§4.2): a process whose first argument is
+ * the binary, else one whose `comm` is the binary's name cut to 15 characters; the lowest pid wins.
+ * `pgrep -x -f` is not used: an `invoker`-started app's booster rewrites its argv in place, so its
+ * joined command line is the path followed by NUL padding and busybox `pgrep -x -f` never matches it
+ * (emulator recording, T4-3). Only processes with the right `comm` are read further, so the remote
+ * shell running the script (`comm` sh) and `invoker` are never candidates, and the scan forks little.
  */
 export const APP_STATS_SCRIPT = [
-  `p=$(pgrep -x -f "$1" | head -n 1); [ -n "$p" ] || { echo 'pid 0'; head -n 1 /proc/stat; exit 0; }`,
+  `b=$(printf '%.15s' "\${1##*/}"); p=; f=`,
+  `for d in /proc/[0-9]*; do`,
+  `  read -r c 2>/dev/null < "$d/comm" || continue`,
+  `  [ "$c" = "$b" ] || continue`,
+  `  q=\${d#/proc/}`,
+  `  if [ "$(tr '\\0' '\\n' 2>/dev/null < "$d/cmdline" | head -n 1)" = "$1" ]; then`,
+  `    { [ -n "$p" ] && [ "$p" -lt "$q" ]; } || p=$q`,
+  `  else`,
+  `    { [ -n "$f" ] && [ "$f" -lt "$q" ]; } || f=$q`,
+  `  fi`,
+  `done`,
+  `[ -n "$p" ] || p=$f`,
+  `[ -n "$p" ] || { echo 'pid 0'; head -n 1 /proc/stat; exit 0; }`,
   `echo "pid $p"; cat /proc/$p/stat; echo '--'; cat /proc/$p/status; echo '--'; cat /proc/uptime; head -n 1 /proc/stat`,
 ].join('\n');
 
