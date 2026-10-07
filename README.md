@@ -374,6 +374,10 @@ Tips:
   (`sfdk` in a terminal) is not checked.
 - The debugged app is started by `gdbserver` over SSH, outside the Sailjail
   sandbox, so sandbox permission problems do not reproduce under the debugger.
+- **Restart** (🔄 in the debug toolbar, **Ctrl+Shift+F5**) stops the app and
+  starts the same installed build again under the debugger; breakpoints stay.
+  It does not build or deploy, so code changes are not picked up. To run
+  changed code, stop the session and press 🐞 **Debug** again.
 
 **Debug Installed App** starts the app already on the device under the
 debugger, without building or deploying again. QML and JavaScript debugging are not supported yet.
