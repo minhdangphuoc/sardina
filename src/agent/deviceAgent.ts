@@ -1,3 +1,4 @@
+import { deviceSessions } from '../core/deviceSessions';
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
@@ -18,17 +19,21 @@ import {
   archFromOutput,
   archFromRpmQuery,
   classifyPing,
+  clientName,
   decodeBase64Output,
+  describeAgentRefusal,
   describeProbe,
   installConsentDetail,
   isPng,
   isScreenshotPath,
   parseAgentReply,
+  phoneRefusal,
   pickAgentRpm,
   screenshotFileName,
   type AgentArch,
   type AgentProbe,
 } from './agentCore';
+import { agentUpdateNotice, agentUpdateAvailable, bundledAgentVersion } from './mirrorCore';
 import { activateMirror } from './mirror';
 
 /**
@@ -38,6 +43,9 @@ import { activateMirror } from './mirror';
  */
 
 const INSTALL_AGENT = 'Install Device Agent';
+export const UPDATE_AGENT = 'Update Device Agent';
+/** Devices already told about an update in this session. */
+const updateOffered = new Set<string>();
 const REVEAL = 'Reveal in folder';
 const STOP = 'Stop';
 const LOG_CHANNEL_NAME = 'Sailfish Device Log';
@@ -47,6 +55,13 @@ const REQUEST_TIMEOUT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 120_000;
 const COPY_TIMEOUT_MS = 120_000;
 const ROOT_TIMEOUT_MS = 5 * 60 * 1000;
+
+/** `--client <host>` for the agent's log request (shown on the phone as "VS Code on <host>"); nothing when the name is empty. */
+function clientArgs(): string[] {
+  // `sfdk device exec` hands its words to a remote shell, which would split a space: none is sent.
+  const name = clientName(os.hostname()).replace(/ /g, '-');
+  return name ? ['--client', name] : [];
+}
 
 /** The device from a Devices-view item, else the workspace's `sailfish.device`. */
 function resolveDevice(services: Services, item: unknown): string | undefined {
@@ -76,13 +91,77 @@ export async function probe(services: Services, device: string, token?: vscode.C
   return classifyPing(await request(services, device, 'ping', token));
 }
 
+/** The agent version shipped in `media/agent/*`, from the RPM file names; undefined when none ship. */
+export async function bundledAgentVersionOf(ctx: vscode.ExtensionContext): Promise<string | undefined> {
+  const names: string[] = [];
+  for (const arch of AGENT_ARCHES) {
+    try {
+      names.push(...(await fs.readdir(path.join(ctx.extensionPath, 'media', 'agent', arch))));
+    } catch {
+      // an architecture without a directory ships nothing
+    }
+  }
+  return bundledAgentVersion(names);
+}
+
+/** The bundled version when the running agent is older than it, else undefined. */
+export async function newerBundledAgent(ctx: vscode.ExtensionContext, probeState: AgentProbe): Promise<string | undefined> {
+  if (probeState.state !== 'running') return undefined;
+  const bundled = await bundledAgentVersionOf(ctx);
+  return agentUpdateAvailable(probeState.version, bundled) ? bundled : undefined;
+}
+
+/**
+ * Agent installs and updates, for open streams (the mirror): `installing` just before the root step,
+ * which restarts the agent and so ends its streams; `done` afterwards, with the agent's ping answer,
+ * or without one when the install was cancelled or failed.
+ */
+export type AgentInstallEvent =
+  | { device: string; phase: 'installing' }
+  | { device: string; phase: 'done'; probe?: AgentProbe };
+const installEvents = new vscode.EventEmitter<AgentInstallEvent>();
+export const onAgentInstall = installEvents.event;
+
+/**
+ * Non-modal "update available" notification, once per device per session. The action
+ * runs the install flow (which reports through `onAgentInstall`). Not awaited by callers that must not block.
+ */
+export async function offerAgentUpdate(
+  ctx: vscode.ExtensionContext,
+  services: Services,
+  device: string,
+  probeState: AgentProbe,
+): Promise<void> {
+  if (probeState.state !== 'running') return;
+  if (updateOffered.has(device)) return;
+  const bundled = await newerBundledAgent(ctx, probeState);
+  if (!bundled) return;
+  updateOffered.add(device);
+  const choice = await services.prompts.showInformationMessage(agentUpdateNotice(device, probeState.version, bundled), UPDATE_AGENT);
+  if (choice !== UPDATE_AGENT) return;
+  await installAgentOn(ctx, services, device);
+}
+
 /**
  * True when the agent is running with Developer Mode on. Otherwise explains, offers the install
  * when the agent is missing, and returns false.
  */
-export async function ensureAgent(ctx: vscode.ExtensionContext, services: Services, device: string): Promise<boolean> {
+export async function ensureAgent(
+  ctx: vscode.ExtensionContext,
+  services: Services,
+  device: string,
+  need?: 'screenView' | 'logs',
+): Promise<boolean> {
   const state = await probe(services, device);
-  if (state.state === 'running' && state.developerMode) return true;
+  if (state.state === 'running' && state.developerMode) {
+    // The phone's own settings win: say so before asking for something it will refuse.
+    const refusal = need ? phoneRefusal(state, need) : undefined;
+    if (refusal) {
+      void services.prompts.showErrorMessage(`Sailfish: "${device}": ${refusal}`);
+      return false;
+    }
+    return true;
+  }
   if (state.state === 'not-installed' || state.state === 'not-running') {
     const choice = await services.prompts.showWarningMessage(
       `${describeProbe(device, state)} Screenshots and device logs need it.`,
@@ -138,7 +217,10 @@ async function copyRpm(services: Services, device: string, rpmPath: string, toke
   return result.exitCode === 0;
 }
 
-/** The install itself: consent, architecture, copy, `devel-su rpm -U` (one password prompt), then a ping. */
+/**
+ * The install itself: consent, architecture, copy, `devel-su rpm -U` (one password prompt), then a ping.
+ * The root step and its outcome are announced through `onAgentInstall`.
+ */
 export async function installAgentOn(ctx: vscode.ExtensionContext, services: Services, device: string): Promise<boolean> {
   const consent = await services.prompts.showWarningMessage(
     `Sailfish: install the device agent on "${device}"?`,
@@ -182,6 +264,7 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   );
   if (!prepared) return false;
 
+  installEvents.fire({ device, phase: 'installing' });
   const exitCode = await runAsRootOnDevice(services, device, {
     title: `Install the device agent on "${device}"`,
     prompt: 'Developer-mode password of the device (Settings → Developer tools).',
@@ -189,6 +272,7 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
     script: INSTALL_SCRIPT,
     timeoutMs: ROOT_TIMEOUT_MS,
   });
+  if (exitCode !== 0) installEvents.fire({ device, phase: 'done' });
   if (exitCode === undefined) return false;
   if (exitCode !== 0) {
     void services.prompts.showErrorMessage(
@@ -198,6 +282,7 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   }
 
   const state = await probe(services, device);
+  installEvents.fire({ device, phase: 'done', probe: state });
   if (state.state === 'running') {
     void services.prompts.showInformationMessage(describeProbe(device, state));
     return state.developerMode;
@@ -236,7 +321,7 @@ function uninstallAgent(services: Services) {
   };
 }
 
-function agentStatus(services: Services) {
+function agentStatus(ctx: vscode.ExtensionContext, services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
@@ -244,6 +329,15 @@ function agentStatus(services: Services) {
       { location: vscode.ProgressLocation.Notification, title: `Sailfish: asking the device agent on "${device}"…`, cancellable: true },
       (_progress, token) => probe(services, device, token),
     );
+    const bundled = await newerBundledAgent(ctx, state);
+    if (state.state === 'running' && bundled) {
+      updateOffered.add(device);
+      const message = `${describeProbe(device, state)} ${agentUpdateNotice(device, state.version, bundled).replace(/^Sailfish: /, 'Update available: ')}`;
+      void services.prompts.showInformationMessage(message, UPDATE_AGENT).then((choice) => {
+        if (choice === UPDATE_AGENT) void installAgentOn(ctx, services, device);
+      });
+      return;
+    }
     const message = describeProbe(device, state);
     void (state.state === 'running' ? services.prompts.showInformationMessage(message) : services.prompts.showWarningMessage(message));
   };
@@ -255,7 +349,7 @@ async function captureScreenshot(services: Services, device: string, token: vsco
   const reply = parseAgentReply(shot.stdout);
   if (shot.exitCode !== 0 || !reply?.ok || !reply.path) {
     if (!token.isCancellationRequested) {
-      void services.prompts.showErrorMessage(`Sailfish: the device agent could not take a screenshot: ${reply?.error || shot.stderr.trim() || `exit ${shot.exitCode}`}`);
+      void services.prompts.showErrorMessage(`Sailfish: the device agent could not take a screenshot: ${reply?.error ? describeAgentRefusal(reply.error) : shot.stderr.trim() || `exit ${shot.exitCode}`}`);
     }
     return undefined;
   }
@@ -294,7 +388,7 @@ function takeScreenshot(ctx: vscode.ExtensionContext, services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
-    if (!(await ensureAgent(ctx, services, device))) return;
+    if (!(await ensureAgent(ctx, services, device, 'screenView'))) return;
 
     const png = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Sailfish: taking a screenshot of "${device}"…`, cancellable: true },
@@ -354,7 +448,7 @@ function showLogs(ctx: vscode.ExtensionContext, services: Services) {
     }
     const device = requireDevice(services, item);
     if (!device) return;
-    if (!(await ensureAgent(ctx, services, device))) return;
+    if (!(await ensureAgent(ctx, services, device, 'logs'))) return;
 
     const out = getChannel();
     out.clear();
@@ -362,6 +456,10 @@ function showLogs(ctx: vscode.ExtensionContext, services: Services) {
     out.show(true);
     const cts = new vscode.CancellationTokenSource();
     session = { device, cts };
+    const registration = deviceSessions.register(device, 'logs', 'device logs', () => {
+      cts.cancel();
+      return Promise.resolve();
+    });
     void vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Sailfish: streaming device logs from "${device}"`, cancellable: true },
       async (_progress, token) => {
@@ -372,7 +470,7 @@ function showLogs(ctx: vscode.ExtensionContext, services: Services) {
         let lastStderr = '';
         try {
           const result = await services.runner.run({
-            args: ['device', 'exec', '--', AGENT_BINARY, '--request', 'logs', '--lines', String(LOG_LINES)],
+            args: ['device', 'exec', '--', AGENT_BINARY, '--request', 'logs', '--lines', String(LOG_LINES), ...clientArgs()],
             device,
             timeoutMs: NO_TIMEOUT,
             token: cts.token,
@@ -390,14 +488,18 @@ function showLogs(ctx: vscode.ExtensionContext, services: Services) {
             out.appendLine('[stopped]');
           } else {
             out.appendLine(`[log stream ended (exit ${result.exitCode})]`);
-            if (result.exitCode !== 0) {
-              const reply = parseAgentReply(lastStdout);
-              void services.prompts.showErrorMessage(
-                `Sailfish: device logs from "${device}" stopped: ${reply?.error || lastStderr || `exit ${result.exitCode}`}`,
-              );
+            // The agent ends a stream with {"ok":false,"error":…} when the phone stops or forbids it
+            // (also with exit 0 when it ends a running stream), so the last line is looked at first.
+            const reply = parseAgentReply(lastStdout);
+            if (reply && !reply.ok && reply.error) {
+              out.appendLine(`[${describeAgentRefusal(reply.error)}]`);
+              void services.prompts.showErrorMessage(`Sailfish: device logs from "${device}" stopped: ${describeAgentRefusal(reply.error)}`);
+            } else if (result.exitCode !== 0) {
+              void services.prompts.showErrorMessage(`Sailfish: device logs from "${device}" stopped: ${lastStderr || `exit ${result.exitCode}`}`);
             }
           }
         } finally {
+          registration.dispose();
           session = undefined;
           cts.dispose();
         }
@@ -410,7 +512,7 @@ export function activateDeviceAgent(ctx: vscode.ExtensionContext, services: Serv
   ctx.subscriptions.push(
     vscode.commands.registerCommand('sailfish.agent.install', installAgent(ctx, services)),
     vscode.commands.registerCommand('sailfish.agent.uninstall', uninstallAgent(services)),
-    vscode.commands.registerCommand('sailfish.agent.status', agentStatus(services)),
+    vscode.commands.registerCommand('sailfish.agent.status', agentStatus(ctx, services)),
     vscode.commands.registerCommand('sailfish.agent.screenshot', takeScreenshot(ctx, services)),
     vscode.commands.registerCommand('sailfish.agent.logs', showLogs(ctx, services)),
   );

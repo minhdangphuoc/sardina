@@ -49,6 +49,45 @@ export interface AgentReply {
   developerMode?: boolean;
   path?: string;
   error?: string;
+  /** Agent 1.2.0+: the agent's local socket path (unvalidated here). Absent on 1.1.0 replies. */
+  socket?: string;
+  /** Agent 1.2.0+: the mirror encodings the agent offers. Absent on 1.1.0 replies. */
+  mirrorEncodings?: string[];
+  /** Agent 1.7.0+: mirror gestures the daemon can inject. Absent means view-only. */
+  mirrorInput?: string[];
+  /** Agent 1.9.0+: the phone's own settings (Settings → System → Developer agent). Absent on older agents. */
+  settings?: PhoneSettings;
+  /** Agent 1.9.0+: true when the agent installed its Settings page. */
+  settingsPage?: boolean;
+}
+
+export const INDICATOR_LEVELS = ['normal', 'quiet', 'minimal'] as const;
+export type IndicatorLevel = (typeof INDICATOR_LEVELS)[number];
+
+/** What the phone allows; a key is present only when the agent reported it with the right type. */
+export interface PhoneSettings {
+  screenView?: boolean;
+  control?: boolean;
+  logs?: boolean;
+  indicator?: IndicatorLevel;
+  muteNotifications?: boolean;
+  touchIndicator?: boolean;
+}
+
+const PHONE_BOOLEAN_KEYS = ['screenView', 'control', 'logs', 'muteNotifications', 'touchIndicator'] as const;
+
+/** Keeps only the known keys with the right types; undefined when the value is not an object. */
+export function parsePhoneSettings(value: unknown): PhoneSettings | undefined {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return undefined;
+  const raw = value as Record<string, unknown>;
+  const out: PhoneSettings = {};
+  for (const key of PHONE_BOOLEAN_KEYS) {
+    if (typeof raw[key] === 'boolean') out[key] = raw[key];
+  }
+  if (typeof raw.indicator === 'string' && (INDICATOR_LEVELS as readonly string[]).includes(raw.indicator)) {
+    out.indicator = raw.indicator as IndicatorLevel;
+  }
+  return out;
 }
 
 /** The first JSON object line of the agent's stdout; undefined when there is none. */
@@ -59,13 +98,25 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
     try {
       const parsed = JSON.parse(trimmed) as Record<string, unknown>;
       if (typeof parsed.ok !== 'boolean') return undefined;
-      return {
+      const reply: AgentReply = {
         ok: parsed.ok,
         version: typeof parsed.version === 'string' ? parsed.version : undefined,
         developerMode: typeof parsed.developerMode === 'boolean' ? parsed.developerMode : undefined,
         path: typeof parsed.path === 'string' ? parsed.path : undefined,
         error: typeof parsed.error === 'string' ? parsed.error : undefined,
       };
+      // Added only when present, so a 1.1.0 reply parses to exactly what it did before.
+      if (typeof parsed.socket === 'string') reply.socket = parsed.socket;
+      if (Array.isArray(parsed.mirrorEncodings) && parsed.mirrorEncodings.every((e) => typeof e === 'string')) {
+        reply.mirrorEncodings = parsed.mirrorEncodings;
+      }
+      if (Array.isArray(parsed.mirrorInput) && parsed.mirrorInput.every((e) => typeof e === 'string')) {
+        reply.mirrorInput = parsed.mirrorInput;
+      }
+      const settings = parsePhoneSettings(parsed.settings);
+      if (settings !== undefined) reply.settings = settings;
+      if (typeof parsed.settingsPage === 'boolean') reply.settingsPage = parsed.settingsPage;
+      return reply;
     } catch {
       return undefined;
     }
@@ -74,7 +125,7 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
 }
 
 export type AgentProbe =
-  | { state: 'running'; version: string; developerMode: boolean }
+  | { state: 'running'; version: string; developerMode: boolean; socket?: string; mirrorEncodings?: string[]; mirrorInput?: string[]; settings?: PhoneSettings; settingsPage?: boolean }
   | { state: 'not-running' }
   | { state: 'not-installed' }
   | { state: 'unreachable'; detail: string };
@@ -83,7 +134,13 @@ export type AgentProbe =
 export function classifyPing(result: { exitCode: number; stdout: string; stderr: string }): AgentProbe {
   const reply = parseAgentReply(result.stdout);
   if (result.exitCode === 0 && reply?.ok) {
-    return { state: 'running', version: reply.version ?? '?', developerMode: reply.developerMode ?? false };
+    const running: AgentProbe = { state: 'running', version: reply.version ?? '?', developerMode: reply.developerMode ?? false };
+    if (reply.socket !== undefined) running.socket = reply.socket;
+    if (reply.mirrorEncodings !== undefined) running.mirrorEncodings = reply.mirrorEncodings;
+    if (reply.mirrorInput !== undefined) running.mirrorInput = reply.mirrorInput;
+    if (reply.settings !== undefined) running.settings = reply.settings;
+    if (reply.settingsPage !== undefined) running.settingsPage = reply.settingsPage;
+    return running;
   }
   if (result.exitCode === 3 || reply?.error === 'agent not running') {
     return { state: 'not-running' };
@@ -147,18 +204,75 @@ export const UNINSTALL_SCRIPT = `rpm -e ${AGENT_PACKAGE}`;
 /** What the consent dialog says the agent can do (the security model's "install is the consent step"). */
 export function installConsentDetail(device: string): string {
   return (
-    `The agent is a small service (${AGENT_PACKAGE}) that lets VS Code take screenshots and read the system log of "${device}" ` +
-    'without asking for the password each time. It runs as defaultuser with the "privileged" and "systemd-journal" groups only, ' +
-    'answers only on a local socket (nothing new is opened on the network) and only while Developer Mode is on. ' +
+    `The agent is a small service (${AGENT_PACKAGE}) that lets VS Code mirror the screen, send taps and swipes from a focused mirror panel, ` +
+    `and read the system log of "${device}" without asking for the password each time. It runs as defaultuser, whose normal groups include ` +
+    'access to the touchscreen, with "privileged" as its primary group and "systemd-journal" added. It answers only on a local socket ' +
+    '(nothing new is opened on the network), only while Developer Mode is on, and input stops when the mirror loses focus. ' +
     'You will be asked for the device\'s developer-mode password once. "Uninstall Device Agent" removes it again.'
   );
+}
+
+const SETTINGS_PLACE = 'Settings → System → Developer agent';
+
+/** The wire reasons the agent gives when the phone's settings (or its owner) refuse or end something. */
+const REFUSAL_TEXT: Readonly<Record<string, string>> = {
+  'screen view disabled on the phone': `Screen view is turned off on the phone. Turn on "Allow screen view" in ${SETTINGS_PLACE} on the phone.`,
+  'logs disabled on the phone': `System logs are turned off on the phone. Turn on "Allow system logs" in ${SETTINGS_PLACE} on the phone.`,
+  'stopped from the phone': 'The session was stopped from the phone ("Stop all sessions now" in the Developer agent settings).',
+  'control disabled on the phone': `Control is turned off on the phone. Turn on "Allow control from VS Code" in ${SETTINGS_PLACE} on the phone.`,
+  'developer mode is off': 'Developer Mode is off on the phone. Turn it on in Settings → Developer tools.',
+};
+
+/** A user-facing text for an agent error string; unknown errors are returned as they are. */
+export function describeAgentRefusal(error: string): string {
+  return REFUSAL_TEXT[error] ?? error;
+}
+
+/** The permissions that are off on the phone, as words. */
+function permissionsOff(settings: PhoneSettings): string[] {
+  const off: string[] = [];
+  if (settings.screenView === false) off.push('screen view');
+  if (settings.control === false) off.push('control');
+  if (settings.logs === false) off.push('logs');
+  return off;
+}
+
+/** The phone's own settings as one sentence ("" when the agent did not report any). */
+export function describePhoneSettings(settings: PhoneSettings | undefined): string {
+  if (!settings) return '';
+  const off = permissionsOff(settings);
+  const known = settings.screenView !== undefined || settings.control !== undefined || settings.logs !== undefined;
+  const parts: string[] = [];
+  if (off.length > 0) {
+    parts.push(`the phone has turned off ${off.join(', ')} (${SETTINGS_PLACE})`);
+  } else if (known) {
+    parts.push('the phone allows screen view, control and logs');
+  }
+  if (settings.indicator !== undefined && settings.indicator !== 'normal') parts.push(`session indicator ${settings.indicator}`);
+  if (settings.muteNotifications === true) parts.push('agent notifications muted');
+  if (settings.touchIndicator === true) parts.push('touch indicator on');
+  return parts.length > 0 ? ` On the phone: ${parts.join('; ')}.` : '';
+}
+
+/** The text for a request the phone's settings would refuse, or undefined when it is allowed or unknown. */
+export function phoneRefusal(probe: AgentProbe, need: 'screenView' | 'logs'): string | undefined {
+  if (probe.state !== 'running' || probe.settings?.[need] !== false) return undefined;
+  return describeAgentRefusal(need === 'screenView' ? 'screen view disabled on the phone' : 'logs disabled on the phone');
+}
+
+/**
+ * The client name sent as `client` (`--client`): the host name cut to the agent's alphabet
+ * `[A-Za-z0-9 ._-]` and 64 characters, like the agent does. Empty means unknown.
+ */
+export function clientName(host: string): string {
+  return host.replace(/[^A-Za-z0-9 ._-]/g, '').trim().slice(0, 64).trim();
 }
 
 /** One line for the status notification. */
 export function describeProbe(device: string, probe: AgentProbe): string {
   switch (probe.state) {
     case 'running':
-      return `Sailfish: device agent ${probe.version} is running on "${device}"; Developer Mode is ${probe.developerMode ? 'on' : 'off, so screenshots and logs are refused'}.`;
+      return `Sailfish: device agent ${probe.version} is running on "${device}"; Developer Mode is ${probe.developerMode ? 'on' : 'off, so screenshots and logs are refused'}.${describePhoneSettings(probe.settings)}`;
     case 'not-running':
       return `Sailfish: the device agent is installed on "${device}" but not running (try "Install Device Agent" again, or on the device: systemctl status sailfish-devagent).`;
     case 'not-installed':
