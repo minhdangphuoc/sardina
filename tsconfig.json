@@ -13,5 +13,6 @@
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true
   },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/monitor/webview/main.ts", "src/monitor/webview/logView.ts", "src/monitor/webview/virtualList.ts"]
 }

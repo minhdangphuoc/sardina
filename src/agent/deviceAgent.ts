@@ -1,10 +1,9 @@
-import { deviceSessions } from '../core/deviceSessions';
 import * as vscode from 'vscode';
 import * as fs from 'node:fs/promises';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import type { Services } from '../core/services';
-import { NO_TIMEOUT, type SfdkResult } from '../sfdk/runner';
+import type { SfdkResult } from '../sfdk/runner';
 import { deviceFrom } from '../devices/commands';
 import { runAsRootOnDevice } from '../devices/devicePackages';
 import { sfdkDeviceName } from '../devices/listParsing';
@@ -47,17 +46,14 @@ export const UPDATE_AGENT = 'Update Device Agent';
 /** Devices already told about an update in this session. */
 const updateOffered = new Set<string>();
 const REVEAL = 'Reveal in folder';
-const STOP = 'Stop';
-const LOG_CHANNEL_NAME = 'Sailfish Device Log';
 const LAST_FOLDER_KEY = 'sailfish.agent.lastScreenshotFolder';
-const LOG_LINES = 200;
 const REQUEST_TIMEOUT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 120_000;
 const COPY_TIMEOUT_MS = 120_000;
 const ROOT_TIMEOUT_MS = 5 * 60 * 1000;
 
 /** `--client <host>` for the agent's log request (shown on the phone as "VS Code on <host>"); nothing when the name is empty. */
-function clientArgs(): string[] {
+export function clientArgs(): string[] {
   // `sfdk device exec` hands its words to a remote shell, which would split a space: none is sent.
   const name = clientName(os.hostname()).replace(/ /g, '-');
   return name ? ['--client', name] : [];
@@ -181,7 +177,7 @@ export async function ensureAgent(
 }
 
 /** The agent RPM architecture from `uname -m`; an error message when it cannot be told or is not supported. */
-async function detectArch(
+export async function detectArch(
   services: Services,
   device: string,
   token: vscode.CancellationToken,
@@ -421,90 +417,12 @@ function takeScreenshot(ctx: vscode.ExtensionContext, services: Services) {
   };
 }
 
-interface LogSession {
-  device: string;
-  cts: vscode.CancellationTokenSource;
-}
-
-/** Streams `journalctl -f` from the agent into an output channel until stopped (notification "Cancel", or "Stop"). */
-function showLogs(ctx: vscode.ExtensionContext, services: Services) {
-  let channel: vscode.OutputChannel | undefined;
-  let session: LogSession | undefined;
-  const getChannel = (): vscode.OutputChannel => {
-    if (!channel) {
-      channel = vscode.window.createOutputChannel(LOG_CHANNEL_NAME);
-      ctx.subscriptions.push(channel);
-    }
-    return channel;
-  };
-
+/** Show Device Logs: opens the Device Monitor with the Logs section revealed and focused. */
+function showLogs(services: Services) {
   return async (item?: unknown): Promise<void> => {
-    if (session) {
-      getChannel().show(true);
-      const current = session;
-      const choice = await services.prompts.showInformationMessage(`Sailfish: device logs are already streaming from "${current.device}".`, STOP);
-      if (choice === STOP) current.cts.cancel();
-      return;
-    }
     const device = requireDevice(services, item);
     if (!device) return;
-    if (!(await ensureAgent(ctx, services, device, 'logs'))) return;
-
-    const out = getChannel();
-    out.clear();
-    out.appendLine(`[streaming journalctl from "${device}"; cancel the notification to stop]`);
-    out.show(true);
-    const cts = new vscode.CancellationTokenSource();
-    session = { device, cts };
-    const registration = deviceSessions.register(device, 'logs', 'device logs', () => {
-      cts.cancel();
-      return Promise.resolve();
-    });
-    void vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Sailfish: streaming device logs from "${device}"`, cancellable: true },
-      async (_progress, token) => {
-        token.onCancellationRequested(() => cts.cancel());
-        // The stream is endless, so the runner keeps no output (collectOutput: false); only the
-        // last line of each stream is kept, for the error message when it ends badly.
-        let lastStdout = '';
-        let lastStderr = '';
-        try {
-          const result = await services.runner.run({
-            args: ['device', 'exec', '--', AGENT_BINARY, '--request', 'logs', '--lines', String(LOG_LINES), ...clientArgs()],
-            device,
-            timeoutMs: NO_TIMEOUT,
-            token: cts.token,
-            collectOutput: false,
-            onLine: (line, stream) => {
-              if (stream === 'stdout') {
-                out.appendLine(line);
-                if (line.trim()) lastStdout = line;
-              } else if (line.trim()) {
-                lastStderr = line.trim();
-              }
-            },
-          });
-          if (result.cancelled) {
-            out.appendLine('[stopped]');
-          } else {
-            out.appendLine(`[log stream ended (exit ${result.exitCode})]`);
-            // The agent ends a stream with {"ok":false,"error":…} when the phone stops or forbids it
-            // (also with exit 0 when it ends a running stream), so the last line is looked at first.
-            const reply = parseAgentReply(lastStdout);
-            if (reply && !reply.ok && reply.error) {
-              out.appendLine(`[${describeAgentRefusal(reply.error)}]`);
-              void services.prompts.showErrorMessage(`Sailfish: device logs from "${device}" stopped: ${describeAgentRefusal(reply.error)}`);
-            } else if (result.exitCode !== 0) {
-              void services.prompts.showErrorMessage(`Sailfish: device logs from "${device}" stopped: ${lastStderr || `exit ${result.exitCode}`}`);
-            }
-          }
-        } finally {
-          registration.dispose();
-          session = undefined;
-          cts.dispose();
-        }
-      },
-    );
+    await vscode.commands.executeCommand('sailfish.monitor.open', { device, reveal: 'logs' });
   };
 }
 
@@ -514,7 +432,7 @@ export function activateDeviceAgent(ctx: vscode.ExtensionContext, services: Serv
     vscode.commands.registerCommand('sailfish.agent.uninstall', uninstallAgent(services)),
     vscode.commands.registerCommand('sailfish.agent.status', agentStatus(ctx, services)),
     vscode.commands.registerCommand('sailfish.agent.screenshot', takeScreenshot(ctx, services)),
-    vscode.commands.registerCommand('sailfish.agent.logs', showLogs(ctx, services)),
+    vscode.commands.registerCommand('sailfish.agent.logs', showLogs(services)),
   );
   activateMirror(ctx, services);
 }

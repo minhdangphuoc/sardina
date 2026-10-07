@@ -2,6 +2,8 @@
 #include "paths.h"
 #include "screenshot.h"
 #include "logs.h"
+#include "stats.h"
+#include "statsmath.h"
 #include "indicator.h"
 #include "mirror.h"
 #include "settings.h"
@@ -147,6 +149,7 @@ void Agent::tryListen()
         return;
     }
     fprintf(stderr, "sailfish-devagent %s: listening on %s\n", AGENT_VERSION, qPrintable(path));
+    LogStream::probeOutputFields(); // once: the result is cached
     closeStaleStreamEntries();
     notifyStarted();
     m_service->start();
@@ -163,6 +166,11 @@ void Agent::stop()
     for (const QPointer<LogStream> &log : m_logs) {
         if (log) {
             log->disconnect(this);
+        }
+    }
+    for (const QPointer<StatsStream> &stats : m_stats) {
+        if (stats) {
+            stats->disconnect(this);
         }
     }
     m_indicator->disconnect(this);
@@ -364,6 +372,11 @@ void Agent::onSessionChanged()
             m_logs.removeAt(i);
         }
     }
+    for (int i = m_stats.size() - 1; i >= 0; --i) {
+        if (!m_stats.at(i) || !m_stats.at(i)->active()) {
+            m_stats.removeAt(i);
+        }
+    }
     m_service->notifyChanged(QStringLiteral("session"));
 }
 
@@ -389,6 +402,13 @@ QVariantMap Agent::statusMap() const
         }
     }
     m.insert(QStringLiteral("logStreams"), logStreams);
+    int monitorStreams = 0;
+    for (const QPointer<StatsStream> &stats : m_stats) {
+        if (stats && stats->active()) {
+            ++monitorStreams;
+        }
+    }
+    m.insert(QStringLiteral("monitorStreams"), monitorStreams);
     m.insert(QStringLiteral("client"), mirrorActive && !m_mirrorClient.isEmpty() ? m_mirrorClient : logClient);
     return m;
 }
@@ -405,6 +425,13 @@ int Agent::stopSessions()
     for (const QPointer<LogStream> &log : logs) {
         if (log && log->active()) {
             log->endWithError(reason);
+            ++stopped;
+        }
+    }
+    const QList<QPointer<StatsStream>> stats = m_stats;
+    for (const QPointer<StatsStream> &stream : stats) {
+        if (stream && stream->active()) {
+            stream->endWithError(reason);
             ++stopped;
         }
     }
@@ -484,12 +511,15 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
         o.insert(QStringLiteral("mirrorInput"), QJsonArray{ QStringLiteral("tap"), QStringLiteral("swipe"), QStringLiteral("down"),
                                                                   QStringLiteral("move"), QStringLiteral("up") });
         o.insert(QStringLiteral("settingsPage"), true);
+        o.insert(QStringLiteral("logFormats"), QJsonArray{ QStringLiteral("text"), QStringLiteral("json") });
+        o.insert(QStringLiteral("stats"), true);
         o.insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(m_settings->toMap()));
         reply(socket, o);
         return;
     }
 
-    static const QStringList gated = { QStringLiteral("screenshot"), QStringLiteral("logs"), QStringLiteral("mirror") };
+    static const QStringList gated = { QStringLiteral("screenshot"), QStringLiteral("logs"), QStringLiteral("mirror"),
+                                       QStringLiteral("stats") };
     if (!gated.contains(cmd)) {
         reply(socket, errorReply(QStringLiteral("unknown command")));
         return;
@@ -503,7 +533,8 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
 
     // The phone's settings (agent 1.9.0), after the Developer Mode gate so its text wins.
     // "Allow screen view" covers single screenshots too.
-    if (cmd != QLatin1String("logs") && !m_settings->screenView()) {
+    // Stats (agent 1.10.0) are gated by Developer Mode only: /proc is readable over the SSH login.
+    if (cmd != QLatin1String("logs") && cmd != QLatin1String("stats") && !m_settings->screenView()) {
         reply(socket, errorReply(QStringLiteral("screen view disabled on the phone")));
         return;
     }
@@ -512,6 +543,21 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
         return;
     }
     const QString client = clientName(request.value(QStringLiteral("client")));
+
+    if (cmd == QLatin1String("stats")) {
+        const QString exe = request.value(QStringLiteral("exe")).toString();
+        if (!statsmath::validExe(exe.toStdString())) {
+            reply(socket, errorReply(QStringLiteral("invalid exe")));
+            return;
+        }
+        const int interval = statsmath::clampInterval(
+            request.value(QStringLiteral("interval")).toInt(statsmath::INTERVAL_DEFAULT_MS));
+        StatsStream *stats = new StatsStream(socket, exe, interval, client);
+        m_stats << QPointer<StatsStream>(stats);
+        connect(stats, &StatsStream::ended, this, &Agent::onSessionChanged);
+        onSessionChanged();
+        return;
+    }
 
     if (cmd == QLatin1String("screenshot")) {
         Screenshot *shot = new Screenshot(socket);
@@ -577,7 +623,10 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
         lines = LOGS_MAX_LINES;
     }
     // Streams raw journal lines until the client goes away; owned by the socket.
-    LogStream *log = new LogStream(socket, lines, client);
+    // "format":"json" (agent 1.10.0) is opt-in; anything else is text, byte for byte as before.
+    const bool json = request.value(QStringLiteral("format")).toString() == QLatin1String("json");
+    const QString after = request.value(QStringLiteral("after")).toString();
+    LogStream *log = new LogStream(socket, lines, client, json, json && LogStream::validCursor(after) ? after : QString());
     m_logs << QPointer<LogStream>(log);
     connect(log, &LogStream::ended, this, &Agent::onSessionChanged);
     onSessionChanged();

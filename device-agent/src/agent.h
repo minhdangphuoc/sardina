@@ -14,6 +14,7 @@ class LogStream;
 class MirrorStream;
 class Settings;
 class SettingsService;
+class StatsStream;
 class StreamIndicator;
 
 // The daemon: a Unix socket in the user's runtime directory, one JSON request
@@ -65,6 +66,7 @@ private:
     QPointer<MirrorStream> m_mirror;
     QString m_mirrorClient;
     QList<QPointer<LogStream>> m_logs;
+    QList<QPointer<StatsStream>> m_stats; // agent 1.10.0: the monitor's stats streams
 };
 
 #endif

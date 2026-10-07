@@ -6,7 +6,58 @@
 #include <QStringList>
 #include <cstdio>
 
-LogStream::LogStream(QLocalSocket *socket, int lines, const QString &client)
+namespace {
+
+// -1 = not probed yet, 0 = not supported, 1 = supported.
+int outputFieldsState = -1;
+
+const char *const OUTPUT_FIELDS =
+    "MESSAGE,PRIORITY,SYSLOG_IDENTIFIER,SYSLOG_PID,_PID,_COMM,_EXE,_UID,_SYSTEMD_UNIT,_TRANSPORT,CODE_FILE,"
+    "CODE_LINE,CODE_FUNC,QT_CATEGORY,COREDUMP_PID,COREDUMP_COMM,COREDUMP_SIGNAL";
+
+}
+
+bool LogStream::validCursor(const QString &cursor)
+{
+    if (cursor.isEmpty() || cursor.size() > 512) {
+        return false;
+    }
+    for (const QChar c : cursor) {
+        const ushort u = c.unicode();
+        const bool ok = (u >= 'A' && u <= 'Z') || (u >= 'a' && u <= 'z') || (u >= '0' && u <= '9') || u == ';'
+            || u == '=' || u == ':' || u == '.' || u == '_' || u == '-';
+        if (!ok) {
+            return false;
+        }
+    }
+    return true;
+}
+
+void LogStream::probeOutputFields()
+{
+    QProcess probe;
+    probe.setProcessChannelMode(QProcess::MergedChannels);
+    probe.start(QStringLiteral("journalctl"),
+                QStringList() << QStringLiteral("--no-pager") << QStringLiteral("--output-fields=MESSAGE")
+                              << QStringLiteral("-n") << QStringLiteral("0"),
+                QIODevice::ReadOnly);
+    bool ok = false;
+    if (probe.waitForFinished(3000)) {
+        ok = probe.exitStatus() == QProcess::NormalExit && probe.exitCode() == 0;
+    } else {
+        probe.kill();
+        probe.waitForFinished(1000);
+    }
+    outputFieldsState = ok ? 1 : 0;
+    fprintf(stderr, "sailfish-devagent: journalctl --output-fields %s\n", ok ? "supported" : "not supported");
+}
+
+bool LogStream::outputFieldsSupported()
+{
+    return outputFieldsState == 1;
+}
+
+LogStream::LogStream(QLocalSocket *socket, int lines, const QString &client, bool json, const QString &after)
     : QObject(socket)
     , m_socket(socket)
     , m_client(client)
@@ -19,10 +70,24 @@ LogStream::LogStream(QLocalSocket *socket, int lines, const QString &client)
             this, &LogStream::onProcessFinished);
     connect(m_socket, &QLocalSocket::disconnected, this, &LogStream::onClientGone);
 
-    // Fixed argv; `lines` is a bounded integer, nothing from the request reaches a shell.
+    // Fixed argv; `lines` is a bounded integer and the cursor passed validCursor(): nothing from the
+    // request reaches a shell.
     QStringList args;
-    args << QStringLiteral("--no-pager") << QStringLiteral("-o") << QStringLiteral("short-precise")
-         << QStringLiteral("-n") << QString::number(lines) << QStringLiteral("-f");
+    if (!json) {
+        args << QStringLiteral("--no-pager") << QStringLiteral("-o") << QStringLiteral("short-precise")
+             << QStringLiteral("-n") << QString::number(lines) << QStringLiteral("-f");
+    } else {
+        args << QStringLiteral("--no-pager") << QStringLiteral("-o") << QStringLiteral("json")
+             << QStringLiteral("-f");
+        if (!after.isEmpty() && validCursor(after)) {
+            args << QStringLiteral("--after-cursor") << after;
+        } else {
+            args << QStringLiteral("-n") << QString::number(lines);
+        }
+        if (outputFieldsSupported()) {
+            args << QStringLiteral("--output-fields=") + QLatin1String(OUTPUT_FIELDS);
+        }
+    }
     m_process.start(QStringLiteral("journalctl"), args, QIODevice::ReadOnly);
 }
 

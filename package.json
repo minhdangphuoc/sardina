@@ -340,6 +340,13 @@
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
+        "command": "sailfish.monitor.open",
+        "title": "Open Device Monitor",
+        "category": "Sailfish",
+        "icon": "$(dashboard)",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
         "command": "sailfish.device.remove",
         "title": "Remove Device",
         "category": "Sailfish",
@@ -395,6 +402,36 @@
           "default": false,
           "scope": "resource",
           "markdownDescription": "Run the Harbour compliance check (`sfdk check`) automatically as part of the build task."
+        },
+        "sailfish.debug.openDeviceMonitor": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Open the Device Monitor tab (overview, app stats and device log) beside the editor when you start **Debug on Device** or **Debug Installed App**. The editor keeps the focus."
+        },
+        "sailfish.monitor.logBufferLines": {
+          "type": "integer",
+          "default": 10000,
+          "minimum": 1000,
+          "maximum": 100000,
+          "scope": "window",
+          "markdownDescription": "How many device log lines the Device Monitor keeps (oldest lines are dropped first). The buffer is also capped at 16 MiB of text."
+        },
+        "sailfish.monitor.pollIntervalSeconds": {
+          "type": "integer",
+          "default": 5,
+          "minimum": 2,
+          "maximum": 60,
+          "scope": "window",
+          "markdownDescription": "Seconds between app statistics samples when the device agent has no stats stream (device agent older than 1.10.0). Each sample is one `sfdk device exec` call."
+        },
+        "sailfish.monitor.logLines": {
+          "type": "integer",
+          "default": 500,
+          "minimum": 1,
+          "maximum": 10000,
+          "scope": "window",
+          "markdownDescription": "How many of the newest device log lines the Device Monitor asks for when its log stream starts."
         },
         "sailfish.build.revealLog": {
           "type": "boolean",
@@ -852,7 +889,17 @@
           "group": "2_agent"
         },
         {
+          "command": "sailfish.monitor.open",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "group": "2_agent"
+        },
+        {
           "command": "sailfish.agent.logs",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.monitor.open",
           "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
@@ -989,7 +1036,7 @@
     "build": "node esbuild.mjs",
     "build:watch": "node esbuild.mjs --watch",
     "build:tests": "tsc -p tsconfig.test.json",
-    "check:types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "check:types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p src/monitor/webview/tsconfig.json",
     "lint": "eslint src test --max-warnings=0",
     "test:unit": "npm run build:tests && mocha \"out/test/unit/**/*.test.js\"",
     "test:fuzz": "npm run build:tests && mocha \"out/test/fuzz/**/*.test.js\"",

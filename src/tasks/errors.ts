@@ -56,5 +56,33 @@ export function mapBuildError(stderr: string): MappedError | undefined {
   if (/no build target|no default target|no such target|target .* not found/i.test(stderr)) {
     return { message: stderr.trim(), actionLabel: 'Select target' };
   }
+  const missing = missingInstallPaths(stderr);
+  if (missing.length > 0) {
+    const shown = missing.slice(0, 3).join(', ');
+    const list = missing.length > 3 ? `${shown} and ${missing.length - 3} more` : shown;
+    return {
+      message: `Packaging failed: the spec lists ${list} in %files, but the build did not install it. Check the %files section and the INSTALLS in the .pro`,
+    };
+  }
   return undefined;
+}
+
+const MISSING_RE = /^\s*(?:error: )?(File|Directory) not found(?: by glob)?:\s*(\S*?\/installroot)?(\/\S+)/;
+
+/** Paths rpmbuild could not find in the install root; a directory is dropped when a file below it is also missing. */
+function missingInstallPaths(stderr: string): string[] {
+  const files: string[] = [];
+  const dirs: string[] = [];
+  for (const line of stderr.split(/\r?\n/)) {
+    const m = MISSING_RE.exec(line);
+    if (!m) {
+      continue;
+    }
+    const list = m[1] === 'Directory' ? dirs : files;
+    if (!list.includes(m[3])) {
+      list.push(m[3]);
+    }
+  }
+  const keptDirs = dirs.filter((d) => !files.some((f) => f.startsWith(d.replace(/\/+$/, '') + '/')));
+  return [...keptDirs, ...files];
 }
