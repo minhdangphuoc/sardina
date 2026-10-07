@@ -94,15 +94,17 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     await setSetting('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
-  test('I-M1 open: one tab per device, a second call reveals it, ping then logs then stats', async function () {
+  test('I-M1 open: one tab per device, a second call reveals it, ping before the logs and stats streams', async function () {
     this.timeout(30000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
       await vscode.commands.executeCommand('sailfish.monitor.open');
       await new Promise((r) => setTimeout(r, 300));
       assert.strictEqual(monitorTabs().length, 1, 'a second open reveals the existing tab');
-      await waitFor(() => keys().includes('device_exec.sailfish-devagent.stats'), 10000);
-      assertInOrder(keys(), ['device_exec.sailfish-devagent.ping', 'device_exec.sailfish-devagent.logs', 'device_exec.sailfish-devagent.stats']);
+      await waitFor(() => keys().includes('device_exec.sailfish-devagent.stats') && keys().includes('device_exec.sailfish-devagent.logs'), 10000);
+      // The probe decides both formats, so ping comes first; the two streams start together and either may spawn first.
+      assertInOrder(keys(), ['device_exec.sailfish-devagent.ping', 'device_exec.sailfish-devagent.logs']);
+      assertInOrder(keys(), ['device_exec.sailfish-devagent.ping', 'device_exec.sailfish-devagent.stats']);
       const logs = all('device_exec.sailfish-devagent.logs')[0];
       const argv = logs.argv;
       const pair = (flag: string): string | undefined => argv[argv.indexOf(flag) + 1];
@@ -145,6 +147,8 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       const view = await viewWhen((v) => v.sessions.some((s) => s.label.includes('device logs')) && v.sessions.some((s) => s.label.includes('app monitor')), 10000);
       const logsSession = view.sessions.find((s) => s.label.includes('device logs'));
       assert.ok(logsSession, JSON.stringify(view.sessions));
+      // A session is registered before its process starts; stop it only once both fakes run (and log a kill).
+      await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs') && keys().includes('device_exec.sailfish-devagent.stats'), 10000);
       clearFakeLog();
       await send({ type: 'session.stop', id: logsSession.id });
       await waitFor(() => readFakeLog().killed.length >= 1, 8000);
@@ -272,7 +276,9 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       await openMonitor();
       const view = await viewWhen((v) => v.log.status === 'needsAgent', 10000);
       assert.ok(view.overview.some((r) => /not installed/i.test(r.value)), JSON.stringify(view.overview));
-      assert.ok(/install/i.test(view.log.reason ?? ''), JSON.stringify(view.log));
+      // §8: `Logs need the device agent on "<device>".` plus the Install Device Agent button (the page shows it for needsAgent).
+      assert.strictEqual(view.log.reason, `Logs need the device agent on "${DEVICE}".`, JSON.stringify(view.log));
+      assert.strictEqual(view.actions.installAgent?.enabled, true, JSON.stringify(view.actions));
       assert.strictEqual(view.actions.screenshot?.enabled, false, JSON.stringify(view.actions));
       assert.strictEqual(view.actions.openMirror?.enabled, false, JSON.stringify(view.actions));
       clearFakeLog();
