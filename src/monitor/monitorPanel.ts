@@ -533,6 +533,11 @@ export class MonitorPanel {
     return pollIntervalMs(this.services.settings.get('monitor.pollIntervalSeconds')) / 1000;
   }
 
+  /**
+   * Samples and `start` events arrive only while this monitor's own `app monitor` session is registered, so every
+   * PID change it sees happens "while a session is registered" (§4.3) and counts as a restart (I-M6), also for an
+   * app relaunched on the phone with no Run or Debug session in VS Code.
+   */
   private startStats(app: AppRef): void {
     const src = new AppStatsSource(this.services, {
       device: this.device,
@@ -553,7 +558,7 @@ export class MonitorPanel {
       this.lastStats = statsView(u.sample, u.cpu, u.sysCpu);
       if (u.sample.pid > 0) {
         this.pids.add(u.sample.pid);
-        this.counter.pidSeen(u.sample.pid, deviceSessions.activeFor(this.device).some((s) => s.kind === 'app' || s.kind === 'debug'));
+        this.counter.pidSeen(u.sample.pid, true);
       }
       this.statsText = statsSourceText(this.statsMode, this.intervalSec(), this.visible);
       this.postApp();
@@ -562,7 +567,7 @@ export class MonitorPanel {
       const name = this.app?.name ?? 'app';
       if (t.type === 'start') {
         this.pids.add(t.pid);
-        this.counter.pidSeen(t.pid, deviceSessions.activeFor(this.device).some((s) => s.kind === 'app' || s.kind === 'debug'));
+        this.counter.pidSeen(t.pid, true);
         this.pushMarker({ type: 'started', app: name, pid: t.pid, mode: this.app?.mode });
       } else {
         this.lastStats = { ...(this.lastStats ?? {}), pid: undefined, cpu: undefined };
