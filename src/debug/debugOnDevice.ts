@@ -245,6 +245,14 @@ function cppdbgConfiguration(services: Services, app: DeployedApp, recipe: Debug
   };
 }
 
+/** Opens the Device Monitor beside the editor (focus stays put) with the log revealed, when the setting allows it. */
+async function openMonitorForDebug(services: Services, folder: vscode.WorkspaceFolder): Promise<void> {
+  if (!services.settings.get('debug.openDeviceMonitor', folder.uri)) return;
+  const device = services.settings.get('device', folder.uri);
+  if (!device) return; // the build step reports the missing device
+  await vscode.commands.executeCommand('sailfish.monitor.open', { device, preserveFocus: true, reveal: 'logs' });
+}
+
 /** "Sailfish: Debug on Device": build, deploy, start the app under gdbserver and attach VS Code's debugger. */
 export async function debugOnDevice(services: Services): Promise<void> {
   if (!(await ensureCppTools(services))) return;
@@ -260,6 +268,7 @@ export async function debugOnDevice(services: Services): Promise<void> {
   }
   if (gdbserver === 'cancel') return;
   if (!(await ensureDebugBuild(services, project.folder))) return;
+  await openMonitorForDebug(services, project.folder);
 
   await buildDeployThen(services, 'Sailfish: Debug on Device', (app, progress, token) => attachDebugger(services, app, progress, token), project);
 }
@@ -279,6 +288,7 @@ export async function debugInstalled(services: Services): Promise<void> {
   }
   if (gdbserver === 'cancel') return;
   // No Release-to-Debug offer here: nothing is rebuilt, so switching the build type would not help this session.
+  await openMonitorForDebug(services, project.folder);
   await installedAppThen(services, 'Sailfish: Debug Installed App', 'sailfish.debugOnDevice', (app, progress, token) =>
     attachDebugger(services, app, progress, token), project);
 }
@@ -376,7 +386,7 @@ async function attachDebugger(
         // Ends the debug session first (GDB kills the app), then gdbserver.
         if (debugSession) await vscode.debug.stopDebugging(debugSession);
         lifecycle.stop();
-      })
+      }, { app: app.project.name, binary: app.project.appBinaryPath, mode: 'debug' })
     : undefined;
 
   let started = false;
