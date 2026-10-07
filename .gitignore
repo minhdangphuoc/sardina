@@ -12,8 +12,12 @@ test/fixtures/workspaces/*/devices.xml
 # In-source build outputs of the device agent (device-agent/build.sh); media/agent/**/*.rpm ship.
 device-agent/*.o
 device-agent/moc_*
+device-agent/*-protocol.c
+device-agent/*-client-protocol.h
 device-agent/Makefile
 device-agent/sailfish-devagent
 device-agent/documentation.list
 device-agent/RPMS/
 device-agent/.sfdk/
+HANDOFF.md
+REVIEW-mirror.md

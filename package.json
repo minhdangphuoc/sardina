@@ -3,7 +3,7 @@
   "displayName": "Sailfish OS Tools",
   "description": "Build, deploy, run and manage Sailfish OS applications from VS Code.",
   "publisher": "sailfish-tools-dev",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -26,7 +26,9 @@
       "description": "Sailfish OS Tools runs the SDK's sfdk on workspace build files, so it needs a trusted workspace."
     }
   },
-  "extensionDependencies": ["theqtcompany.qt-qml"],
+  "extensionDependencies": [
+    "theqtcompany.qt-qml"
+  ],
   "extensionPack": [],
   "activationEvents": [
     "workspaceContains:rpm/*.spec",
@@ -39,8 +41,8 @@
     "onCommand:sailfish.device.add",
     "onCommand:sailfish.device.remove",
     "onCommand:sailfish.setupSigning",
+    "onView:sailfish.build",
     "onView:sailfish.sdk",
-    "onView:sailfish.emulators",
     "onView:sailfish.devices",
     "onLanguage:qml"
   ],
@@ -134,6 +136,7 @@
       {
         "command": "sailfish.build",
         "title": "Build",
+        "icon": "$(tools)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
@@ -176,6 +179,38 @@
       {
         "command": "sailfish.clean",
         "title": "Clean",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.cleanProjectBuild",
+        "title": "Clean Project Build",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.rebuild",
+        "title": "Rebuild",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.check",
+        "title": "Validate RPM",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.stopBuild",
+        "title": "Stop Build",
+        "icon": "$(debug-stop)",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.showBuildLog",
+        "title": "Show Build Log",
+        "icon": "$(output)",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
@@ -224,6 +259,13 @@
         "title": "Set Default Device",
         "category": "Sailfish",
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
+        "command": "sailfish.device.stopSessions",
+        "title": "Stop Sessions on Device",
+        "category": "Sailfish",
+        "icon": "$(debug-stop)",
+        "enablement": "sailfish.platformSupported"
       },
       {
         "command": "sailfish.device.setSfdkDefault",
@@ -354,6 +396,12 @@
           "scope": "resource",
           "markdownDescription": "Run the Harbour compliance check (`sfdk check`) automatically as part of the build task."
         },
+        "sailfish.build.revealLog": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Show the \"Sailfish OS Build\" output channel when Run, Debug or Deploy starts building. The build log is streamed to the channel either way."
+        },
         "sailfish.build.extraArgs": {
           "type": "array",
           "items": {
@@ -371,7 +419,7 @@
           ],
           "enumDescriptions": [
             "Release build (`sfdk build`).",
-            "Debug build (`sfdk build --enable-debug`)."
+            "Debug build: `sfdk build --enable-debug`, compiled unoptimised (`-O0 -g`) so breakpoints and variables match the source."
           ],
           "default": "release",
           "scope": "resource",
@@ -620,19 +668,19 @@
     "views": {
       "sailfish": [
         {
-          "id": "sailfish.sdk",
-          "name": "SDK",
-          "when": "sailfish.platformSupported"
-        },
-        {
-          "id": "sailfish.emulators",
-          "name": "Emulators",
-          "when": "sailfish.platformSupported && sailfish.sdkAvailable"
+          "id": "sailfish.build",
+          "name": "Build",
+          "when": "sailfish.platformSupported && sailfish.sdkAvailable && sailfish.isProject"
         },
         {
           "id": "sailfish.devices",
           "name": "Devices",
           "when": "sailfish.platformSupported && sailfish.sdkAvailable"
+        },
+        {
+          "id": "sailfish.sdk",
+          "name": "SDK",
+          "when": "sailfish.platformSupported"
         }
       ]
     },
@@ -659,129 +707,184 @@
           "group": "1_sdk@2"
         },
         {
-          "command": "sailfish.emulator.installAvailable",
-          "when": "view == sailfish.emulators",
-          "group": "navigation@1"
-        },
-        {
-          "command": "sailfish.devices.refresh",
-          "when": "view == sailfish.emulators",
-          "group": "navigation@9"
-        },
-        {
           "command": "sailfish.device.add",
           "when": "view == sailfish.devices",
           "group": "navigation@1"
         },
         {
+          "command": "sailfish.emulator.installAvailable",
+          "when": "view == sailfish.devices",
+          "group": "navigation@2"
+        },
+        {
           "command": "sailfish.devices.refresh",
           "when": "view == sailfish.devices",
           "group": "navigation@9"
+        },
+        {
+          "command": "sailfish.build",
+          "when": "view == sailfish.build && !sailfish.building",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailfish.stopBuild",
+          "when": "view == sailfish.build && sailfish.building",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailfish.showBuildLog",
+          "when": "view == sailfish.build",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sailfish.cleanProjectBuild",
+          "when": "view == sailfish.build",
+          "group": "1_clean@1"
+        },
+        {
+          "command": "sailfish.rebuild",
+          "when": "view == sailfish.build",
+          "group": "1_clean@2"
+        },
+        {
+          "command": "sailfish.package",
+          "when": "view == sailfish.build",
+          "group": "2_package@1"
+        },
+        {
+          "command": "sailfish.check",
+          "when": "view == sailfish.build",
+          "group": "2_package@2"
+        },
+        {
+          "command": "sailfish.runInstalled",
+          "when": "view == sailfish.build",
+          "group": "3_installed@1"
+        },
+        {
+          "command": "sailfish.debugInstalled",
+          "when": "view == sailfish.build",
+          "group": "3_installed@2"
+        },
+        {
+          "command": "sailfish.setupSigning",
+          "when": "view == sailfish.build",
+          "group": "4_setup@1"
+        },
+        {
+          "command": "sailfish.showBuildLog",
+          "when": "view == sailfish.build",
+          "group": "4_setup@2"
         }
       ],
       "view/item/context": [
         {
           "command": "sailfish.emulator.start",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.stopped)?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.stopped)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.emulator.stop",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.running)?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.emulator.status",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/"
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
         },
         {
           "command": "sailfish.emulator.show",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/"
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
         },
         {
           "command": "sailfish.device.setDefault",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/"
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
         },
         {
           "command": "sailfish.device.setDefault",
-          "when": "view == sailfish.devices && viewItem == hardware-device"
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
+        },
+        {
+          "command": "sailfish.device.stopSessions",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device\\+sessions$/",
+          "group": "inline"
+        },
+        {
+          "command": "sailfish.device.stopSessions",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?\\+sessions$/",
+          "group": "inline"
         },
         {
           "command": "sailfish.device.openSsh",
-          "when": "view == sailfish.devices && viewItem == hardware-device"
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
         },
         {
           "command": "sailfish.device.installTools",
-          "when": "view == sailfish.devices && viewItem == hardware-device"
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
         },
         {
           "command": "sailfish.device.remove",
-          "when": "view == sailfish.devices && viewItem == hardware-device"
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
         },
         {
           "command": "sailfish.agent.screenshot",
-          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.agent.mirror",
-          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.agent.screenshot",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.running)?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.agent.mirror",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.running)?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
           "command": "sailfish.agent.logs",
-          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
           "command": "sailfish.agent.logs",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
           "command": "sailfish.agent.status",
-          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
           "command": "sailfish.agent.status",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
           "command": "sailfish.agent.install",
-          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
           "command": "sailfish.agent.install",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
           "command": "sailfish.agent.uninstall",
-          "when": "view == sailfish.devices && viewItem == hardware-device",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
           "command": "sailfish.agent.uninstall",
-          "when": "view == sailfish.emulators && viewItem =~ /^emulator(\\.(running|stopped))?$/",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
-        },
-        {
-          "command": "sailfish.emulator.installAvailable",
-          "when": "view == sailfish.emulators && viewItem == emulator-available",
-          "group": "inline"
         },
         {
           "command": "sailfish.engine.start",

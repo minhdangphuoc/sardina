@@ -141,10 +141,10 @@ function logEvent(logPath, obj) {
   appendJsonLine(logPath, { ts: Date.now(), ...obj });
 }
 
-function appendUnrecorded(rawArgv, cwd, scenario, key) {
+function appendUnrecorded(rawArgv, cwd, scenario, key, bin = 'sfdk') {
   appendJsonLine(UNRECORDED_LOG, {
     ts: Date.now(),
-    bin: 'sfdk',
+    bin,
     argv: rawArgv,
     cwd,
     scenario,
@@ -196,6 +196,16 @@ function readStdinBounded(timeoutMs, maxBytes) {
   });
 }
 
+/**
+ * Replace every `@FIXTURES_ROOT@` in recorded output with the FIXTURES_ROOT environment value (the
+ * integration launcher sets it), so a fixture can name a file under test/fixtures with an absolute path.
+ */
+function substituteFixturesRoot(text) {
+  if (!text.includes('@FIXTURES_ROOT@')) return text;
+  const root = process.env.FIXTURES_ROOT || path.join(__dirname, '..');
+  return text.split('@FIXTURES_ROOT@').join(root);
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -217,5 +227,6 @@ module.exports = {
   logEvent,
   appendUnrecorded,
   readStdinBounded,
+  substituteFixturesRoot,
   sleep,
 };

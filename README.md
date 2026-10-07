@@ -1,82 +1,166 @@
 # Sailfish OS Tools
 
-A VS Code extension for building, deploying, running and managing Sailfish OS
-applications: SDK detection, build targets, devices/emulators, build/deploy/run
-tasks, project scaffolding and a getting-started walkthrough.
+A VS Code extension for building, running and debugging Sailfish OS apps. It
+finds your Sailfish SDK, lets you pick a build target and a device from the
+status bar, and runs build, deploy, run and debug with one click on the
+emulator or a phone. An optional helper on the phone, the **device agent**,
+adds screenshots, a live system log and a screen mirror you can tap and swipe
+from VS Code.
 
-## Before you start: the words used below
+Version 0.1.7. Linux and macOS. The extension is not on the Marketplace yet;
+see [Part 3](#part-3-install-vs-code-and-this-extension) to build it.
+
+> **Independent project.** This is a personal hobby project. It is not
+> affiliated with, endorsed by or made for Jolla or any other company.
+> Sailfish OS is a trademark of Jolla; the name is used here only to say which
+> platform the extension works with.
+
+## Features
+
+**SDK and build targets**
+
+- Finds the Sailfish SDK on its own (`sailfish.sdkPath`, `SAILFISH_SDK_ROOT`,
+  `~/SailfishOS`, then `sfdk` on `PATH`). **Set SDK Path**, **Download SDK**
+  and **Install SDK** help when it is missing.
+- An **SDK** view: SDK version and location, the `sfdk` path, the build engine
+  with start and stop buttons, and the installed build targets.
+- Pick the build target from the status bar (**Select Target**). **Set sfdk
+  Default Target** and **Set sfdk Default Device** change `sfdk`'s own defaults.
+- **New Project** creates a project with `sfdk init`. A getting-started
+  walkthrough covers the first steps.
+
+**Build, deploy, run and debug**
+
+- Status bar buttons: **Build**, **Deploy** (build and install, without
+  starting), **Run** (build, install and start; **Ctrl+Alt+R**) and **Debug**.
+- **Run Installed App** and **Debug Installed App** start the app that is
+  already on the device, without building again. If it is not installed, they
+  offer to build and deploy first.
+- Release or Debug build type, six deploy methods, and a warning before
+  building for another architecture on top of an old build.
+- C++ debugging on the device through `gdbserver` and the C/C++ extension.
+- VS Code tasks of type `sailfish` (build, build (debug), deploy, run,
+  package, check, clean) with problem matchers for gcc, qmake, rpmbuild and the
+  Harbour validator.
+
+**Package signing**
+
+- **Set Up Package Signing** picks one of your GPG keys, or creates one, checks
+  that the passphrase works, and turns on signing for the project. It saves the
+  key's fingerprint, so a key with a similar name cannot be used by mistake.
+
+**Build view**
+
+- The **Build** view at the top of the Sailfish sidebar shows the project's
+  target, device (connected or offline), build type, deploy method, signing and
+  the last build (running with its stage and time, or succeeded / failed). Click a
+  row to change it; the title bar has Build (Stop while a build runs) and the
+  build log, and the ⋯ menu has Clean Project Build, Rebuild, Package, Validate
+  RPM, Run / Debug Installed App and Set Up Package Signing.
+- **Clean Project Build** deletes what an in-source build generated in the
+  project folder (qmake Makefiles, object files, moc/qrc output, `RPMS`,
+  `BUILD`, `BUILDROOT`) after a confirmation that lists what goes. Hand-written
+  Makefiles, symlinks and `.git` are never touched. **Rebuild** cleans, then builds.
+
+**Devices and emulators**
+
+- One **Devices** view with two groups, **Emulators** and **Devices**: start,
+  stop and show emulators, install more emulators, open an SSH terminal to a
+  device.
+- **Add Device** registers a phone in a few prompts: it creates an SSH key,
+  copies it to the phone and registers the phone with the SDK and the build
+  engine. **Remove Device** undoes it.
+- **Install Deploy & Debug Tools on Device** installs `rsync`,
+  `sdk-deploy-rpm` and `gdb-gdbserver` on the phone.
+
+**Device agent: screenshots, logs, screen mirror and control**
+
+- **Take Device Screenshot** saves a PNG where you choose and opens it.
+- **Show Device Logs** streams the phone's system log into VS Code.
+- **Mirror Device Screen** shows the phone's screen live in an editor tab, as
+  VP8 video over an SSH forward when possible. With agent 1.7.0 or newer you
+  can click to tap and drag to swipe while the panel has focus.
+- The agent is installed once, with your consent and the developer-mode
+  password, and works only while Developer Mode is on. See
+  [How the device agent stays safe](#how-the-device-agent-stays-safe).
+
+**QML editing**
+
+- 21 Silica QML snippets (`sfpage`, `sfdialog`, `sflistview`, `sfpulldown`,
+  `sfcover` and more).
+- Turns off the Qt QML extension's `qmlls` language server in Sailfish
+  projects, where it only reports false errors (see
+  [What this is not (yet)](#what-this-is-not-yet)).
+
+## Words used below
 
 | Term | Meaning |
 |---|---|
 | **Sailfish SDK** | Jolla's toolkit for building Sailfish OS apps. It installs into `~/SailfishOS`. |
-| **`sfdk`** | The SDK's command-line tool. This extension runs it for you; you can also run it in a terminal. |
-| **Build engine** | A small virtual machine (VirtualBox) or container (Docker) where the SDK compiles your app. It starts automatically when needed. |
+| **`sfdk`** | The SDK's command-line tool. The extension runs it for you; you can also run it in a terminal. |
+| **Build engine** | A virtual machine (VirtualBox) or container (Docker) where the SDK compiles your app. It starts by itself when needed. |
 | **Build target** | The Sailfish OS version and processor type you compile for, e.g. `SailfishOS-5.1.0.11-aarch64`. |
-| **Architecture** | The processor type at the end of a target name: `aarch64` (64-bit ARM phones), `armv7hl` (32-bit ARM phones) or `i486` (the emulator). |
+| **Architecture** | The end of a target name: `aarch64` (64-bit ARM phones), `armv7hl` (32-bit ARM phones) or `i486` (the emulator). |
 | **Emulator** | A Sailfish OS phone running as a VirtualBox virtual machine on your computer. |
-| **Device** | A real phone (or the emulator) that the SDK installs your app on. |
-| **RPM** | The package format Sailfish OS installs apps from; a build produces `.rpm` files in your project's `RPMS/` folder. |
-| **SDK workspace** | The folder the build engine can see, by default your home directory. Your projects must be inside it. |
+| **Device** | A phone or the emulator that the SDK installs your app on. |
+| **RPM** | The package format Sailfish OS installs apps from. A build puts `.rpm` files in the project's `RPMS/` folder. |
+| **SDK workspace** | The folder the build engine can see, by default your home directory. Projects must be inside it. |
+| **Device agent** | `sailfish-devagent`, a small service this extension can install on a device for screenshots, logs and the mirror. |
 
 ## Requirements
 
 | What | Version | Notes |
 |---|---|---|
-| Computer | Linux or macOS | **Windows is not supported yet.** The `sailfish.experimental.enableWindows` setting only removes the Windows block and looks for the SDK in `C:\SailfishOS`; nothing else is implemented or tested, so leave it off. |
+| Computer | Linux or macOS | **Windows is not supported.** The `sailfish.experimental.enableWindows` setting only lifts the Windows block and looks for the SDK in `C:\SailfishOS`; nothing else is implemented or tested, so leave it off. |
 | Free disk space | about 15 GB | For the SDK with its default components. |
 | Memory | 4 GB or more | Recommended by the SDK. |
 | [VirtualBox](https://www.virtualbox.org/wiki/Downloads) | 6.1 or newer | **Install before the SDK.** Needed for the emulator, and for the build engine unless you choose Docker. Tested with 7.2.20. |
-| [Sailfish SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/) | 3.10 or newer | Tested with **3.13.5**. Older versions are not blocked; a warning is written to the Sailfish OS output channel. |
+| [Sailfish SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/) | 3.10 or newer | Tested with **3.13.5**. Older versions are not blocked; a warning goes to the **Sailfish OS** output channel. |
 | [VS Code](https://code.visualstudio.com/) | 1.94 or newer | |
-| [Qt QML](https://marketplace.visualstudio.com/items?itemName=theqtcompany.qt-qml) extension | any | Required: VS Code installs it together with this extension (needs internet access to the Marketplace; VSCodium users install it from Open VSX first). |
-| git and [Node.js](https://nodejs.org/) | Node.js 22 or newer | Only to build this extension from source. CI builds with Node.js 22; some build tools in `package-lock.json` require it. Tested with 22.23.3. |
-| OpenSSH client | 8.4 or newer | `ssh`, `ssh-keygen` and `ssh-copy-id`, used when adding a phone. The extension checks for them once when it starts and shows a notice if any are missing. |
+| [Qt QML](https://marketplace.visualstudio.com/items?itemName=theqtcompany.qt-qml) extension | any | Installed together with this extension (needs access to the Marketplace; VSCodium users install it from Open VSX first). |
+| OpenSSH client | 8.4 or newer | `ssh`, `ssh-keygen` and `ssh-copy-id`, for **Add Device** and the fast screen mirror. The extension checks for them at start and shows a notice if any is missing. |
+| GnuPG | any | Only for package signing. |
+| git and [Node.js](https://nodejs.org/) | Node.js 22 or newer | Only to build the extension from source. Tested with 22.23.3. |
 
 ## Setup
 
-Each part ends with a check. Don't continue until the check passes.
+Each part ends with a **Check:**. Do not go on until it passes. Parts 1 to 6
+get you running on the emulator; Parts 7 to 10 add a phone, debugging, signing
+and the device agent.
 
 ### Part 1: Install VirtualBox
 
-1. Install VirtualBox 6.1 or newer from <https://www.virtualbox.org/wiki/Downloads>
-   (Linux: the package for your distribution; Ubuntu and elementary OS can use
-   Oracle's `.deb`).
-2. **Check:** in a terminal, `VBoxManage --version` prints a version such as
-   `7.2.20r175154`.
+1. Install VirtualBox 6.1 or newer from
+   <https://www.virtualbox.org/wiki/Downloads> (on Linux, the package for your
+   distribution; Ubuntu and elementary OS can use Oracle's `.deb`).
+2. **Check:** `VBoxManage --version` prints a version such as `7.2.20r175154`.
 
 ### Part 2: Install the Sailfish SDK
 
 1. Download the Linux installer from
-   <https://docs.sailfishos.org/Tools/Sailfish_SDK/#latest-sdk-release>. The
-   file is named like `SailfishSDK-3.13.5-linux64-online.run`.
-2. Make it executable and start it as your normal user (not root):
+   <https://docs.sailfishos.org/Tools/Sailfish_SDK/#latest-sdk-release>, named
+   like `SailfishSDK-3.13.5-linux64-online.run`.
+2. Start it as your normal user (not root):
 
    ```sh
    chmod +x ~/Downloads/SailfishSDK-3.13.5-linux64-online.run
    ~/Downloads/SailfishSDK-3.13.5-linux64-online.run
    ```
 
-3. In the installer:
-   - Keep the installation folder `~/SailfishOS`. The extension finds the SDK
-     there without any configuration.
-   - Choose **VirtualBox** as the build engine type (or Docker if you prefer;
-     the emulator still uses VirtualBox).
-   - Keep the default workspace (your home directory) unless your projects
-     live elsewhere.
-   - Keep the default components. Installation downloads several GB and can
-     take a while.
-4. When the installer finishes, it opens the SDK's IDE (**Qt Creator**).
-   **Close it.** While it is open, it can overwrite the SDK's device list (see
-   Part 7).
-5. Make `sfdk` available as a plain command (this is the SDK documentation's
-   recommended way):
+3. In the installer, keep the folder `~/SailfishOS`, choose **VirtualBox** as
+   the build engine (or Docker; the emulator still uses VirtualBox), keep the
+   default workspace (your home directory) and the default components. It
+   downloads several GB.
+4. When it finishes it opens **Qt Creator**. **Close it.** While Qt Creator
+   runs it can overwrite the SDK's device list (see Part 7).
+5. Make `sfdk` a plain command, as the SDK documentation recommends:
 
    ```sh
    mkdir -p ~/.local/bin
    ln -s ~/SailfishOS/bin/sfdk ~/.local/bin/sfdk
    ```
 
-   Open a new terminal afterwards. If `sfdk` is still not found, add
+   Open a new terminal. If `sfdk` is still not found, add
    `export PATH="$HOME/.local/bin:$PATH"` to `~/.bashrc` or `~/.zshrc`.
 6. **Check:**
 
@@ -85,21 +169,16 @@ Each part ends with a check. Don't continue until the check passes.
    sfdk tools target list      # e.g. SailfishOS-5.1.0.11-aarch64, -armv7hl, -i486
    ```
 
-   The first command that needs the build engine starts its virtual machine,
-   which takes a minute.
+   The first command that needs the build engine starts it, which takes a
+   minute.
 
-If you installed the SDK somewhere other than `~/SailfishOS`, set the
-`sailfish.sdkPath` setting in VS Code, or the `SAILFISH_SDK_ROOT` environment
-variable, to that folder. The extension looks in this order: `sailfish.sdkPath`,
-`SAILFISH_SDK_ROOT`, `~/SailfishOS`, then `sfdk` on `PATH`.
+If the SDK is somewhere other than `~/SailfishOS`, set `sailfish.sdkPath` in
+VS Code, or the `SAILFISH_SDK_ROOT` environment variable, to that folder.
 
 ### Part 3: Install VS Code and this extension
 
-The extension is not on the Marketplace yet, so you build it from source.
-
-1. Install VS Code from <https://code.visualstudio.com/>, git, and Node.js
-   (22 or newer). **Check:** `code --version`, `git --version` and
-   `node --version` each print a version.
+1. Install VS Code, git and Node.js 22 or newer. **Check:** `code --version`,
+   `git --version` and `node --version` each print a version.
 2. Build and install the extension:
 
    ```sh
@@ -107,11 +186,12 @@ The extension is not on the Marketplace yet, so you build it from source.
    cd vscode-sailfish
    npm ci                                         # install build tools
    npm run build                                  # compile into dist/
-   npx vsce package                               # creates sailfish-tools-0.1.0.vsix
-   code --install-extension sailfish-tools-0.1.0.vsix
+   npx vsce package                               # creates sailfish-tools-0.1.7.vsix
+   code --install-extension sailfish-tools-0.1.7.vsix
    ```
 
-   The last command also installs the Qt QML extension.
+   The last command also installs the Qt QML extension. The package includes
+   the device agent RPMs for `aarch64`, `armv7hl` and `i486`.
 3. **Check:** `code --list-extensions | grep -iE 'sailfish|qt-qml'` lists
    `sailfish-tools-dev.sailfish-tools` and `theqtcompany.qt-qml`.
 
@@ -119,26 +199,24 @@ To update later: `git pull`, then repeat the last four commands.
 
 ### Part 4: Create or open a project
 
-1. Projects must be inside the SDK workspace (your home directory by
-   default). Outside it, every `sfdk` command fails with "The command needs to
-   be used under Sailfish SDK workspace".
-2. Create a project, either:
-   - in VS Code: **Ctrl+Shift+P** (**Cmd+Shift+P** on macOS) →
-     **Sailfish: New Project**, or
-   - in a terminal:
+1. Projects must be inside the SDK workspace (your home directory by default).
+   Outside it, every `sfdk` command fails with "The command needs to be used
+   under Sailfish SDK workspace". The path must not contain spaces either; the
+   extension warns if it does.
+2. Create a project, either in VS Code with **Ctrl+Shift+P** (**Cmd+Shift+P**
+   on macOS) → **Sailfish: New Project**, or in a terminal:
 
-     ```sh
-     mkdir -p ~/Projects/harbour-myapp && cd ~/Projects/harbour-myapp
-     sfdk init -t qtquick2app
-     ```
+   ```sh
+   mkdir -p ~/Projects/harbour-myapp && cd ~/Projects/harbour-myapp
+   sfdk init -t qtquick2app
+   ```
 
    App names start with `harbour-` by Sailfish convention.
-3. Open the folder in VS Code (**File → Open Folder**) and click **Yes, I
-   trust the authors** when asked. In Restricted Mode the extension stays
-   disabled.
-4. **Check:** a Sailfish fish icon appears in the left activity bar, and the
-   status bar along the bottom shows the Sailfish items below. The extension
-   only treats a folder as a Sailfish project if it contains `rpm/*.spec`.
+3. Open the folder in VS Code (**File → Open Folder**) and choose **Yes, I
+   trust the authors**. In Restricted Mode the extension stays off.
+4. **Check:** a Sailfish icon appears in the activity bar on the left, and the
+   status bar shows the items in Part 5. A folder counts as a Sailfish project
+   only if it contains `rpm/*.spec`.
 
 ### Part 5: The status bar
 
@@ -147,12 +225,17 @@ From left to right:
 | Item | What it is | Click to |
 |---|---|---|
 | `SailfishOS-5.1.0.11-aarch64` | Build target | Pick a target. Its architecture must match the device: `i486` for the emulator, `aarch64` or `armv7hl` for a phone. |
-| 📱 `Jolla Phone 2026` | Deploy device | Pick the device. Shows ⚠ if that device is not registered with the SDK. |
-| ⚙ `Release` | Build type | Switch between Release and Debug (`sfdk build --enable-debug`). |
-| ☁ `RPM` | Deploy method | Pick how the app gets onto the device (see below). |
-| 🔧 | Build button | Build the project. |
-| ▶ `Run` | Run button | Build, install on the device and start the app (**Ctrl+Alt+R**, **Cmd+Alt+R** on macOS). |
-| 🐞 `Debug` | Debug button | Build, install and start the app under the debugger (see Part 8). |
+| 📱 `Jolla Phone` | Deploy device | Pick the device. Shows ⚠ if the SDK does not know the device, and `(offline)` if it does not answer. |
+| ⚙ `Release` | Build type | Switch between Release and Debug (`sfdk build --enable-debug`, compiled without optimisation). |
+| ☁ `RPM` | Deploy method | Pick how the app gets onto the device (below). |
+| 🔧 | Build | Build the project. |
+| 📦 `Deploy` | Deploy | Build and install on the device, without starting the app. |
+| ▶ `Run` | Run | Build, install and start the app (**Ctrl+Alt+R**, **Cmd+Alt+R** on macOS). |
+| 🐞 `Debug` | Debug | Build, install and start the app under the debugger (Part 8). |
+
+To start or debug what is already installed without building again, use
+**Sailfish: Run Installed App** or **Sailfish: Debug Installed App** from the
+Command Palette.
 
 Deploy methods:
 
@@ -160,88 +243,56 @@ Deploy methods:
 |---|---|
 | **Deploy as RPM package** (default) | Copies the RPM to the device and installs it. Needs Developer Mode. |
 | **Deploy by copying binaries** | Copies the built files to `/opt/sdk/<name>` without installing an RPM. |
-| **Copy RPM for manual install** | Copies the RPM to `~/RPMS` on the device; you install it yourself. **Run** stops after copying. |
-| Install RPM with pkcon / zypper / zypper dup | Alternative installers; zypper needs zypper and root on the device. |
+| **Copy RPM for manual install** | Copies the RPM to `~/RPMS` on the device for you to install. **Run** stops after copying. |
+| Install RPM with pkcon / zypper / zypper dup | Other installers; zypper needs zypper and root on the device. |
 
 When you press **Run**, the progress notification closes once the app has
-started. The app then runs in its own terminal (named after the app) that
-shows its output; press **Ctrl+C** there, or close that terminal, to stop it.
+started. The app runs in its own terminal, named after the app, which shows its
+output. Press **Ctrl+C** there, or close the terminal, to stop it.
 
-**Changing architecture:** projects build in place, so building for a new
-architecture on top of the old build produces a broken package. When you pick
-a target with a different architecture, the extension asks to clean the build
-first; answer **Clean**. Set `sailfish.build.cleanOnArchChange` to `true` to
-clean without asking.
+**Changing architecture:** projects build in place, so building for another
+architecture on top of the old build gives a broken package. When you pick a
+target with a different architecture, the extension asks to clean first;
+answer **Clean**. Set `sailfish.build.cleanOnArchChange` to `true` to clean
+without asking.
 
 **OS versions:** a target may be older than the phone's Sailfish OS; this is
-normal. As of SDK 3.13.5 (October 2026) the newest targets are 5.1.0.11, and
-their apps run on Sailfish OS 5.2 phones.
+normal. As of SDK 3.13.5 the newest targets are 5.1.0.11, and their apps run on
+Sailfish OS 5.2 phones.
 
 ### Part 6: Run on the emulator
 
-1. Click the Sailfish fish icon in the activity bar. Under **Emulators**,
-   right-click `SailfishOS-5.1.0.11` → **Start**. A phone-shaped window opens;
-   wait until its home screen appears.
+1. Click the Sailfish icon in the activity bar. In the **Devices** view under **Emulators**, start
+   `SailfishOS-5.1.0.11` with its start button. A phone-shaped window opens;
+   wait for the home screen.
 2. In the status bar, pick an `…-i486` target and the device
    `Sailfish OS Emulator 5.1.0.11`.
 3. Press ▶ **Run**.
 4. **Check:** your app opens in the emulator window.
 
-#### The SDK group
-
-Below **Devices**, the same view has an **SDK** group showing what is installed
-on your computer: the SDK version and location, the `sfdk` path, the build
-engine (with start/stop buttons) and the installed build targets, with a ✓ on
-the one you selected. The group does not update by itself when something
-changes outside VS Code (for example the engine starting during a build); click
-the view's **Refresh** button to see it. If no SDK is found, the group shows a
-**Sailfish SDK not found** item; click it to open the install guide.
+The **SDK** view in the same sidebar shows the SDK version and location, the
+`sfdk` path, the build engine (with start and stop buttons) and the installed
+targets, with ✓ on the selected one. It does not update by itself when
+something changes outside VS Code, such as the engine starting during a build;
+press the view's **Refresh** button. If no SDK is found, it shows **Sailfish
+SDK not found**; click it to open the install guide.
 
 ### Part 7: Run on a phone
 
-1. **Turn on developer mode.** On the phone: **Settings → Developer tools**.
+1. **Turn on Developer Mode.** On the phone: **Settings → Developer tools**.
    Turn on **Developer mode** and **Remote connection**, and set a password.
-   Note the password and the **USB IP address** shown on that page.
-2. **Connect by USB.** Use a USB cable that carries data (not a charge-only
-   cable), plugged into the computer itself rather than a dock if possible.
-   The phone appears as a network adapter.
-   **Check:** `ping <USB IP address>` gets replies. The address is often
-   `192.168.2.15`, but some phones use another one (a Jolla Phone (2026) used
-   `192.168.2.16`). If the connection keeps dropping, try another cable or
-   port.
-3. **Install the deploy and debug helpers on the phone.** The SDK copies apps
-   with `rsync`, installs them with `sdk-deploy-rpm`, and debugs them with
-   `gdbserver`; some phones lack all three. The phone downloads them from
-   Jolla's repositories, so **turn on Wi-Fi or mobile data on the phone first**
-   (the USB link alone has no internet). `devel-su` asks for the
-   developer-mode password and needs a real terminal, so run this in the
-   phone's **Terminal** app:
-
-   ```sh
-   devel-su sh -c 'pkcon refresh && pkcon install rsync sdk-deploy-rpm gdb-gdbserver'
-   ```
-
-   or from a terminal on your computer (enter the developer-mode password
-   twice: once for SSH, once for `devel-su`):
-
-   ```sh
-   ssh -t defaultuser@<USB IP address> "devel-su sh -c 'pkcon refresh && pkcon install -y rsync sdk-deploy-rpm gdb-gdbserver'"
-   ```
-
-   `pkcon refresh` updates the phone's package lists first; without it, a
-   phone with outdated lists reports the packages as not found.
-   You can also do this from VS Code: right-click the phone in the Sailfish
-   view → **Sailfish: Install Deploy & Debug Tools on Device**.
-
-   **Check:** `pkcon` ends with `Finished` and no error. If you skip
-   `gdb-gdbserver` here, the 🐞 **Debug** button offers to install it later.
-
-4. **Allow apps from outside the store.** On the phone: **Settings →
-   Untrusted software** → turn on **Allow untrusted software**. Otherwise the
-   phone refuses to install your app.
-5. **Register the phone with the SDK.** Close Qt Creator first: while it
-   runs it rewrites the SDK's device list and would undo this. Then, in
-   VS Code: **Ctrl+Shift+P** → **Sailfish: Add Device**, and answer:
+   Note the password and the **USB IP address** shown there.
+2. **Connect by USB** with a cable that carries data, plugged into the computer
+   itself rather than a dock if you can. The phone appears as a network
+   adapter. **Check:** `ping <USB IP address>` gets replies. The address is
+   often `192.168.2.15`, but not always (a Jolla Phone (2026) used
+   `192.168.2.16`). If the link keeps dropping, try another cable or port.
+3. **Allow apps from outside the store.** On the phone: **Settings → Untrusted
+   software** → turn on **Allow untrusted software**. Otherwise the phone
+   refuses to install your app.
+4. **Register the phone.** Close Qt Creator first; while it runs it rewrites
+   the SDK's device list and would undo this. Then **Ctrl+Shift+P** →
+   **Sailfish: Add Device**, and answer:
 
    | Prompt | Answer |
    |---|---|
@@ -253,163 +304,368 @@ the view's **Refresh** button to see it. If no SDK is found, the group shows a
    | Authentication | **Generate new key (recommended)** |
    | Developer Mode password | The password from step 1 |
 
-   The extension creates an SSH key for the phone, installs it there, and
-   registers the phone with the SDK and its build engine. A message confirms
-   "registered and confirmed via `sfdk device list`".
-   **Check:**
+   The extension creates an SSH key, installs it on the phone, and registers
+   the phone with the SDK and its build engine. A message confirms
+   "registered and confirmed via `sfdk device list`". **Check:**
 
    ```sh
    sfdk device list                                # shows your phone as "hardware-device"
    sfdk device exec "<phone name>" -- uname -m     # prints aarch64 or armv7hl
    ```
 
-   If `uname -m` prints a different architecture than you chose, run
-   **Sailfish: Remove Device** and add the phone again with the right one.
+   If `uname -m` prints another architecture than you chose, run
+   **Sailfish: Remove Device** and add the phone again.
+5. **Install the deploy and debug tools.** The SDK copies apps with `rsync`,
+   installs them with `sdk-deploy-rpm` and debugs them with `gdbserver`; some
+   phones have none of them. The phone downloads them from Jolla's
+   repositories, so **turn on Wi-Fi or mobile data on the phone first** (the
+   USB link has no internet). In the **Devices** view, right-click the phone →
+   **Install Deploy & Debug Tools on Device**, and enter the developer-mode
+   password when asked. To do it by hand instead, run this in the phone's
+   **Terminal** app (`devel-su` needs a real terminal):
 
-6. **Run your app.** In VS Code, in the Sailfish view, click **Sailfish:
-   Refresh Devices**. In the status bar, pick the phone and a target with the
-   architecture `uname -m` printed. Press ▶ **Run**, and confirm the
-   installation on the phone when it asks.
+   ```sh
+   devel-su sh -c 'pkcon refresh && pkcon install rsync sdk-deploy-rpm gdb-gdbserver'
+   ```
+
+   **Check:** the install reports success (by hand: `pkcon` ends with
+   `Finished` and no error).
+6. **Run your app.** In the status bar, pick the phone and a target with the
+   architecture `uname -m` printed. Press ▶ **Run**, and confirm the install on
+   the phone if it asks.
 7. **Check:** your app opens on the phone.
+
+**Open SSH to Device** (right-click the phone) and **Connect to Device (WLAN)**
+open an SSH terminal to a device; you type the password there yourself.
 
 ### Part 8: Debug on the device
 
-1. Install `gdb-gdbserver` on the phone (Part 7, step 3).
-2. Set the build type to **Debug** in the status bar (⚙), so breakpoints and
+1. Set the build type to **Debug** (⚙ in the status bar) so breakpoints and
    variables work.
-3. Set breakpoints in your C++ code: click left of a line number.
-4. Press 🐞 **Debug** in the status bar. The first time, accept installing the
-   **C/C++** extension (`ms-vscode.cpptools`), which provides the debugger
-   view. If `gdbserver` is missing on the device, choose **Install on device**
-   and type the developer-mode password in the terminal that opens.
-5. The app starts on the device and stops at your breakpoints. Use the Run and
-   Debug view to step through code and inspect variables and the call stack.
-   The app's output appears in the terminal named "<app> (debug)". Stopping
-   the debug session stops the app.
+2. Set breakpoints in your C++ code by clicking left of a line number.
+3. Press 🐞 **Debug**. The first time, accept installing the **C/C++**
+   extension (`ms-vscode.cpptools`), which provides the debugger view. If
+   `gdbserver` is missing on the device, choose **Install on device** and enter
+   the developer-mode password (the phone needs internet).
+4. The app starts on the device and stops at your breakpoints. Use the Run and
+   Debug view to step and inspect variables and the call stack. The app's
+   output is in the terminal "<app> (debug)". Stopping the debug session stops
+   the app.
 
-QML/JavaScript debugging is not supported yet.
+Tips:
 
-### Part 9: Device agent (screenshots, logs and screen mirror)
+- A Debug build is compiled without optimisation (`-O0 -g`), so breakpoints
+  stay on their lines and local variables show their current values. `sfdk
+  build -d` alone only keeps the debug info packages and still compiles with
+  `-O2`, because the `%qmake5` macro passes the platform's `%optflags` to the
+  compiler. The extension therefore adds
+  `-- --define '__global_cflags -O0 -g …'` for Debug, which replaces only the
+  generic part of `%optflags` and keeps the architecture flags; it also leaves
+  out `-D_FORTIFY_SOURCE=2`, which needs optimisation. You do not need to change
+  your `.pro` or `.spec`. Release builds are unchanged. Your own
+  `sailfish.build.extraArgs` come after this define, so a define of your own
+  wins. `Q_ASSERT` stays disabled (`QT_NO_DEBUG` is still defined), as in an
+  `sfdk build -d`. CMake projects get the same flags through `%cmake`.
+- qmake does not rebuild objects when only the flags change. When you switch
+  between Release and Debug, the next Build, Deploy, Run or Debug first runs
+  `sfdk make -- clean` if the project's `Makefile` was generated for the other
+  type, so a Release package never contains unoptimised objects and a Debug
+  build never reuses optimised ones. A build started outside the extension
+  (`sfdk` in a terminal) is not checked.
+- The debugged app is started by `gdbserver` over SSH, outside the Sailjail
+  sandbox, so sandbox permission problems do not reproduce under the debugger.
 
-The device agent is a small helper you install on the phone once. After that,
-VS Code can take screenshots and show the phone's system log without asking for
-the developer-mode password each time.
+**Debug Installed App** starts the app already on the device under the
+debugger, without building or deploying again. QML and JavaScript debugging are not supported yet.
 
-1. **Check the prerequisites.** The phone is registered (Part 7) and Developer
-   mode is on.
-2. **Install the agent.** In VS Code: **Ctrl+Shift+P** → **Sailfish: Install
-   Device Agent**. Read the dialog, then confirm. VS Code asks for the
-   developer-mode password once.
-   **Check:** **Sailfish: Device Agent Status** reports the agent as installed
-   and running, with Developer Mode on.
-3. **Take a screenshot.** **Ctrl+Shift+P** → **Sailfish: Take Device
-   Screenshot** (also the camera button on the phone in the Sailfish view).
-   Choose where to save the PNG. The picture opens in VS Code.
-   **Check:** the file exists and shows the phone's screen. If you cancel the
-   save dialog, nothing is saved.
-4. **Read the logs.** **Sailfish: Show Device Logs** opens the output panel
-   **Sailfish Device Log** and streams the phone's system log live. Stop the
-   command or close the panel to stop it.
-5. **Mirror the screen.** **Sailfish: Mirror Device Screen** (or the mirror
-   button on the device in the Sailfish view) opens a panel beside the editor
-   showing the phone's screen, refreshed a few times per second. It is view
-   only: you cannot tap or type on it. It pauses when the tab is hidden and
-   resumes when you show it again; closing the tab stops it. It needs agent
-   1.1.0; if the phone has an older agent, VS Code offers to upgrade it
-   (one password prompt).
-   **Check:** the panel shows the current screen and follows what you do on the
-   phone. If it says **disconnected**, press **Reconnect**.
-6. **Remove the agent.** **Sailfish: Uninstall Device Agent** (one password
-   prompt) removes it completely.
+### Part 9: Sign packages (optional)
 
-If the agent is missing, Take Device Screenshot and Show Device Logs offer to
-install it.
+Signing is off by default. To turn it on for a project:
 
-**What it can do:** take screenshots, read the system log and show a view-only live picture of the screen. That is all.
+1. Install GnuPG (for example `sudo apt install gnupg`).
+2. **Ctrl+Shift+P** → **Sailfish: Set Up Package Signing**. Pick a key from
+   the list (each shows the end of its fingerprint), or choose **Create a new
+   key** and enter a name, an optional email and a passphrase.
+3. For an existing key, enter its passphrase. The extension signs a test file
+   with the key and passphrase first; if that fails, nothing is saved.
+4. It then sets, for this project folder, `sailfish.build.sign` to `true`,
+   `sailfish.build.signingUser` to the key's **fingerprint**, and
+   `sailfish.build.signingPassphraseFile` to a private file (mode 600) in the
+   extension's storage, because `sfdk` reads the passphrase from a file. The
+   passphrase is never stored in settings.
+5. **Check:** the confirmation names the key and the end of its fingerprint.
+   Build, deploy, run and package now pass `--sign` to `sfdk`. To verify an
+   RPM, import the public key once and run `rpm -K`:
 
-**What it cannot do:** it cannot run commands, change settings or read your
-files. It cannot be reached from the network; it only answers over the SSH
-connection VS Code already uses. It runs as the normal phone user
-(`defaultuser`), not as root, with two extra groups that allow screenshots and
-reading the log. Like any `defaultuser` process it also belongs to that user's
-normal groups, including `input`, so it could write to input devices; the
-current version has no command that does.
+   ```sh
+   gpg --export --armor <fingerprint> | rpm --import /dev/stdin
+   rpm -K RPMS/<package>.rpm
+   ```
 
-**Developer mode:** the agent only works while Developer mode is on. Turn it
-off and the agent refuses every request; turn it on again and it works again
-without reinstalling. The phone shows a notification when the agent starts.
+If you set `sailfish.build.signingUser` to a name by hand, the extension looks
+it up before building: a name matching exactly one key is used by its
+fingerprint, and a name matching none or several keys stops the build with a
+clear message (gpg matches names as substrings, so `Jane Doe` also matches
+`Jane Doe Dev`).
+
+### Part 10: Device agent (screenshots, logs and screen mirror)
+
+The device agent is a small service you install on a device once. After that,
+VS Code can take screenshots, show the system log and mirror the screen without
+asking for the developer-mode password each time. It works on phones and on the
+emulator. This extension includes agent **1.8.1**.
+
+1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
+   on.
+2. **Install the agent.** **Ctrl+Shift+P** → **Sailfish: Install Device
+   Agent** (also in the device's right-click menu). Read the dialog, confirm,
+   and enter the developer-mode password once.
+   **Check:** **Sailfish: Device Agent Status** reports agent 1.8.1 running,
+   with Developer Mode on.
+3. **Take a screenshot.** **Sailfish: Take Device Screenshot**, or the camera
+   button on the device in the Devices view. Choose where to save
+   the PNG (the dialog remembers the folder). The picture opens in VS Code, and
+   the notice offers **Reveal in folder**. If you cancel the dialog, nothing is
+   saved.
+4. **Read the logs.** **Sailfish: Show Device Logs** streams the device's
+   system log into the output panel **Sailfish Device Log**. Stop it from the
+   notification.
+5. **Mirror the screen.** **Sailfish: Mirror Device Screen**, or the mirror
+   button on the device, opens the screen in a tab beside the editor.
+   **Check:** the tab shows the current screen and follows what you do on the
+   phone. If it says **Disconnected**, press **Reconnect**.
+6. **Control the phone** (agent 1.7.0 or newer). When the strip does not show
+   `Screenshot capture`, click the picture to tap and drag to swipe. A
+   `Control` pill appears at the right of the strip while control is active
+   (nothing while the mirror is view only; `Control off on phone` when the
+   phone turned it off). Control works only
+   while the mirror tab and the VS Code window have focus; switching away stops
+   it at once. Only taps and one-finger swipes exist: no keys, text or power
+   button.
+7. **Remove the agent.** **Sailfish: Uninstall Device Agent** (one password
+   prompt) removes the package, its service and its socket.
+
+If the agent is missing, **Take Device Screenshot** and **Show Device Logs**
+offer to install it.
+
+**Updating the agent.** When the device has an older agent than this
+extension includes, the mirror still opens, and VS Code shows a notice once per
+device per session with **Update Device Agent**. **Device Agent Status** shows
+the same. Updating asks for the password once and restarts the agent: a running
+log stream ends, and an open mirror shows `connecting: the agent is being
+updated` and reconnects by itself. The mirror needs agent 1.1.0, the SSH
+forward 1.2.0, VP8 video 1.6.0 and control 1.7.0.
+
+**How the mirror works.** When the device's key is registered, VS Code opens an
+SSH port forward to the agent and receives VP8 video, which the tab decodes
+itself; if this VS Code build cannot decode VP8, it uses JPEG images instead.
+The video aims for up to 30 frames per second at 720 pixels wide and
+2000 kbit/s. If the forward cannot be set up, the mirror uses the slower
+connection through the SDK. The phone captures the screen with Lipstick's own
+recorder, so no "Screenshot captured." notices appear. If the recorder is not
+available, the agent takes a screenshot per frame instead: viewing still works,
+but slower, with a notice per frame, and control stays off (Lipstick does not
+report how it rotated the saved image, so taps could land in the wrong place).
+Hiding the tab pauses the stream after a moment; closing it stops the stream.
+
+**The status strip** below the picture is one line, for example `● Live · 30
+fps`: a coloured dot (green live, grey waiting, red disconnected), the state,
+the frame rate (`idle` while the screen is still), at most one warning, and on
+the right an action button, the control pill and an ⓘ button. Everything else
+is behind ⓘ.
+
+| Strip | Meaning |
+|---|---|
+| `Live · 30 fps` | Streaming; the frame rate you actually get, smoothed over about a second. When the phone cannot encode 30 frames a second, it steps down to a steady 20, 15, 10 or 7.5 and back up when it can. |
+| `Slow path` | The mirror uses the SDK connection instead of the fast SSH forward. The details give the reason, e.g. `ssh forward unavailable — auth`. With an outdated agent an **Update agent** button appears. |
+| `Reduced for phone` | The phone could not encode fast enough, so only the size went down. |
+| `Reduced for link` | A slow link made the mirror lower bitrate and size. Both reductions go back by themselves, which takes about half a minute; the level changes only while the picture changes. |
+| `Screenshot capture` | The agent takes a screenshot per frame instead of using the recorder. Control needs the native recorder. |
+| `N dropped` | Frames skipped because VS Code was still drawing the previous one. |
+| `Control` / `Control off on phone` | Control is active; or the phone's Settings page turned it off. |
+| `Paused`, `Connecting…`, `Disconnected: <reason>` | The tab is hidden, starting, or ended (press **Reconnect**). |
+
+Only one warning shows at a time, in the order above. The ⓘ button opens
+**Mirror details** (close it with ×, Escape or a click outside): Transport
+(`SSH forward` or `SDK connection`), Video or Image (codec, size, target kbit/s
+or JPEG quality, and why it was reduced), Received kbit/s, Frame rate, Latency
+(phone to your screen), Phone time (per frame), Capture, Dropped and Control.
+**Copy details** puts them on the clipboard for a bug report.
+
+**The lease.** While the tab is visible, VS Code renews the mirror every 20
+seconds. If the phone hears nothing for 60 seconds (VS Code hung, the computer
+slept, the network dropped), it stops streaming by itself and the tab shows
+`Disconnected` with **Reconnect**.
+
+**On the phone,** one notification says "Screen is being viewed from VS Code"
+while the mirror runs, and "Screen is being controlled from VS Code" while
+control is active. It goes away shortly after the stream stops. A separate
+notice says the developer agent is running.
+
+## How the device agent stays safe
+
+- **Installed only with your consent.** The install dialog explains what the
+  agent does, and installing, updating and removing each need the
+  developer-mode password. **Uninstall Device Agent** removes it completely.
+- **Developer Mode gate.** The agent checks on every request, every mirror
+  renewal and every start of control that Developer Mode is on. Turn it off and
+  the agent refuses everything and ends a running mirror at its next renewal;
+  turn it on and it works again without reinstalling.
+- **No network listener.** The agent listens only on a private Unix socket on
+  the phone (mode 0600, owned by `defaultuser`). VS Code reaches it only through
+  the SSH login it already has. The fast mirror's port forward is a channel
+  inside that login, using only the device's registered key; the socket on your
+  computer is private to your user and removed when the tab closes.
+- **Pinned host keys.** VS Code keeps its own list of device host keys, filled
+  from the SDK connection, and refuses a key that changed. An emulator is
+  re-trusted automatically; for a phone VS Code warns and offers **Trust New
+  Key**, and uses the SDK connection until then.
+- **Lease.** A mirror ends by itself 60 seconds after the last renewal, so a
+  hung or disconnected computer cannot leave the screen streaming.
+- **Visible on the phone.** A notification is shown while the screen is viewed,
+  and control stays off until the phone has confirmed the "being controlled"
+  notification.
+- **Control only while focused.** Control has its own 3-second lease, renewed
+  only while the mirror tab and its window have focus; losing focus, hiding or
+  closing the tab stops it at once. Only bounded taps and one-finger swipes are
+  accepted, rate-limited on both sides. There is no key, text, power-button or
+  arbitrary input command.
+- **Limited rights.** The agent runs as the normal phone user `defaultuser`,
+  not root, with two extra groups: `privileged` (for screen capture) and
+  `systemd-journal` (for the log). It accepts a fixed set of requests with
+  checked arguments and passes nothing to a shell. It cannot run commands,
+  change settings or read your files.
+
+Details: [`device-agent/README.md`](device-agent/README.md).
+
+## What is not verified yet
+
+The device agent is new. These parts are built and tested on the emulator and
+with test fixtures, but not yet confirmed on a real phone:
+
+- Tap and swipe control: injection on a phone's touchscreen, all screen
+  rotations, and the change of the on-phone notification to "being
+  controlled". (The emulator follows the computer's mouse, so it does not prove
+  this.)
+- Mirror speed on a phone with agent 1.8.x: whether it holds 30 or 20 frames a
+  second at 720 pixels wide. Frame rates and timings have only been measured on
+  the emulator.
+- Long sessions on a phone (memory over 10 minutes or more), and behaviour when
+  the phone's screen turns off during a mirror.
+- If the phone lacks the JPEG image plugin, the agent sends larger PNG frames
+  on the JPEG path; which package provides that plugin is not known yet.
 
 ## Troubleshooting
 
+**Build and deploy**
+
 | What you see | Cause | Fix |
 |---|---|---|
-| `The command needs to be used under Sailfish SDK workspace` | The project is outside the SDK workspace. | Move the project into your home directory, or change the workspace in Qt Creator's options. |
-| Phone missing from the Sailfish view, ⚠ on the device in the status bar | The phone is not in `sfdk device list`, e.g. because a running Qt Creator rewrote the list. | Close Qt Creator and register the phone again (Part 7, step 5). |
-| `Fatal: '<name>' is not a known device` | The build engine keeps its own device list (`~/SailfishOS/vmshare/devices.xml`), and this device is missing from it. | Remove the device and add it again with **Sailfish: Add Device**, which updates both lists. |
-| `bash: rsync: not found` | `rsync` and `sdk-deploy-rpm` are missing on the phone. | Part 7, step 3. |
-| `pkcon` install fails, or exits with code 5, while downloading | The phone has no internet access; the USB link alone does not provide it. | Turn on Wi-Fi or mobile data on the phone and install again. |
-| `pkcon` install exits with code 4 (packages not found) | The phone's package lists are out of date. | Run `pkcon refresh` first (Part 7, step 3 does), or use **Install Deploy & Debug Tools on Device**. |
-| 🐞 Debug says gdbserver is not installed | `gdb-gdbserver` is missing on the phone. | Choose **Install on device** (the phone needs internet), or Part 7, step 3. |
-| `Installing untrusted software disabled` | The phone only accepts store apps. | Part 7, step 4. |
-| `nothing provides 'libQt5Core.so.5'` | The package contains files built for another architecture, e.g. the emulator build packaged for a phone. | **Ctrl+Shift+P → Sailfish: Clean**, then build again. |
+| `The command needs to be used under Sailfish SDK workspace` | The project is outside the SDK workspace. | Move it into your home directory, or change the workspace in Qt Creator's options. |
+| `Cannot find real …` from the build engine | The project path contains a space. | Rename the folders so the path has no spaces. |
+| `nothing provides 'libQt5Core.so.5'` | The package holds files built for another architecture. | **Sailfish: Clean**, then build again. |
 | `The required configuration option 'device' is not set` | No deploy device selected. | Click the device item in the status bar. |
-| Qt Creator keeps asking for the device password | The device is set to password login. | In Qt Creator's device settings, choose key-based authentication. |
+| `Installing untrusted software disabled`, or the install is refused as untrusted | The phone accepts only store apps. | Part 7, step 3. |
+| `bash: rsync: not found` | `rsync` and `sdk-deploy-rpm` are missing on the phone. | Part 7, step 5. |
+| Tools install fails, or `pkcon` exits with code 5 while downloading | The phone has no internet; the USB link does not provide it. | Turn on Wi-Fi or mobile data on the phone and try again. |
+| `pkcon` exits with code 4 (packages not found) | The phone's package lists are out of date. | Run `pkcon refresh` first; **Install Deploy & Debug Tools on Device** does this. |
+| 🐞 Debug says gdbserver is not installed | `gdb-gdbserver` is missing on the phone. | Choose **Install on device** (the phone needs internet), or Part 7, step 5. |
+| `Auth failed: Authentication token manipulation error` from `devel-su` | It ran without a terminal. | Run it in the phone's Terminal app, or use the VS Code command. |
+| Signing setup says nothing was saved | The passphrase is wrong, or the key has one and none was entered. | Run **Set Up Package Signing** again with the right passphrase. |
+| A signed build stops because the signing user matches no key or several keys | `sailfish.build.signingUser` holds a name that is missing or ambiguous. | Run **Set Up Package Signing**, which saves the fingerprint. |
+
+**Devices**
+
+| What you see | Cause | Fix |
+|---|---|---|
+| Phone missing from the Devices view, ⚠ on the device in the status bar | The phone is not in `sfdk device list`, e.g. because Qt Creator rewrote the list. | Close Qt Creator and register the phone again (Part 7, step 4). |
+| `Fatal: '<name>' is not a known device` | The build engine's own device list (`~/SailfishOS/vmshare/devices.xml`) lacks this device. | Remove the device and add it again with **Add Device**, which updates both lists. |
 | Add Device says to close Qt Creator | Qt Creator is running. | Close it and run the command again. |
-| `Auth failed: Authentication token manipulation error` from `devel-su` | It ran without an interactive terminal. | Run it in a terminal window (Part 7, step 3). |
+| Qt Creator keeps asking for the device password | The device is set to password login there. | In Qt Creator's device settings, choose key-based authentication. |
 | Phone not visible at all (`lsusb` does not list it) | Cable or port problem. | Try another data cable or USB port. |
-| `Developer Mode is off` when taking a screenshot or reading logs | The agent refuses while Developer mode is off. | On the phone: **Settings → Developer tools** → turn on **Developer mode**. |
-| Device agent says it is not installed or not running | It was never installed, was removed, or the phone just restarted. | **Sailfish: Install Device Agent**, then **Device Agent Status** to confirm. |
-| Mirror says `disconnected: replaced` | Another mirror of the same phone started (for example in another VS Code window); the phone serves one at a time. | Press **Reconnect** here, or close the other mirror. |
-| Mirror shows an error strip, or stays blank | The phone screen is off or locked. | Wake and unlock the phone; the mirror recovers by itself. |
-| Screenshot is black or fails | The phone screen is off or locked. | Wake and unlock the phone, then try again. |
-| Install says the package is untrusted or refuses it | The phone only accepts store apps. | Part 7, step 4. |
+
+**Device agent and mirror**
+
+| What you see | Cause | Fix |
+|---|---|---|
+| `Developer Mode is off` for a screenshot or logs | The agent refuses while Developer Mode is off. | On the phone: **Settings → Developer tools** → turn on **Developer mode**. |
+| The agent is not installed or not running | It was never installed, was removed, or the device just restarted. | **Install Device Agent**, then **Device Agent Status**. |
+| A notice offers **Update Device Agent** | The device has an older agent than this extension includes. | Choose **Update Device Agent** (one password prompt). |
+| Screenshot is black or fails, or the mirror stays blank or shows an error | The screen is off or locked. | Wake and unlock the phone; the mirror recovers by itself. |
+| Strip says `Slow path` and the details say `SDK connection (ssh forward unavailable — <reason>)` | The fast forward could not be set up (`auth`: key not accepted; `unreachable`; `no-host-key`; `remote-refused`). The mirror uses the SDK connection. | It works as it is. For the fast path, check the device's key in `sfdk device list`, that `ssh` is installed and that the phone answers. The **Sailfish OS** output has the full reason. The forward is tried again when you reopen the tab. |
+| Warning that the device's SSH host key changed | The phone was reflashed or reset, or something else answers at its address. | If you changed the phone, choose **Trust New Key**. If not, check what is at that address. |
+| Mirror says `Disconnected: replaced` | Another mirror of the same device started, e.g. in another window. The agent serves one at a time. | Press **Reconnect**, or close the other mirror. |
+| Mirror says `Disconnected: … (lease expired)` | The phone got no renewal for 60 seconds (VS Code busy, computer asleep, network down). | Press **Reconnect**. |
+| Mirror says `Disconnected` after the phone or network changed | The connection broke, e.g. the phone slept or left the Wi-Fi. | Wake the phone, then press **Reconnect**. |
+| Mirror shows no `Control` pill | The agent is older than 1.7.0, the tab or window does not have focus, or the agent could not open the touchscreen. | Update the agent, click into the mirror tab, and check the **Sailfish OS** output for an input error. Viewing still works. |
+| Strip says `Screenshot capture` and control stays off | Lipstick's recorder is not available, so the agent takes screenshots. | Viewing still works. The **Sailfish OS** output has the reason; control returns by itself when capture is `native` again. |
+| Strip says `Reduced for link` | The link is too slow for full quality. | Move closer to the access point, use USB or a 5 GHz network, or ignore it; it recovers by itself. |
+| Strip says `Reduced for phone` | The phone could not encode the full-size picture in time. | Close busy apps on the phone, or ignore it; it recovers by itself. |
 
 ## Known issues
 
-- Close Qt Creator before **Sailfish: Add Device** or **Remove Device**; the
-  extension refuses to change the device list while it runs, because Qt
-  Creator would overwrite the change.
+- Close Qt Creator before **Add Device** or **Remove Device**. The extension
+  refuses to change the device list while Qt Creator runs, because Qt Creator
+  would overwrite the change.
 - As of SDK 3.13.5 there is no Sailfish OS 5.2 build target; use 5.1.0.11.
+- The device agent's open points are listed in
+  [What is not verified yet](#what-is-not-verified-yet).
 
 ## What this is not (yet)
 
-- **Silica IntelliSense is not implemented in v0.1.** Rich completion, hover and
-  diagnostics for Sailfish Silica QML APIs is planned for v0.2; it will read
-  the build target already installed locally on your machine, and Silica's
-  own type/property/API data is never bundled with this extension. v0.1
-  instead disables Qt QML's `qmlls` language server
-  (`qt-qml.qmlls.enabled`) per Sailfish project folder, because qmlls requires
-  Qt 6.8+ while Sailfish OS build targets ship Qt 5.6, so qmlls only produces
-  spurious diagnostics against Silica QML (`sailfish.qtqml.silenceQmlls`).
+- **No Silica IntelliSense.** Completion, hover and diagnostics for Sailfish
+  Silica QML are planned for a later version; they will read the build target
+  installed on your machine, and Silica's own API data will never be bundled
+  with this extension. For now the extension turns off the Qt QML extension's
+  `qmlls` language server (`qt-qml.qmlls.enabled`) in each Sailfish project
+  folder: `qmlls` needs Qt 6.8 or newer while Sailfish OS targets ship Qt 5.6,
+  so it only reports false errors against Silica QML. Set
+  `sailfish.qtqml.silenceQmlls` to `false` to keep it on.
+- **No QML or JavaScript debugging**, only C++.
+- **No Windows support.**
 
 ## Telemetry
 
-**None.** This extension does not collect, transmit or report any usage data,
+**None.** This extension does not collect, send or report any usage data,
 crash data or telemetry of any kind.
 
 ## Publisher
 
 The `publisher` field in `package.json` (`sailfish-tools-dev`) is a
-**placeholder**. The repository owner should set this to their real Marketplace
+**placeholder**. The repository owner should set it to their real Marketplace
 publisher id before any public release.
+
+The publisher id is the owner's own; it does not stand for Jolla or any
+company.
 
 ## Development
 
+Node.js 22 or newer is required.
+
 ```sh
 npm ci
-npm run build        # bundle dist/extension.js with esbuild
+npm run build          # bundle dist/extension.js with esbuild
 npm run check:types
 npm run lint
-npm run test         # unit, fuzz and integration tests (opens a VS Code test window)
+npm run test:unit
+npm run test:fuzz
+npm run test           # unit, fuzz and integration tests (opens a VS Code test window)
+npm run verify         # everything above, plus manifest checks and a packaging dry run
 ```
 
-To try changes without packaging, run `npm run build` (or `npm run build:watch`),
-then `code --extensionDevelopmentPath=$PWD <your-project>`. There is no
-`.vscode/launch.json` in the repository, so **F5** does not work out of the box.
+To try changes without packaging, run `npm run build` (or `npm run build:watch`)
+and then `code --extensionDevelopmentPath=$PWD <your-project>`. There is no
+`.vscode/launch.json`, so **F5** does not work out of the box.
 
-See `CONVENTIONS.md` for the full module layout, stub APIs, naming
-reconciliation and how tests stub UI prompts and the fake `sfdk` binary.
+The device agent is a separate Qt program in `device-agent/`.
+`sh device-agent/build.sh` builds its RPMs for all three architectures with the
+SDK and copies them to `media/agent/`; see
+[`device-agent/README.md`](device-agent/README.md) for its build needs and
+protocol.
+
+See `CONVENTIONS.md` for the module layout, stub APIs, and how tests stub UI
+prompts and use the fake `sfdk` binary.
 
 ## License
 
-GPL-3.0-or-later — see `LICENSE`.
+GPL-3.0-or-later. See `LICENSE`.

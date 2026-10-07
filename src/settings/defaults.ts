@@ -11,6 +11,7 @@ export interface SailfishSettings {
   showSnapshotTargets: boolean;
   'build.jobs': number;
   'build.runHarbourCheck': boolean;
+  'build.revealLog': boolean;
   'build.extraArgs': string[];
   'build.type': 'release' | 'debug';
   'build.cleanOnArchChange': boolean;
@@ -35,6 +36,7 @@ export const DEFAULTS: SailfishSettings = {
   showSnapshotTargets: false,
   'build.jobs': 0,
   'build.runHarbourCheck': false,
+  'build.revealLog': true,
   'build.extraArgs': [],
   'build.type': 'release',
   'build.cleanOnArchChange': false,

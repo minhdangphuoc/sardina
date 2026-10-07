@@ -49,6 +49,10 @@ Rules:
   through `SfdkRunner` (Task A). The one exception is Task E's VBoxManage
   probe, which uses `spawnCapture(bin, args[])`, exported from
   `src/sfdk/runner.ts`.
+- The other spawn exception is the screen-mirror forward in `src/agent/sshForward.ts`: it runs
+  `ssh -N` (and, on macOS, `ps -p`) directly with `child_process` and an argv array
+  (`shell: false`), because it needs the long-lived child handle. Its argv comes only from the
+  pure `buildForwardArgs`; it never runs `sfdk` (that stays on `SfdkRunner`).
 - No shell string interpolation, ever: `child_process.spawn(cmd, argsArray, { shell: false })`
   only.
 - TypeScript strict; no `any` without a `// eslint-disable-next-line
@@ -143,6 +147,8 @@ auto-restored in a root `teardown`.
 | other `tools|emulator|device|engine <sub>` | `<a>_<b>` |
 | `build|deploy|qmake|make|package|check|build-shell` | that word |
 | anything else | `unknown` |
+
+The fake `ssh` (`test/fixtures/bin/ssh`, same scenario lookup) answers only `ssh -N -L <local>:<remote> …` (key `ssh_forward`; modes in `ssh_forward.mode`, frames in `ssh_forward.frames.json`); any other argv exits 255 and is appended to `unrecorded.log`. Recorded output may contain `@FIXTURES_ROOT@`, which the fakes replace with the `FIXTURES_ROOT` environment value. In `ssh_forward.frames.json` an entry `{"settings": {...}}` is a header-only record (agent 1.9.0 phone settings message) that the fake sends only to a request containing `"phoneState":true`, and a `status` with `"ok": false` is sent and the connection closed (used by `agent-settings-*`). A `<key>.stdin-log` file makes the fake sfdk log each stdin line as `{event:'stdin', key, line}` while it is alive.
 
 A `<key>.hang` file (empty) makes the fake stay alive after printing until SIGTERM/SIGINT and log a `killed` event; with `<key>.stream` (per-line delay in ms) it is a live stream, as for `device_exec.sailfish-devagent.mirror`.
 
