@@ -103,20 +103,13 @@ Page {
         signalsEnabled: true
 
         // The agent's ChangedJson(s key, s status) signal. Nemo.DBus calls the JavaScript function
-        // named like the signal; both spellings are defined in case the binding lower-cases it.
-        function ChangedJson(key, status) {
-            page.applyJson(status)
-        }
-
+        // named like the signal with its first letter lower-cased (QML methods cannot start with a
+        // capital letter; a page that defines one does not load).
         function changedJson(key, status) {
             page.applyJson(status)
         }
 
         // The older Changed(s key) signal: only a prompt to ask again.
-        function Changed(key) {
-            page.refresh()
-        }
-
         function changed(key) {
             page.refresh()
         }
