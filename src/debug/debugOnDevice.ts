@@ -1,9 +1,11 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
+import { deviceSessions } from '../core/deviceSessions';
 import { NO_TIMEOUT } from '../sfdk/runner';
 import { buildDeployThen, installedAppThen, type DeployedApp } from '../tasks/commands';
+import { cppdbgArchitecture } from '../tasks/buildConfig';
 import { parseDebugRecipe, type DebugRecipe } from './recipe';
-import { INSTALL_ON_DEVICE, installOnDevice } from '../devices/devicePackages';
+import { INSTALL_ON_DEVICE, checkDeviceTools, installOnDevice } from '../devices/devicePackages';
 
 const CPPTOOLS_ID = 'ms-vscode.cpptools';
 const INSTALL_CPPTOOLS = 'Install C/C++ extension';
@@ -11,6 +13,7 @@ const SWITCH_TO_DEBUG = 'Switch to Debug';
 const DEBUG_ANYWAY = 'Debug anyway';
 const LISTEN_TIMEOUT_MS = 30_000;
 const GDBSERVER_INSTALL_HINT = 'devel-su sh -c "pkcon refresh && pkcon install -y gdb-gdbserver"';
+const GDBSERVER_PACKAGE = 'gdb-gdbserver';
 const RUN_WITHOUT_DEBUGGER = 'Run without debugger';
 
 /** C++ debugging goes through the C/C++ extension's `cppdbg` debugger driving the SDK's GDB. */
@@ -43,16 +46,8 @@ async function ensureDebugBuild(services: Services, folder: vscode.WorkspaceFold
 
 /** true/false when the device answered; undefined when it could not be asked (unreachable, no device…). */
 async function deviceHasGdbserver(services: Services, device: string, cwd: string | undefined): Promise<boolean | undefined> {
-  const result = await services.runner.run({
-    args: ['device', 'exec', '--', 'sh', '-c', 'command -v gdbserver'],
-    device,
-    cwd,
-    timeoutMs: 30_000,
-  });
-  if (result.exitCode === 0 && result.stdout.trim()) return true;
-  // sh's `command -v` exits 1 (or 127 on some shells) with no output when the command is missing.
-  if ((result.exitCode === 1 || result.exitCode === 127) && !result.stdout.trim()) return false;
-  return undefined;
+  const missing = await checkDeviceTools(services, device, cwd);
+  return missing === undefined ? undefined : !missing.includes(GDBSERVER_PACKAGE);
 }
 
 type GdbserverCheck = 'ready' | 'run-instead' | 'cancel';
@@ -77,7 +72,7 @@ async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolde
   if (choice !== INSTALL_ON_DEVICE) return 'cancel';
 
   // undefined: the password box was cancelled (or sfdk couldn't start) — not a failed install.
-  if ((await installOnDevice(services, device, ['gdb-gdbserver'])) === undefined) return 'cancel';
+  if ((await installOnDevice(services, device, [GDBSERVER_PACKAGE])) === undefined) return 'cancel';
   if (await deviceHasGdbserver(services, device, cwd)) return 'ready';
   void services.prompts.showErrorMessage(
     `Sailfish: gdbserver is still missing on "${device}". The device downloads it from Jolla's repositories, ` +
@@ -150,13 +145,17 @@ function startGdbserver(services: Services, app: DeployedApp, recipe: DebugRecip
   });
 }
 
-function cppdbgConfiguration(app: DeployedApp, recipe: DebugRecipe): vscode.DebugConfiguration {
+function cppdbgConfiguration(services: Services, app: DeployedApp, recipe: DebugRecipe): vscode.DebugConfiguration {
+  // cpptools refuses to launch without it ("Specified argument was out of the range of valid values (Parameter 'arch')").
+  const targetArchitecture = cppdbgArchitecture(app.target);
+  if (!targetArchitecture) services.output.log('warn', `Debug: unknown architecture for target "${app.target}"; cppdbg targetArchitecture not set.`);
   return {
     type: 'cppdbg',
     request: 'launch',
     name: `Sailfish: ${app.project.name}${app.device ? ` on ${app.device}` : ''}`,
     program: recipe.program,
     cwd: app.cwd,
+    ...(targetArchitecture ? { targetArchitecture } : {}),
     MIMode: 'gdb',
     miDebuggerPath: recipe.gdbPath,
     // sfdk's own GDB setup (sysroot, source mapping, extended-remote, remote exec-file, file, args),
@@ -239,15 +238,35 @@ async function attachDebugger(
     return;
   }
 
-  const config = cppdbgConfiguration(app, recipe);
-  const started = await vscode.debug.startDebugging(app.project.folder, config);
+  const config = cppdbgConfiguration(services, app, recipe);
+  let debugSession: vscode.DebugSession | undefined;
+  const startSub = vscode.debug.onDidStartDebugSession((session) => {
+    if (session.configuration.name === config.name) debugSession = session;
+  });
+  const registration = app.device
+    ? deviceSessions.register(app.device, 'debug', 'debugging', async () => {
+        // Ends the debug session first, then gdbserver (cancelling its run kills it on the device).
+        if (debugSession) await vscode.debug.stopDebugging(debugSession);
+        stopGdbserver();
+      })
+    : undefined;
+  let started = false;
+  try {
+    started = await vscode.debug.startDebugging(app.project.folder, config);
+  } catch (err) {
+    services.output.log('error', `startDebugging failed: ${err instanceof Error ? err.message : String(err)}`);
+  } finally {
+    startSub.dispose();
+  }
   if (!started) {
+    registration?.dispose();
     stopGdbserver();
     void services.prompts.showErrorMessage('Sailfish: VS Code could not start the debug session.');
     return;
   }
   const sub = vscode.debug.onDidTerminateDebugSession((session) => {
     if (session.configuration.name === config.name) {
+      registration?.dispose();
       stopGdbserver();
       sub.dispose();
     }

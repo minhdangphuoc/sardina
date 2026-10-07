@@ -67,6 +67,7 @@ export class ProjectRegistry {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChange = this.emitter.event;
   private generation = 0;
+  private inFlight: Promise<void> | undefined;
   private readonly watchers = new Map<string, vscode.FileSystemWatcher>();
   private readonly pollTimer: ReturnType<typeof setInterval>;
 
@@ -83,7 +84,11 @@ export class ProjectRegistry {
     return this.list.find((p) => p.folder.uri.toString() === folder.uri.toString());
   }
 
-  resolveActive(): Promise<ProjectDescriptor | undefined> {
+  async resolveActive(): Promise<ProjectDescriptor | undefined> {
+    // Right after activation the first detection may still run; do not report "no project" before it ends.
+    if (this.list.length === 0 && this.inFlight) {
+      await this.inFlight;
+    }
     return resolveActiveProject(this);
   }
 
@@ -116,7 +121,16 @@ export class ProjectRegistry {
     }
   }
 
-  async refresh(): Promise<void> {
+  refresh(): Promise<void> {
+    const run = this.detectAll();
+    this.inFlight = run;
+    void run.finally(() => {
+      if (this.inFlight === run) this.inFlight = undefined;
+    });
+    return run;
+  }
+
+  private async detectAll(): Promise<void> {
     const gen = ++this.generation;
     const folders = vscode.workspace.workspaceFolders ?? [];
     const results = await Promise.all(folders.map((folder) => detectFolder(folder)));
