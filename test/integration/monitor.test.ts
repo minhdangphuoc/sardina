@@ -188,14 +188,16 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     this.timeout(40000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
-      const view = await viewWhen((v) => v.log.entries.length >= 20, 12000);
+      // All 40 fixture lines (markers from the stats stream do not count).
+      const view = await viewWhen((v) => v.log.entries.filter((e) => e.source === 'json').length >= 40, 12000);
       assert.strictEqual(view.log.status, 'live');
       assert.strictEqual(view.log.format, 'json');
       assert.ok(view.log.entries.some((e) => e.tag === 'harbour-demo' && e.priority === 4), 'a warning of the app');
       assert.ok(view.log.entries.some((e) => e.tag === 'lipstick' && e.priority === 6), 'an info line');
-      assert.ok(view.log.entries.some((e) => e.priority === 3), 'an error line');
+      // Error is journal priority 3 to 0 (§5.2); console.error arrives as 2 (T4-2 recording).
+      assert.ok(view.log.entries.some((e) => e.tag === 'harbour-demo' && e.priority !== undefined && e.priority <= 3), 'an error line');
 
-      // The fixture's ReferenceError points at qml/harbour-demo.qml:12:5 (PLAN §9.2 names FirstPage.qml).
+      // The fixture's ReferenceError points at qml/harbour-demo.qml:12 (PLAN §9.2 names FirstPage.qml).
       const folder = vscode.workspace.workspaceFolders?.[0];
       assert.ok(folder);
       await send({ type: 'openSource', file: '/usr/share/harbour-demo/qml/harbour-demo.qml', line: 12, col: 5 });

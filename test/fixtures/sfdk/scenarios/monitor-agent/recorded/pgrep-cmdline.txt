@@ -1,0 +1,14 @@
+pgrep: 
+583 comm=harbour-demo cmdline=/usr/bin/harbour-demo||||||||||||||||||||||||||||||||||
+1170 comm=invoker cmdline=invoker|--type=silica-qt5|/usr/bin/harbour-demo|
+1239 comm=sh cmdline=sh|-c|echo "pgrep: $(pgrep -x -f /usr/bin/harbour-demo | tr "\n" " ")"; for p in $(pgrep -f harbour-demo); do printf "%s comm=%s cmdline=" $p "$(cat /proc/$p/comm)"; tr "\0" "|" < /proc/$p/cmdline; echo; done; echo "self=$$"|sh|/usr/bin/harbour-demo|
+self=1239
+lrwxrwxrwx 1 root root 7 Mar 25  2026 /usr/bin/pgrep -> busybox
+pgrep: invalid option -- 'V'
+x-f: [] rc=0
+f-anchored: [583]
+x-comm: []
+0000000   /   u   s   r   /   b   i   n   /   h   a   r   b   o   u   r
+0000020   -   d   e   m   o  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+0000040  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0  \0
+55

@@ -1,0 +1,8 @@
+NAME="Sailfish OS"
+ID=sailfishos
+VERSION="5.1.0.11 (Pispala)"
+VERSION_ID=5.1.0.11
+PRETTY_NAME="Sailfish OS 5.1.0.11 (Pispala)"
+SAILFISH_BUILD=11
+SAILFISH_FLAVOUR=release
+HOME_URL="https://sailfishos.org/"
