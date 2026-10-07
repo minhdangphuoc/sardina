@@ -15,7 +15,9 @@ int usage()
     fprintf(stderr,
             "usage: sailfish-devagent --daemon\n"
             "       sailfish-devagent --request ping|screenshot\n"
-            "       sailfish-devagent --request logs [--lines N] [--client TEXT]\n"
+            "       sailfish-devagent --request logs [--lines N] [--format json|text] [--after CURSOR]\n"
+            "                         [--client TEXT]\n"
+            "       sailfish-devagent --request stats --exe PATH [--interval MS] [--client TEXT]\n"
             "       sailfish-devagent --request mirror [--fps N] [--width N] [--quality N] [--lease N] [--input]\n"
             "                         [--phone-state] [--client TEXT]\n"
             "       sailfish-devagent --remove-notifications\n"

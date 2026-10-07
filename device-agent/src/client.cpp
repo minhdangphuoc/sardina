@@ -43,7 +43,7 @@ int Client::run(const QStringList &args)
     }
     const QString cmd = args.at(0);
     if (cmd != QLatin1String("ping") && cmd != QLatin1String("screenshot") && cmd != QLatin1String("logs")
-        && cmd != QLatin1String("mirror")) {
+        && cmd != QLatin1String("mirror") && cmd != QLatin1String("stats")) {
         fprintf(stderr, "sailfish-devagent: unknown request \"%s\"\n", qPrintable(cmd));
         return 2;
     }
@@ -64,7 +64,39 @@ int Client::run(const QStringList &args)
         if (i + 1 >= args.size()) {
             return 2;
         }
-        if ((cmd == QLatin1String("mirror") || cmd == QLatin1String("logs")) && opt == QLatin1String("--client")) {
+        if (cmd == QLatin1String("logs") && opt == QLatin1String("--format")) {
+            const QString format = args.at(i + 1);
+            if (format != QLatin1String("json") && format != QLatin1String("text")) {
+                return 2;
+            }
+            if (format == QLatin1String("json")) {
+                request.insert(QStringLiteral("format"), format);
+            }
+            i += 2;
+            continue;
+        }
+        if (cmd == QLatin1String("logs") && opt == QLatin1String("--after")) {
+            request.insert(QStringLiteral("after"), args.at(i + 1).left(1024));
+            i += 2;
+            continue;
+        }
+        if (cmd == QLatin1String("stats") && opt == QLatin1String("--exe")) {
+            request.insert(QStringLiteral("exe"), args.at(i + 1).left(1024));
+            i += 2;
+            continue;
+        }
+        if (cmd == QLatin1String("stats") && opt == QLatin1String("--interval")) {
+            bool ok = false;
+            const int value = args.at(i + 1).toInt(&ok);
+            if (!ok) {
+                return 2;
+            }
+            request.insert(QStringLiteral("interval"), qBound(250, value, 10000));
+            i += 2;
+            continue;
+        }
+        if ((cmd == QLatin1String("mirror") || cmd == QLatin1String("logs") || cmd == QLatin1String("stats"))
+            && opt == QLatin1String("--client")) {
             // Informational; the daemon strips and cuts it (agent 1.9.0).
             request.insert(QStringLiteral("client"), args.at(i + 1).left(256));
             i += 2;
@@ -99,7 +131,7 @@ int Client::run(const QStringList &args)
 
     int exitCode = 0;
     bool firstChunk = true;
-    const bool streaming = cmd == QLatin1String("logs") || cmd == QLatin1String("mirror");
+    const bool streaming = cmd == QLatin1String("logs") || cmd == QLatin1String("mirror") || cmd == QLatin1String("stats");
     const bool checkFirstLine = cmd != QLatin1String("logs");
 
     QObject::connect(&socket, &QLocalSocket::readyRead, &socket, [&]() {

@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.9.0-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.0-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -121,14 +121,16 @@ added `mirror`; 1.2.0 added the binary mirror encoding, acks and the lease (see
 `PLAN-mirror-forward.md`, §1.2); 1.3.0 changes only how mirror frames are captured (below), not the
 protocol; 1.4.0 adds opt-in adaptive quality to binary mirror streams; 1.5.0 adds the `capture` and
 `captureReason` fields; 1.6.0 adds VP8 video; 1.7.0 adds opt-in tap/swipe input; 1.8.0 paces VP8
-frames and reports an idle screen (optional header fields only); 1.8.1 corrects the pacing rule. All additions are
+frames and reports an idle screen (optional header fields only); 1.8.1 corrects the pacing rule; 1.10.0 adds JSON log output with cursor resume and the `stats` stream
+(for the Device Monitor). All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
 |---|---|
-| `{"cmd":"ping"}` | `{"ok":true,"version":"1.8.1","developerMode":true,"socket":"/run/user/100000/sailfish-devagent/agent.sock","mirrorEncodings":["text","binary","vp8"],"mirrorInput":["tap","swipe"]}` (`mirrorInput` since 1.7.0; absence means view-only) |
+| `{"cmd":"ping"}` | `{"ok":true,"version":"1.8.1","developerMode":true,"socket":"/run/user/100000/sailfish-devagent/agent.sock","mirrorEncodings":["text","binary","vp8"],"mirrorInput":["tap","swipe"],"logFormats":["text","json"],"stats":true}` (`mirrorInput` since 1.7.0; absence means view-only; `logFormats` and `stats` since 1.10.0, absence means text logs only and no stats stream) |
 | `{"cmd":"screenshot"}` | `{"ok":true,"path":"/run/user/100000/sailfish-devagent/shot-<ts>.png"}` |
-| `{"cmd":"logs","lines":100}` | Raw `journalctl` lines, streamed until the client disconnects. |
+| `{"cmd":"logs","lines":100}` | Raw `journalctl` lines (`short-precise`), streamed until the client disconnects. Optional (1.10.0): `"format":"json"` streams `journalctl -o json` (one object per line, `__CURSOR` included) with a fixed `--output-fields` list when the installed `journalctl` accepts it (probed once at daemon start); `"after":"<cursor>"` resumes after that cursor (`--after-cursor`, else the last `lines`) and is ignored unless it matches `^[A-Za-z0-9;=:._-]{1,512}$`. Any other `format` is text. A phone-side stop ends the stream with `{"ok":false,"error":…}`. Reserved for later: `"filter":{"priority":0..7,"identifiers":[…],"pids":[…]}`. |
+| `{"cmd":"stats","exe":"/usr/bin/harbour-demo","interval":1000}` | 1.10.0. Streamed: first `{"ok":true,"stream":"stats","interval":1000}`, then per interval `{"ts":…,"pid":4321,"state":"S","cpu":12.4,"rssKb":48216,"threads":9,"started":…,"sys":{"cpu":31.0,"load1":0.82,"memAvailableKb":812000}}` (`pid` 0 and no process fields when the app is not running; `cpu` is percent of one core and absent on the first sample of a pid), and `{"event":"start"|"exit","pid":…,"ts":…}` at pid transitions. The process is the lowest pid whose first command line argument equals `exe` (fallback: `comm` equals the base name cut to 15 characters). `exe` must match `^/[A-Za-z0-9._+/-]{1,255}$` without `..` (else `{"ok":false,"error":"invalid exe"}`); `interval` is clamped to 250..10000 ms (default 1000). Gated by Developer Mode only (reads `/proc`, no phone setting, no indicator); counted as `monitorStreams` in the Settings service status. |
 | `{"cmd":"mirror","fps":4,"width":360,"quality":60}` | Streamed events (below). Optional fields: `"encoding":"binary"|"vp8"`, `"lease":<seconds>`, `"adapt":true`, `"bitrate":<kbit/s>`, `"input":true`. JPEG fps is 1..10; VP8 fps is 1..30. `width` is 0 (native) or 90..2160 and `quality` is 1..100. Values are clamped and the status echoes what is in effect. |
 | anything else | `{"ok":false,"error":"unknown command"}` |
 
