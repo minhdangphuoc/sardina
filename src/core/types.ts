@@ -75,4 +75,5 @@ export type SailfishContextKey =
   | 'sailfish.sdkAvailable'
   | 'sailfish.platformSupported'
   | 'sailfish.hasTarget'
-  | 'sailfish.hasDevice';
+  | 'sailfish.hasDevice'
+  | 'sailfish.building';

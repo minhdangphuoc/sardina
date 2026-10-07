@@ -11,7 +11,9 @@ import {
   isDefaultDevice,
   parseDeviceList,
   parseEmulatorList,
+  sfdkDeviceName,
 } from './listParsing';
+import { deviceSessions, SESSIONS_CONTEXT_SUFFIX, sessionDescription, type DeviceSessionInfo } from '../core/deviceSessions';
 import { RefreshDebouncer } from './refreshDebouncer';
 import { endpointKey, isReachable, type Reachability } from './reachability';
 import { parseEngineStatus, type EngineRunningStatus } from '../sfdk/parsers/engineStatus';
@@ -44,27 +46,19 @@ export class DevicesRootItem extends vscode.TreeItem {
   }
 }
 
-export class AvailableRootItem extends vscode.TreeItem {
-  constructor() {
-    super('Available to install', vscode.TreeItemCollapsibleState.Collapsed);
-    this.contextValue = 'devices-root-available';
-  }
-}
-
 export class DeviceTreeItem extends vscode.TreeItem {
   constructor(
     public readonly device: SfdkDeviceInfo,
     isDefault: boolean,
-    /** FR-6.3: an "Available to install" child gets 'emulator-available' so it offers install, not start/stop/status. */
-    contextValueOverride?: string,
     reachability: Reachability = 'unknown',
+    sessions: readonly DeviceSessionInfo[] = [],
   ) {
     super(formatDeviceLabel(device), vscode.TreeItemCollapsibleState.None);
     const hardware = device.kind === 'hardware-device';
     const state =
       reachability === 'online' ? (hardware ? '● connected' : '● running') : reachability === 'offline' ? (hardware ? '○ offline' : '○ stopped') : undefined;
     // Tree labels can't render $(icon) codes, so state and default are marked in the description.
-    this.description = [state, isDefault ? '✓ default' : undefined, formatDeviceDescription(device)].filter(Boolean).join(' · ');
+    this.description = [state, isDefault ? '✓ default' : undefined, sessionDescription(sessions) || undefined, formatDeviceDescription(device)].filter(Boolean).join(' · ');
     this.tooltip =
       formatDeviceTooltip(device) +
       (reachability === 'online'
@@ -74,7 +68,8 @@ export class DeviceTreeItem extends vscode.TreeItem {
           : '');
     // `emulator.running` / `emulator.stopped` drive which of Start/Stop is offered inline (package.json menus).
     const emulatorState = reachability === 'online' ? '.running' : reachability === 'offline' ? '.stopped' : '';
-    this.contextValue = contextValueOverride ?? (hardware ? 'hardware-device' : `emulator${emulatorState}`);
+    this.contextValue =
+      `${hardware ? 'hardware-device' : `emulator${emulatorState}`}${sessions.length > 0 ? SESSIONS_CONTEXT_SUFFIX : ''}`;
     const color =
       reachability === 'online'
         ? new vscode.ThemeColor('testing.iconPassed')
@@ -104,7 +99,7 @@ export class EmptyStateItem extends vscode.TreeItem {
   }
 }
 
-export type DevicesSection = 'sdk' | 'emulators' | 'devices';
+export type DevicesSection = 'sdk' | 'devices';
 
 export class SdkRootItem extends vscode.TreeItem {
   constructor() {
@@ -169,7 +164,6 @@ export class SdkTargetItem extends vscode.TreeItem {
 export type DeviceOrRootItem =
   | EmulatorsRootItem
   | DevicesRootItem
-  | AvailableRootItem
   | DeviceTreeItem
   | ListErrorItem
   | EmptyStateItem
@@ -212,10 +206,12 @@ function onlyHardware(outcome: ListOutcome): ListOutcome {
 export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOrRootItem>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<DeviceOrRootItem | undefined | void>();
   readonly onDidChangeTreeData = this.emitter.event;
+  /** Fires only after the device lists were invalidated or their reachability changed, never for session-only re-renders. */
+  private readonly listsEmitter = new vscode.EventEmitter<void>();
+  readonly onDidReloadLists = this.listsEmitter.event;
 
   private readonly emulatorsRoot = new EmulatorsRootItem();
   private readonly devicesRoot = new DevicesRootItem();
-  private readonly availableRoot = new AvailableRootItem();
 
   private cache: Promise<{ emulators: ListOutcome; devices: ListOutcome }> | undefined;
   private availableCache: Promise<ListOutcome> | undefined;
@@ -236,6 +232,8 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
       services.settings.onDidChange('target', () => this.refresh()),
       services.settings.onDidChange('showSnapshotTargets', () => this.refresh()),
       services.sdk.onDidChange(() => this.refresh()),
+      // Session labels live in the description: re-render at once, no `sfdk` list reload.
+      deviceSessions.onDidChange(() => this.emitter.fire()),
     ];
   }
 
@@ -243,7 +241,7 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
     return element;
   }
 
-  /** One sidebar pane per root (like the Extensions view): the pane lists the root's children directly. */
+  /** One sidebar pane per section: SDK lists its children directly; Devices has the two groups Emulators and Devices as roots. */
   section(which: DevicesSection): vscode.TreeDataProvider<DeviceOrRootItem> {
     return {
       onDidChangeTreeData: this.onDidChangeTreeData,
@@ -253,7 +251,7 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
         const sdk = this.services.sdk.current();
         if (which === 'sdk') return this.getChildren(this.sdkRoot.apply(sdk) ?? this.sdkRoot);
         if (!sdk) return [];
-        return this.getChildren(which === 'emulators' ? this.emulatorsRoot : this.devicesRoot);
+        return [this.emulatorsRoot, this.devicesRoot];
       },
     };
   }
@@ -276,9 +274,6 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
     }
     if (element === this.devicesRoot) {
       return this.loadDevices().then((outcome) => this.renderList(onlyHardware(outcome), 'No devices found.'));
-    }
-    if (element === this.availableRoot) {
-      return this.loadAvailable().then((outcome) => this.renderAvailable(outcome));
     }
     return [];
   }
@@ -316,18 +311,23 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
         }
       }),
     );
-    if (changed) this.emitter.fire();
+    if (changed) {
+      this.emitter.fire();
+      this.listsEmitter.fire();
+    }
   }
 
   dispose(): void {
     clearInterval(this.pollTimer);
     this.debouncer.dispose();
     this.emitter.dispose();
+    this.listsEmitter.dispose();
     for (const sub of this.settingsSubscriptions) sub.dispose();
   }
 
   private doRefresh(): void {
     this.emitter.fire();
+    this.listsEmitter.fire();
   }
 
   /** Both root lists load together via Promise.allSettled (NFR-3). */
@@ -396,7 +396,7 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
     return targets.map((t) => new SdkTargetItem(t, configured));
   }
 
-  /** FR-6.3: lets the root's context-menu installAvailable action offer a QuickPick without an already-expanded tree item. */
+  /** FR-6.3: lets the title button / Command Palette installAvailable offer a QuickPick without a tree item. */
   async listAvailableForPick(): Promise<SfdkDeviceInfo[]> {
     const outcome = await this.loadAvailable();
     return outcome.ok ? outcome.value.filter((d) => d.flags.includes('available')) : [];
@@ -412,7 +412,7 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
     ];
   }
 
-  /** Lazy: only fetched once the "Available to install" node is expanded. */
+  /** Lazy: only fetched when the Install available Emulator picker opens. */
   private loadAvailable(): Promise<ListOutcome> {
     if (!this.availableCache) {
       this.availableCache = this.fetch(['emulator', 'list', '-a']).then((result) =>
@@ -457,12 +457,9 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
     }
     const defaultName = this.defaultDeviceName();
     const installed = outcome.value.filter((d) => !d.flags.includes('available'));
-    const items: DeviceOrRootItem[] =
-      installed.length === 0
-        ? [new EmptyStateItem('No emulators installed.')]
-        : installed.map((d) => new DeviceTreeItem(d, isDefaultDevice(d, defaultName), undefined, this.reachabilityOf(d)));
-    items.push(this.availableRoot);
-    return items;
+    return installed.length === 0
+      ? [new EmptyStateItem('No emulators installed.')]
+      : installed.map((d) => new DeviceTreeItem(d, isDefaultDevice(d, defaultName), this.reachabilityOf(d), deviceSessions.activeFor(sfdkDeviceName(d))));
   }
 
   private renderList(outcome: ListOutcome, emptyLabel: string): DeviceOrRootItem[] {
@@ -473,17 +470,6 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
       return [new EmptyStateItem(emptyLabel)];
     }
     const defaultName = this.defaultDeviceName();
-    return outcome.value.map((d) => new DeviceTreeItem(d, isDefaultDevice(d, defaultName), undefined, this.reachabilityOf(d)));
-  }
-
-  private renderAvailable(outcome: ListOutcome): DeviceOrRootItem[] {
-    if (!outcome.ok) {
-      return [new ListErrorItem(outcome.detail)];
-    }
-    const available = outcome.value.filter((d) => d.flags.includes('available'));
-    if (available.length === 0) {
-      return [new EmptyStateItem('No emulators available to install.')];
-    }
-    return available.map((d) => new DeviceTreeItem(d, false, 'emulator-available'));
+    return outcome.value.map((d) => new DeviceTreeItem(d, isDefaultDevice(d, defaultName), this.reachabilityOf(d), deviceSessions.activeFor(sfdkDeviceName(d))));
   }
 }

@@ -1,10 +1,28 @@
 import * as vscode from 'vscode';
 import { spawn } from 'node:child_process';
 import type { Services } from '../core/services';
-import { DEVICE_TOOL_PACKAGES, installOutcomeMessage, installScript } from './devicePackagesCore';
+import {
+  CHECK_TOOLS_SCRIPT,
+  installOutcomeMessage,
+  installScript,
+  packagesToInstall,
+  parseInstallProgress,
+  parseToolCheck,
+} from './devicePackagesCore';
 
 export { DEVICE_TOOL_PACKAGES } from './devicePackagesCore';
 
+
+/** Which of the tool packages the device lacks, via a read-only exec (no root); undefined when it could not be checked. */
+export async function checkDeviceTools(services: Services, device: string, cwd?: string): Promise<string[] | undefined> {
+  const result = await services.runner.run({
+    args: ['device', 'exec', '--', 'sh', '-c', CHECK_TOOLS_SCRIPT],
+    device,
+    cwd,
+    timeoutMs: 30_000,
+  });
+  return result.exitCode === 0 ? parseToolCheck(result.stdout) : undefined;
+}
 
 export const INSTALL_ON_DEVICE = 'Install on device';
 
@@ -25,6 +43,7 @@ export function installOnDevice(services: Services, device: string, packages: re
     prompt: 'Developer-mode password of the device (Settings → Developer tools). The device needs internet access.',
     progressTitle: `Installing ${packages.join(', ')} on "${device}"…`,
     script: installScript(packages),
+    streamOutput: true,
   });
 }
 
@@ -38,6 +57,8 @@ export interface RootShellOptions {
   /** The script `devel-su sh -c <script>` runs; fixed text, never user or device data. */
   script: string;
   timeoutMs?: number;
+  /** Log the script's output lines to the output channel and show the current step in the progress notification. */
+  streamOutput?: boolean;
 }
 
 /**
@@ -60,12 +81,13 @@ export async function runAsRootOnDevice(services: Services, device: string, opts
   const sfdkPath = services.sdk.current()?.sfdkPath ?? 'sfdk';
   return vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: opts.progressTitle, cancellable: true },
-    (_progress, token) =>
+    (progress, token) =>
       new Promise<number | undefined>((resolve) => {
         const child = spawn(sfdkPath, ['device', 'exec', device, '-t', '-t', '--', 'devel-su', 'sh', '-c', opts.script], {
           stdio: ['pipe', 'pipe', 'pipe'],
         });
         let output = '';
+        let pending = '';
         let sentPassword = false;
         const sendPassword = (): void => {
           if (sentPassword) return;
@@ -73,8 +95,20 @@ export async function runAsRootOnDevice(services: Services, device: string, opts
           child.stdin.write(`${password}\n`);
         };
         const onData = (chunk: Buffer): void => {
-          output += chunk.toString();
+          const text = chunk.toString();
+          output += text;
           if (/password:/i.test(output)) sendPassword();
+          if (!opts.streamOutput) return;
+          pending += text;
+          const lines = pending.split(/[\r\n]+/);
+          pending = lines.pop() ?? '';
+          for (const raw of lines) {
+            const line = raw.replace(/\x1b\[[0-9;?]*[A-Za-z]/g, '').trim();
+            if (!line || /password:/i.test(line)) continue;
+            services.output.log('info', `[${device}] ${line}`);
+            const p = parseInstallProgress(line);
+            if (p) progress.report({ message: p.percent === undefined ? p.step : `${p.step} ${p.percent}%` });
+          }
         };
         child.stdout.on('data', onData);
         child.stderr.on('data', onData);
@@ -110,8 +144,18 @@ export function installDeviceTools(services: Services) {
       void services.prompts.showWarningMessage('Sailfish: select a device first (status bar or Devices view).');
       return;
     }
-    const exitCode = await installOnDevice(services, device, DEVICE_TOOL_PACKAGES);
-    const outcome = installOutcomeMessage(device, DEVICE_TOOL_PACKAGES, exitCode);
+    const missing = await vscode.window.withProgress(
+      { location: vscode.ProgressLocation.Notification, title: `Checking deploy and debug tools on "${device}"…` },
+      () => checkDeviceTools(services, device, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath),
+    );
+    if (missing?.length === 0) {
+      void services.prompts.showInformationMessage(`All deploy and debug tools are already installed on "${device}".`);
+      return;
+    }
+    const packages = packagesToInstall(missing);
+    if (missing) void services.prompts.showInformationMessage(`Sailfish: missing on "${device}": ${packages.join(', ')}. Installing only these.`);
+    const exitCode = await installOnDevice(services, device, packages);
+    const outcome = installOutcomeMessage(device, packages, exitCode);
     void (outcome.ok ? services.prompts.showInformationMessage(outcome.message) : services.prompts.showErrorMessage(outcome.message));
   };
 }

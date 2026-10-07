@@ -1,3 +1,5 @@
+import { cleanUpBeforeSwitch, stopDeviceSessions } from './switchCleanup';
+import { deviceSessions } from '../core/deviceSessions';
 import * as vscode from 'vscode';
 import * as os from 'node:os';
 import type { Services } from '../core/services';
@@ -9,25 +11,11 @@ import { correlateVm } from './vmCorrelation';
 import { buildSshLaunch } from './sshLaunch';
 import { buildWlanSshLaunch, isValidPort } from './connectWlan';
 import { addDevice, removeDevice } from './addDevice';
-import { sfdkDeviceName } from './listParsing';
+import { deviceFromItem, sfdkDeviceName } from './listParsing';
 import { installDeviceTools } from './devicePackages';
 
 /** Structural check, not `instanceof DeviceTreeItem`: the item may come from a different copy of the `tree` module. */
-export function deviceFrom(item: unknown): SfdkDeviceInfo | undefined {
-  if (!item || typeof item !== 'object' || !('device' in item)) {
-    return undefined;
-  }
-  const device = item.device;
-  if (
-    device &&
-    typeof device === 'object' &&
-    typeof (device as SfdkDeviceInfo).name === 'string' &&
-    typeof (device as SfdkDeviceInfo).kind === 'string'
-  ) {
-    return device as SfdkDeviceInfo;
-  }
-  return undefined;
-}
+export const deviceFrom = deviceFromItem;
 
 const SHOW_OUTPUT_ACTION = 'Show Output';
 
@@ -154,7 +142,7 @@ function showEmulator(services: Services) {
   };
 }
 
-/** FR-6.3: invoked from a root's context menu (no tree item carries a device), so pick one from `emulator list -a`. */
+/** FR-6.3: invoked from the title button or Command Palette (no tree item carries a device), so pick one from `emulator list -a`. */
 async function pickAvailableDevice(services: Services, provider: DevicesTreeDataProvider): Promise<SfdkDeviceInfo | undefined> {
   const available = await provider.listAvailableForPick();
   if (available.length === 0) {
@@ -195,6 +183,7 @@ async function writeDefaultDeviceSetting(services: Services, name: string): Prom
     return false;
   }
   const config = vscode.workspace.getConfiguration('sailfish', folder.uri);
+  await cleanUpBeforeSwitch(services, services.settings.get('device', folder.uri) || undefined, name);
   await config.update('device', name, vscode.ConfigurationTarget.WorkspaceFolder);
   await services.contextKeys.set('sailfish.hasDevice', true);
   return true;
@@ -221,6 +210,23 @@ function setDefault(services: Services, provider: DevicesTreeDataProvider) {
     if (await writeDefaultDeviceSetting(services, sfdkDeviceName(device))) {
       provider.refresh();
     }
+  };
+}
+
+/** Tree item or the selected device (`sailfish.device`); with several running devices and none selected, asks which. */
+function stopSessions(services: Services) {
+  return async (item: unknown): Promise<void> => {
+    const fromItem = deviceFrom(item);
+    let name = fromItem ? sfdkDeviceName(fromItem) : services.settings.get('device', vscode.workspace.workspaceFolders?.[0]?.uri) || undefined;
+    if (!name) {
+      const busy = deviceSessions.devices();
+      name = busy.length === 1 ? busy[0] : await services.prompts.showQuickPick(busy, { placeHolder: 'Stop sessions on which device?' });
+      if (!name) {
+        if (busy.length === 0) void services.prompts.showInformationMessage('Sailfish: no device selected and nothing is running.');
+        return;
+      }
+    }
+    await stopDeviceSessions(services, name);
   };
 }
 
@@ -339,7 +345,6 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
   ctx.subscriptions.push(
     sdkView,
     services.sdk.onDidChange(syncSdkDescription),
-    vscode.window.registerTreeDataProvider('sailfish.emulators', provider.section('emulators')),
     vscode.window.registerTreeDataProvider('sailfish.devices', provider.section('devices')),
   );
   ctx.subscriptions.push(provider);
@@ -354,6 +359,7 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
     vscode.commands.registerCommand('sailfish.emulator.show', showEmulator(services)),
     vscode.commands.registerCommand('sailfish.emulator.installAvailable', installAvailable(services, provider)),
     vscode.commands.registerCommand('sailfish.device.setDefault', setDefault(services, provider)),
+    vscode.commands.registerCommand('sailfish.device.stopSessions', stopSessions(services)),
     vscode.commands.registerCommand('sailfish.device.setSfdkDefault', setSfdkDefault(services, provider)),
     vscode.commands.registerCommand('sailfish.device.openSsh', openSsh(services)),
     vscode.commands.registerCommand('sailfish.device.connectWlan', connectWlan(services)),
