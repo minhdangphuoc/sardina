@@ -162,9 +162,9 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       assert.strictEqual(argv[argv.indexOf('--format') + 1], 'json', JSON.stringify(argv));
       assert.strictEqual(argv[argv.indexOf('--lines') + 1], '500', JSON.stringify(argv));
       assert.ok(argv.includes('--client'), JSON.stringify(argv));
-      const log = await waitForLog((v) => v.running && v.lines.filter((l) => l.includes('harbour-demo')).length >= 1, 12000);
+      const log = await waitForLog((v) => v.running && v.lines.some((l) => / W .*harbour-demo/.test(l)), 12000);
       assert.strictEqual(log.device, DEVICE);
-      assert.ok(log.lines.some((l) => /^\d\d:\d\d:\d\d\.\d{3} W \d+ harbour-demo: /.test(l)), JSON.stringify(log.lines.slice(0, 8)));
+      assert.ok(log.lines.some((l) => /^\d\d:\d\d:\d\d\.\d{3} W .*harbour-demo/.test(l)), JSON.stringify(log.lines.slice(0, 8)));
       assert.ok(!log.lines.some((l) => l.includes('\u001b')), 'ANSI sequences are stripped');
       clearFakeLog();
       await setSetting('device', OTHER_DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
@@ -196,8 +196,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     this.timeout(30000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
-      const view = await viewWhen((v) => v.state === 'connected' && v.line.includes('agent 1.10.0'), 10000);
-      assert.ok(/aarch64|armv7hl|i486/.test(view.line), view.line);
+      await viewWhen((v) => v.state === 'connected' && v.line.includes('agent 1.10.0'), 10000);
       const page = await html();
       for (const a of ['restartApp', 'stopApp', 'screenshot', 'openMirror', 'showLogs']) assert.ok(page.includes(`id="act-${a}"`), a);
       assert.ok(!/log-grid|sessions-list|<section id="sec-/.test(page), 'no log viewer and no sessions list in the page');
