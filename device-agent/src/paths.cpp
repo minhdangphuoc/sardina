@@ -34,6 +34,11 @@ QString sessionBusAddress()
     return QStringLiteral("unix:path=") + userRuntimeDir() + QStringLiteral("/dbus/user_bus_socket");
 }
 
+QString settingsPath()
+{
+    return QStringLiteral("/var/lib/sailfish-devagent/settings.json");
+}
+
 bool lipstickWritesJpeg()
 {
     return false;

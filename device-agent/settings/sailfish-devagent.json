@@ -1,0 +1,16 @@
+{
+    "required_group": "sailfish-system",
+    "entries": [
+        {
+            "path": "system_settings/system/developer_agent",
+            "title": "Developer agent",
+            "title_short": "Dev agent",
+            "type": "page",
+            "icon": "image://theme/icon-m-computer",
+            "order": 510,
+            "params": {
+                "source": "/usr/share/sailfish-devagent/settings/DeveloperAgentPage.qml"
+            }
+        }
+    ]
+}

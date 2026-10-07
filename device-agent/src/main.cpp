@@ -14,8 +14,11 @@ int usage()
 {
     fprintf(stderr,
             "usage: sailfish-devagent --daemon\n"
-            "       sailfish-devagent --request ping|screenshot|logs [--lines N]\n"
-            "       sailfish-devagent --request mirror [--fps N] [--width N] [--quality N]\n"
+            "       sailfish-devagent --request ping|screenshot\n"
+            "       sailfish-devagent --request logs [--lines N] [--client TEXT]\n"
+            "       sailfish-devagent --request mirror [--fps N] [--width N] [--quality N] [--lease N] [--input]\n"
+            "                         [--phone-state] [--client TEXT]\n"
+            "       sailfish-devagent --remove-notifications\n"
             "       sailfish-devagent --version\n");
     return 2;
 }
@@ -71,6 +74,9 @@ int main(int argc, char **argv)
             return usage();
         }
         return Client::run(args.mid(2));
+    }
+    if (mode == QLatin1String("--remove-notifications")) {
+        return Agent::removeNotifications();
     }
     if (mode == QLatin1String("--version")) {
         printf("%s\n", AGENT_VERSION);

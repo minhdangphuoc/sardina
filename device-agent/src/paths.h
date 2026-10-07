@@ -28,6 +28,11 @@ QString sessionBusAddress();
 // agent asks for .png and encodes JPEG itself).
 bool lipstickWritesJpeg();
 
+// /var/lib/sailfish-devagent/settings.json: the phone's settings (agent 1.9.0). The directory is
+// root:privileged 0770 (created by the package), so only the agent (effective group privileged)
+// and root can read or change the file; the SSH login cannot enter it.
+QString settingsPath();
+
 // Developer Mode gate: jolla-developer-mode ships /usr/bin/devel-su.
 bool developerModeOn();
 
