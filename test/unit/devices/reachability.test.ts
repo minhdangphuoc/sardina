@@ -24,3 +24,23 @@ describe('device reachability probe', () => {
     assert.strictEqual(endpointKey('h', undefined), undefined);
   });
 });
+
+describe('device reachability probe, IPv6', () => {
+  it('accepts a bracketed IPv6 address as sfdk prints it', async function () {
+    const server = net.createServer((s) => s.destroy());
+    try {
+      await new Promise<void>((resolve, reject) => {
+        server.once('error', reject);
+        server.listen(0, '::1', resolve);
+      });
+    } catch {
+      this.skip(); // no IPv6 loopback on this host
+    }
+    const port = (server.address() as net.AddressInfo).port;
+    try {
+      assert.strictEqual(await isReachable('[::1]', port, 1000), true);
+    } finally {
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    }
+  });
+});
