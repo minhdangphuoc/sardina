@@ -181,7 +181,7 @@ export async function ensureAgent(
 }
 
 /** The agent RPM architecture from `uname -m`; an error message when it cannot be told or is not supported. */
-async function detectArch(
+export async function detectArch(
   services: Services,
   device: string,
   token: vscode.CancellationToken,
