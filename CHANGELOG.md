@@ -2,6 +2,10 @@
 
 ## v0.1.8
 
+- New **Device Monitor** tab per device (`Open Device Monitor`, also from the Devices view, the status bar tooltip and Debug, which opens it beside the editor unless `sailfish.debug.openDeviceMonitor` is off). It has Overview, Sessions, App, Logs and Actions sections. New settings `sailfish.monitor.logBufferLines`, `sailfish.monitor.pollIntervalSeconds` and `sailfish.monitor.logLines`.
+- `Show Device Logs` now opens the monitor's Logs section, a Logcat-style viewer (levels, tags, "my app" filter, query bar, folding, process markers, clickable QML source locations, pause, clear, save). It replaces the `Sailfish Device Log` output channel. Logs still need the device agent.
+- App stats: process id, CPU, memory, uptime, restarts and crashes of the launched app, every second with agent 1.10.0 and every 5 seconds through `sfdk` without it.
+- Device agent 1.10.0: `logs` can stream `journalctl` output as JSON (`"format":"json"`) and resume after a cursor (`"after"`), `ping` reports `logFormats` and `stats`, and the new `stats` stream reports an app's CPU, memory and start/exit events. Older agents keep working with plain text logs and polled stats. Not yet verified on a phone.
 - A build that fails because rpmbuild cannot find a file listed in `%files` now says which one: `Packaging failed: the spec lists /usr/libexec/... in %files, but the build did not install it. Check the %files section and the INSTALLS in the .pro` (up to three paths, then `and N more`) instead of only showing the raw `File not found` lines.
 
 ## v0.1.7

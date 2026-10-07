@@ -261,3 +261,12 @@ Lipstick only writes screenshots under the user's home directory and rejects hid
 components, so the agent stages the file in `~/sailfish-devagent/` and moves it to its runtime
 folder (`/run/user/<uid>/sailfish-devagent/shot-<ms>.png`, the path in the reply). The extension fetches it with
 `sfdk device exec -- base64 <path>` over a connection without a terminal, then deletes it.
+
+## What is not verified yet
+
+- Agent 1.10.0 `logs` JSON output and `stats` run only against fixtures and the unit tests
+  (`make -C device-agent/tools test`); nothing has run on the emulator or a phone.
+- `journalctl --output-fields` is probed at daemon start; whether the systemd of Sailfish OS 5.1
+  accepts it is not confirmed.
+- The `stats` process match (first command line argument equal to `exe`, `comm` fallback) is not
+  checked for apps started through `invoker` on a device.

@@ -76,7 +76,11 @@ see [Part 3](#part-3-install-vs-code-and-this-extension) to build it.
 **Device agent: screenshots, logs, screen mirror and control**
 
 - **Take Device Screenshot** saves a PNG where you choose and opens it.
-- **Show Device Logs** streams the phone's system log into VS Code.
+- **Show Device Logs** opens the Device Monitor on its Logs section: a
+  Logcat-style view of the phone's system log (see
+  [Part 11](#part-11-device-monitor)).
+- A **Device Monitor** tab per device: overview, sessions, live app stats, logs
+  and actions (Part 11).
 - **Mirror Device Screen** shows the phone's screen live in an editor tab, as
   VP8 video over an SSH forward when possible. With agent 1.7.0 or newer you
   can click to tap and drag to swipe while the panel has focus.
@@ -431,9 +435,10 @@ emulator. This extension includes agent **1.8.1**.
    the PNG (the dialog remembers the folder). The picture opens in VS Code, and
    the notice offers **Reveal in folder**. If you cancel the dialog, nothing is
    saved.
-4. **Read the logs.** **Sailfish: Show Device Logs** streams the device's
-   system log into the output panel **Sailfish Device Log**. Stop it from the
-   notification.
+4. **Read the logs.** **Sailfish: Show Device Logs** opens the Device Monitor
+   on its Logs section, which streams the device's system log (Part 11). The
+   old **Sailfish Device Log** output channel is gone. Stop the stream with the
+   Stop button in the Logs section.
 5. **Mirror the screen.** **Sailfish: Mirror Device Screen**, or the mirror
    button on the device, opens the screen in a tab beside the editor.
    **Check:** the tab shows the current screen and follows what you do on the
@@ -506,6 +511,41 @@ while the mirror runs, and "Screen is being controlled from VS Code" while
 control is active. It goes away shortly after the stream stops. A separate
 notice says the developer agent is running.
 
+### Part 11: Device Monitor
+
+The Device Monitor is one tab per device that shows what runs on the phone or
+emulator, how your app is doing and what the system log says, without leaving
+the editor.
+
+1. **Open it.** **Ctrl+Shift+P** → **Sailfish: Open Device Monitor**, or use
+   the device's context menu in the Devices view, or the link in the device's
+   status bar tooltip. **Sailfish: Show Device Logs** opens it on the Logs
+   section. Pressing **Debug** opens it beside the editor without taking focus;
+   turn that off with `sailfish.debug.openDeviceMonitor`. Opening a second time
+   shows the tab that is already open.
+2. **Sections.**
+   - **Overview:** device, architecture, OS version, connection (USB, Wi-Fi),
+     agent version.
+   - **Sessions:** what the extension runs on the device (debugging, app, logs,
+     mirror, monitor), each with Stop.
+   - **App:** the launched app's process id, CPU, memory, uptime, restarts and
+     crashes, live while it runs. With agent 1.10.0 it updates every second;
+     without it, every 5 seconds through `sfdk`.
+   - **Logs:** a Logcat-style viewer with level, tag and "my app" filters, a
+     query bar, colours, folding of multi-line entries, process start and exit
+     markers, click on a QML `file:line` to open it, and Pause, Clear and
+     Save. The log needs the device agent; with agent 1.10.0 or newer it
+     carries levels and tags, with older agents it shows plain text lines and
+     offers **Update Device Agent**.
+   - **Actions:** restart or stop the app, take a screenshot, open the mirror.
+3. **Settings.** `sailfish.monitor.logBufferLines` (10000),
+   `sailfish.monitor.pollIntervalSeconds` (5) and `sailfish.monitor.logLines`
+   (500, the initial tail).
+4. **The phone decides.** If the phone turned system logs off in Settings →
+   System → Developer agent, the Logs section says so. Changing the selected
+   device stops the monitor's streams; the tab stays open and offers
+   **Resume**. After an agent update the log continues where it stopped.
+
 ## How the device agent stays safe
 
 - **Installed only with your consent.** The install dialog explains what the
@@ -556,6 +596,12 @@ with test fixtures, but not yet confirmed on a real phone:
   the emulator.
 - Long sessions on a phone (memory over 10 minutes or more), and behaviour when
   the phone's screen turns off during a mirror.
+- The Device Monitor on a phone: the log fields an app started by `invoker`
+  writes (which decide the "my app" filter), `journalctl --output-fields` on
+  the phone's systemd, and app stats on a phone. It is tested with fixtures
+  only, not on the emulator or a phone.
+- The monitor's four-theme check: the page has not been looked at in every
+  VS Code colour theme (light, dark, high contrast light and dark).
 - If the phone lacks the JPEG image plugin, the agent sends larger PNG frames
   on the JPEG path; which package provides that plugin is not known yet.
 
@@ -593,6 +639,7 @@ with test fixtures, but not yet confirmed on a real phone:
 | What you see | Cause | Fix |
 |---|---|---|
 | `Developer Mode is off` for a screenshot or logs | The agent refuses while Developer Mode is off. | On the phone: **Settings → Developer tools** → turn on **Developer mode**. |
+| The Logs section says `Logs need the device agent` | The device agent is not installed or not running, so there is no log source. | **Install Device Agent** from the button in the Logs section. |
 | The agent is not installed or not running | It was never installed, was removed, or the device just restarted. | **Install Device Agent**, then **Device Agent Status**. |
 | A notice offers **Update Device Agent** | The device has an older agent than this extension includes. | Choose **Update Device Agent** (one password prompt). |
 | Screenshot is black or fails, or the mirror stays blank or shows an error | The screen is off or locked. | Wake and unlock the phone; the mirror recovers by itself. |
