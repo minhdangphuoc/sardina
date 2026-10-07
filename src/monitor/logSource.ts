@@ -134,6 +134,8 @@ export interface LogSourceOptions {
   logLines: number;
   /** `['--client', name]` words; empty when the host name is unusable. */
   clientArgs?: readonly string[];
+  /** JSON mode: resume after this cursor (the last entry a previous stream delivered, §4.1). */
+  after?: string;
   /** The agent probe (ping), used to refuse before starting when the phone has logs off. */
   probe?: () => Promise<AgentProbe>;
   sessions?: DeviceSessions;
@@ -166,7 +168,9 @@ export class JournalLogSource {
   constructor(
     private readonly services: Services_,
     private readonly opts: LogSourceOptions,
-  ) {}
+  ) {
+    this.cursor = opts.after;
+  }
 
   get running(): boolean {
     return this.cts !== undefined;
@@ -302,7 +306,9 @@ export class JournalLogSource {
               end = { reason: 'refused', text: parsed.text, agentError: parsed.error };
               break;
             case 'seekFailed':
+              // The agent sends nothing after this line and keeps the connection open, so end it here.
               retryWithoutCursor = true;
+              cts.cancel();
               break;
             case 'skip':
               break;

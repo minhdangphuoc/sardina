@@ -150,9 +150,12 @@ describe('monitor sources: stats helpers', () => {
 interface FakeRun {
   args: string[];
   onLine?: (line: string, stream: 'stdout' | 'stderr') => void;
+  token?: { onCancellationRequested(l: () => void): unknown };
 }
 
-function fakeServices(script: (r: FakeRun) => { exitCode: number; stdout?: string; stderr?: string; cancelled?: boolean } | Promise<never>) {
+type FakeResult = { exitCode: number; stdout?: string; stderr?: string; cancelled?: boolean };
+
+function fakeServices(script: (r: FakeRun) => FakeResult | Promise<FakeResult> | Promise<never>) {
   const runs: FakeRun[] = [];
   const logs: string[] = [];
   const services = {
@@ -224,6 +227,41 @@ describe('JournalLogSource', () => {
     assert.equal(runs.length, 2);
     assert.ok(runs[1].args.includes('--after'));
     assert.ok(!runs[1].args.includes('--lines'));
+    src.dispose();
+  });
+});
+
+describe('JournalLogSource cursor resume', () => {
+  it('starts after the cursor it was given', async () => {
+    const { services, runs } = fakeServices(() => new Promise<never>(() => undefined));
+    const src = new JournalLogSource(services, { device: 'dev', format: 'json', logLines: 50, sessions: new DeviceSessions(), after: 's=a;i=7' });
+    await src.start();
+    assert.deepEqual(runs[0].args.slice(-3), ['json', '--after', 's=a;i=7']);
+    assert.ok(!runs[0].args.includes('--lines'));
+    src.dispose();
+  });
+
+  it('a failed seek ends the silent stream and reconnects with the tail and a marker', async () => {
+    // Recorded (T4-4): one plain line, then nothing more and no exit until the client closes.
+    const { services, runs } = fakeServices(
+      (r) =>
+        new Promise((resolve) => {
+          r.token?.onCancellationRequested(() => resolve({ exitCode: 0, cancelled: true }));
+          if (runs.length === 1) r.onLine?.('Failed to seek to cursor: Invalid argument', 'stdout');
+        }),
+    );
+    const src = new JournalLogSource(services, { device: 'dev', format: 'json', logLines: 50, sessions: new DeviceSessions(), after: 's=bogus;i=1;b=x' });
+    const got: JournalEntry[] = [];
+    const ends: LogEnd[] = [];
+    src.onEntries((e) => got.push(...e));
+    src.onEnd((e) => ends.push(e));
+    await src.start();
+    await new Promise((r) => setTimeout(r, 80));
+    assert.equal(runs.length, 2);
+    assert.ok(runs[0].args.includes('--after'));
+    assert.ok(!runs[1].args.includes('--after') && runs[1].args.includes('--lines'));
+    assert.ok(got.some((e) => e.source === 'marker'));
+    assert.equal(ends.length, 0);
     src.dispose();
   });
 });

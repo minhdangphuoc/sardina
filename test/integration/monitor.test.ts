@@ -162,14 +162,17 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     this.timeout(40000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
-      const before = await viewWhen((v) => v.log.status === 'live' && v.log.entries.length > 0 && v.log.cursor !== undefined, 10000);
-      const cursor = before.log.entries[before.log.entries.length - 1].cursor ?? before.log.cursor;
-      assert.ok(cursor, 'the last entry has a cursor');
+      await viewWhen((v) => v.log.status === 'live' && v.log.entries.length > 0 && v.log.cursor !== undefined, 10000);
+      await waitFor(() => keys().includes('device_exec.sailfish-devagent.stats'), 10000);
       clearFakeLog();
       await setSetting('device', OTHER_DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
       await waitFor(() => readFakeLog().killed.length >= 2, 10000);
       assert.strictEqual(monitorTabs().length, 1, 'the tab stays open');
       const view = await viewWhen((v) => v.banner !== undefined, 8000);
+      // The streams are stopped now, so the buffer's last journal entry is the one to resume after.
+      const cursor = view.log.entries.filter((e) => e.cursor !== undefined).pop()?.cursor;
+      assert.ok(cursor, 'the last entry has a cursor');
+      assert.strictEqual(view.log.cursor, cursor, 'the view keeps the cursor of the stopped stream');
       assert.ok(view.banner?.actions.some((a) => a.resume !== undefined), JSON.stringify(view.banner));
       assert.ok(/device logs, app monitor/.test(view.banner?.text ?? '') || view.sessions.length === 0, JSON.stringify(view.banner));
       await setSetting('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);

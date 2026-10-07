@@ -113,6 +113,8 @@ export class MonitorPanel {
 
   private logSrc: JournalLogSource | undefined;
   private logFormat: LogFormat | undefined;
+  /** The last journal cursor delivered (JSON mode); kept across stopped streams so Resume continues after it (§4.1, D5). */
+  private lastLogCursor: string | undefined;
   private logStatus: LogStatus = 'starting';
   private logReason: string | undefined;
   private logPaused = false;
@@ -424,6 +426,7 @@ export class MonitorPanel {
       format,
       logLines: clampLogLines(this.services.settings.get('monitor.logLines')),
       clientArgs: clientArgs(),
+      after: format === 'json' ? this.lastLogCursor : undefined,
       sessions: this.sessionsProxy(() => {
         if (this.logSrc === src) this.logSrc = undefined;
         this.setLog('stopped', 'stopped');
@@ -454,6 +457,7 @@ export class MonitorPanel {
     const identity = this.appIdentity();
     for (const e of batch) {
       this.buf.push(e);
+      if (e.cursor && e.source === 'json') this.lastLogCursor = e.cursor;
       const ev = identity ? coredumpEvent(e, identity) : undefined;
       if (ev && ev.type === 'exited') {
         if (this.counter.exited(e.coredumpPid, ev.exit)) this.postApp();
@@ -820,7 +824,7 @@ export class MonitorPanel {
     if (this.app) v.app.app = this.app.binary ? { name: this.app.name, binary: this.app.binary } : { name: this.app.name };
     if (this.logReason !== undefined) v.log.reason = this.logReason;
     if (this.logFormat) v.log.format = this.logFormat;
-    const cursor = this.logSrc?.lastCursor;
+    const cursor = this.logSrc?.lastCursor ?? this.lastLogCursor;
     if (cursor) v.log.cursor = cursor;
     if (this.banner) v.banner = this.banner;
     return v;
