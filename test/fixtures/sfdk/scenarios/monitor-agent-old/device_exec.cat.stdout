@@ -1,0 +1,7 @@
+NAME="Sailfish OS"
+VERSION="5.1.0.11 (Tamina)"
+ID=sailfish
+VERSION_ID=5.1.0.11
+PRETTY_NAME="Sailfish OS 5.1.0.11 (Tamina)"
+CPE_NAME="cpe:/o:jolla:sailfish_os:5.1.0.11"
+HOME_URL="https://sailfishos.org/"

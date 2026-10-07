@@ -1,0 +1,1 @@
+{"ok":true,"version":"1.10.0","developerMode":true,"socket":"/run/user/100000/sailfish-devagent/agent.sock","mirrorEncodings":["text","binary"],"mirrorInput":["tap","swipe"],"settingsPage":true,"logFormats":["text","json"],"stats":true,"settings":{"screenView":true,"control":true,"logs":false,"indicator":"quiet","muteNotifications":false,"touchIndicator":false}}

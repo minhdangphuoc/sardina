@@ -1,0 +1,6 @@
+{"ok":true,"stream":"stats","interval":1000}
+{"ts":1759758001000,"pid":4321,"state":"S","threads":9,"rssKb":48216,"cpu":2.5,"started":1759757990000,"sys":{"cpu":12.3,"load1":0.4,"memAvailableKb":812000}}
+{"ts":1759758002000,"pid":4321,"state":"S","threads":9,"rssKb":48300,"cpu":1.8,"started":1759757990000,"sys":{"cpu":10.1,"load1":0.4,"memAvailableKb":811000}}
+{"ts":1759758003000,"event":"exit","pid":4321}
+{"ts":1759758004000,"event":"start","pid":4322}
+{"ts":1759758004500,"pid":4322,"state":"S","threads":7,"rssKb":31000,"cpu":5,"started":1759758004000,"sys":{"cpu":15,"load1":0.5,"memAvailableKb":820000}}

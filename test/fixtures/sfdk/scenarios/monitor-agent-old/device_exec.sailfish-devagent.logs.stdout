@@ -1,0 +1,3 @@
+Oct 05 13:42:01.123456 Sailfish systemd[1]: Started sailfish-devagent.
+Oct 05 13:42:02.234567 Sailfish harbour-demo[4321]: qml: harbour-demo started
+Oct 05 13:42:03.345678 Sailfish lipstick[640]: screenshot requested
