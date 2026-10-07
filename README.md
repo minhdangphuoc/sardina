@@ -856,6 +856,7 @@ with test fixtures, but not yet confirmed on a real phone:
 | `Installing untrusted software disabled`, or the install is refused as untrusted | The phone accepts only store apps. | Part 7, step 3. |
 | `bash: rsync: not found` | `rsync` and `sdk-deploy-rpm` are missing on the phone. | Part 7, step 5. |
 | Tools install fails, or `pkcon` exits with code 5 while downloading | The phone has no internet; the USB link does not provide it. | Turn on Wi-Fi or mobile data on the phone and try again. |
+| `"<device>" is offline — connect it …` when installing tools or debugging | The phone's SSH port does not answer: unplugged, asleep, Developer Mode off, or on another Wi-Fi network. Nothing was installed. | Connect it (USB or Wi-Fi), wake it, check that its address in **Devices** is current, then **Retry**. |
 | `pkcon` exits with code 4 (packages not found) | The phone's package lists are out of date. | Run `pkcon refresh` first; **Install Deploy & Debug Tools on Device** does this. |
 | 🐞 Debug says gdbserver is not installed | `gdb-gdbserver` is missing on the phone. | Choose **Install on device** (the phone needs internet), or Part 7, step 5. |
 | `Auth failed: Authentication token manipulation error` from `devel-su` | It ran without a terminal. | Run it in the phone's Terminal app, or use the VS Code command. |
