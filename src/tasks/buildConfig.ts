@@ -4,6 +4,8 @@
  * import so this can be unit-tested directly under plain mocha.
  */
 
+import { DEBUG_GLOBAL_CFLAGS } from './argv';
+
 export type BuildType = 'release' | 'debug';
 export type DeployMethod = 'sdk' | 'pkcon' | 'rsync' | 'zypper' | 'zypper-dup' | 'manual';
 
@@ -15,7 +17,7 @@ export interface Choice<T extends string> {
 
 export const BUILD_TYPES: ReadonlyArray<Choice<BuildType>> = [
   { value: 'release', label: 'Release', description: 'sfdk build' },
-  { value: 'debug', label: 'Debug', description: 'sfdk build --enable-debug' },
+  { value: 'debug', label: 'Debug', description: 'sfdk build --enable-debug · unoptimised (-O0)' },
 ];
 
 export const DEPLOY_METHODS: ReadonlyArray<Choice<DeployMethod>> = [
@@ -65,6 +67,14 @@ export function targetArch(target: string): string | undefined {
   return TARGET_ARCH_RE.exec(target.trim())?.[1];
 }
 
+const CPPDBG_ARCH: Record<string, string> = { i486: 'x86', armv7hl: 'arm', aarch64: 'arm64' };
+
+/** cppdbg's `targetArchitecture` for a target name; undefined when the architecture is unknown. */
+export function cppdbgArchitecture(target: string | undefined): string | undefined {
+  const arch = target ? targetArch(target) : undefined;
+  return arch ? CPPDBG_ARCH[arch] : undefined;
+}
+
 /** `.sfdk/target` holds the last build's target as `<target>.<suffix>`; strips the suffix. */
 export function lastBuildTarget(sfdkTargetFile: string): string | undefined {
   const line = sfdkTargetFile.trim().split(/\r?\n/)[0];
@@ -82,4 +92,52 @@ export function staleBuildTarget(sfdkTargetFile: string | undefined, nextTarget:
   const before = previous && targetArch(previous);
   const after = targetArch(nextTarget);
   return before && after && before !== after ? previous : undefined;
+}
+
+/** Marks a Release build's flags: the platform's own `%__global_cflags` has it, the Debug one drops it. */
+const RELEASE_FLAGS_MARK = '-Wp,-D_FORTIFY_SOURCE=2';
+
+/**
+ * The build type an in-source qmake Makefile was generated for, read from its `CXXFLAGS` line;
+ * undefined when the flags match neither (no Makefile line, or flags the project set itself).
+ */
+export function makefileBuildType(makefile: string): BuildType | undefined {
+  const flags = /^CXXFLAGS[ \t]*=(.*)$/m.exec(makefile)?.[1];
+  if (flags === undefined) return undefined;
+  if (flags.includes(DEBUG_GLOBAL_CFLAGS)) return 'debug';
+  if (flags.includes(RELEASE_FLAGS_MARK)) return 'release';
+  return undefined;
+}
+
+/**
+ * True when the objects of the previous in-source qmake build were compiled for the other build
+ * type. qmake's Makefiles do not make objects depend on the flags, so `sfdk build` would reuse them.
+ */
+export function staleBuildType(makefile: string | undefined, nextType: BuildType): boolean {
+  const previous = makefile === undefined ? undefined : makefileBuildType(makefile);
+  return previous !== undefined && previous !== nextType;
+}
+
+/** Marker prefix for the device item: debug session -> `$(debug)`, other sessions -> `$(pulse)`. */
+export function sessionMarker(sessions: ReadonlyArray<{ kind: string }>): string {
+  if (sessions.some((s) => s.kind === 'debug')) return '$(debug) ';
+  return sessions.length > 0 ? '$(pulse) ' : '';
+}
+
+/** Device item text with the session marker replacing the device icon, e.g. `$(debug) Jolla Phone`. */
+export function deviceTextWithSessions(device: string, sessions: ReadonlyArray<{ kind: string }>): string {
+  const marker = sessionMarker(sessions);
+  return marker ? `${marker}${device || 'No device'}` : deviceText(device);
+}
+
+/** Tooltip line listing the active sessions and how to stop them; empty when none. */
+export function sessionTooltip(device: string, sessions: ReadonlyArray<{ label: string }>): string {
+  if (sessions.length === 0) return '';
+  const labels = [...new Set(sessions.map((s) => s.label))].join(', ');
+  return `Active on "${device}": ${labels}.\nTo stop them, run "Sailfish: Stop Sessions on Device" (or use the stop button in the Devices view).`;
+}
+
+/** The Debug action button text: `$(debug-alt) Debugging…` while a debug session runs on the selected device. */
+export function debugActionText(sessions: ReadonlyArray<{ kind: string }>): string {
+  return sessions.some((s) => s.kind === 'debug') ? '$(debug-alt) Debugging…' : '$(debug-alt) Debug';
 }

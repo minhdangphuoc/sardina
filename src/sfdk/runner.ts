@@ -13,6 +13,8 @@ export interface SfdkRunOptions {
   timeoutMs?: number;
   onLine?: (line: string, stream: 'stdout' | 'stderr') => void;
   ensureEngine?: boolean;
+  /** With `ensureEngine`: receives the lines `sfdk engine start` prints, when the engine had to be started. */
+  onEngineLine?: (line: string, stream: 'stdout' | 'stderr') => void;
   /** Written to the child's stdin, which is then closed (e.g. a file for `device exec -- sh -c 'base64 -d > …'`). */
   stdin?: string | Buffer;
   /**
@@ -20,6 +22,14 @@ export interface SfdkRunOptions {
    * `SfdkResult.stdout`/`stderr` stay empty so memory does not grow with the stream.
    */
   collectOutput?: boolean;
+  /** With `stdin`: write it but leave the child's stdin open (it is otherwise closed after the write). */
+  keepStdinOpen?: boolean;
+  /**
+   * Called once after the spawn with a writer for the child's stdin, so a long-lived run can be fed
+   * later (the mirror's keepalive lines). `write` does nothing once the child has exited, and EPIPE is
+   * ignored. The stdin is never closed by this option.
+   */
+  onStdin?: (write: (data: string) => void) => void;
 }
 
 export interface SfdkResult {
@@ -70,7 +80,7 @@ export class SfdkRunner {
   async run(opts: SfdkRunOptions): Promise<SfdkResult> {
     const cwd = opts.cwd ?? vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
     if (opts.ensureEngine) {
-      const engineFailure = await this.ensureEngineRunning(cwd, opts.token);
+      const engineFailure = await this.ensureEngineRunning(cwd, opts.token, opts.onEngineLine);
       if (engineFailure) {
         return engineFailure;
       }
@@ -97,7 +107,11 @@ export class SfdkRunner {
   }
 
   /** FR-1.5: engine status/start (with progress); returns the failed/cancelled result so `run()` aborts, or `undefined` once the engine is up. */
-  private async ensureEngineRunning(cwd: string | undefined, token?: vscode.CancellationToken): Promise<SfdkResult | undefined> {
+  private async ensureEngineRunning(
+    cwd: string | undefined,
+    token?: vscode.CancellationToken,
+    onLine?: SfdkRunOptions['onLine'],
+  ): Promise<SfdkResult | undefined> {
     const status = await this.execRaw(['--no-pager', 'engine', 'status'], { args: [] }, cwd);
     const parsed = parseEngineStatus(status.stdout);
     if (parsed.ok && parsed.value === 'running') {
@@ -105,7 +119,7 @@ export class SfdkRunner {
     }
     const started = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: 'Sailfish: starting the build engine…' },
-      () => this.execRaw(['--no-pager', 'engine', 'start'], { args: [], token }, cwd),
+      () => this.execRaw(['--no-pager', 'engine', 'start'], { args: [], token, onLine }, cwd),
     );
     if (started.cancelled || started.exitCode !== 0) {
       this.services.output.log('error', `sfdk engine start failed: ${started.stderr.trim() || started.stdout.trim() || `exit ${started.exitCode}`}`);
@@ -118,7 +132,7 @@ export class SfdkRunner {
     return this.services.sdk.current()?.sfdkPath;
   }
 
-  private execRaw(argv: string[], opts: Pick<SfdkRunOptions, 'token' | 'timeoutMs' | 'onLine' | 'args' | 'stdin' | 'collectOutput'>, cwd?: string): Promise<SfdkResult> {
+  private execRaw(argv: string[], opts: Pick<SfdkRunOptions, 'token' | 'timeoutMs' | 'onLine' | 'args' | 'stdin' | 'collectOutput' | 'keepStdinOpen' | 'onStdin'>, cwd?: string): Promise<SfdkResult> {
     const bin = this.sfdkPath();
     if (!bin) {
       return Promise.resolve({
@@ -162,10 +176,22 @@ export class SfdkRunner {
         return;
       }
 
-      if (opts.stdin !== undefined && child.stdin) {
+      if (child.stdin) {
         // The child may exit before reading everything (EPIPE); the exit code tells the story.
-        child.stdin.on('error', () => undefined);
-        child.stdin.end(opts.stdin);
+        const stdin = child.stdin;
+        stdin.on('error', () => undefined);
+        if (opts.stdin !== undefined) {
+          if (opts.keepStdinOpen) stdin.write(opts.stdin);
+          else stdin.end(opts.stdin);
+        }
+        opts.onStdin?.((data) => {
+          if (settled || child.exitCode !== null || stdin.destroyed || !stdin.writable) return;
+          try {
+            stdin.write(data);
+          } catch {
+            // EPIPE and the like: the run's end is reported through the exit code
+          }
+        });
       }
 
       const collect = opts.collectOutput !== false;

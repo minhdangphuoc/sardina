@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { deviceSessions } from '../core/deviceSessions';
 import type { Services } from '../core/services';
 import type { SfdkDeviceInfo } from '../core/types';
 import { sfdkDeviceName } from '../devices/listParsing';
@@ -10,7 +11,9 @@ import {
   buildTypeText,
   deployMethodLabel,
   deployMethodText,
-  deviceText,
+  debugActionText,
+  deviceTextWithSessions,
+  sessionTooltip,
   type BuildType,
   type DeployMethod,
 } from './buildConfig';
@@ -24,11 +27,12 @@ export class BuildConfigStatusBar {
   private readonly device = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
   private readonly buildType = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
   private readonly deployMethod = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
+  private readonly debugAction = actionItem(92, '$(debug-alt) Debug', 'sailfish.debugOnDevice', 'Sailfish: Build, Deploy & Debug on the device. To debug without rebuilding: "Sailfish: Debug Installed App"');
   private readonly actions = [
     actionItem(95, '$(tools)', 'sailfish.build', 'Sailfish: Build'),
     actionItem(94, '$(package) Deploy', 'sailfish.deploy', 'Sailfish: Build & Deploy to the device, without launching'),
     actionItem(93, '$(play) Run', 'sailfish.buildDeployRun', 'Sailfish: Build, Deploy & Run (Ctrl+Alt+R). To launch without rebuilding: "Sailfish: Run Installed App"'),
-    actionItem(92, '$(debug-alt) Debug', 'sailfish.debugOnDevice', 'Sailfish: Build, Deploy & Debug on the device. To debug without rebuilding: "Sailfish: Debug Installed App"'),
+    this.debugAction,
   ];
 
   /** Names `-c device=` accepts -> connected/offline, from the Devices view's last list load; undefined until loaded. */
@@ -53,15 +57,21 @@ export class BuildConfigStatusBar {
 
     const unregistered = !!device && this.registeredDevices !== undefined && !this.registeredDevices.has(device);
     const offline = !!device && this.registeredDevices?.get(device) === 'offline';
-    this.device.text = unregistered ? `$(warning) ${device}` : offline ? `${deviceText(device)} (offline)` : deviceText(device);
-    this.device.tooltip = unregistered
+    const sessions = device ? deviceSessions.activeFor(device) : [];
+    const debugging = sessions.some((x) => x.kind === 'debug');
+    const base = deviceTextWithSessions(device, sessions);
+    this.device.text = unregistered ? `$(warning) ${device}` : offline ? `${base} (offline)` : base;
+    const baseTooltip = unregistered
       ? `Sailfish: "${device}" is not registered with the SDK (missing from \`sfdk device list\`). Click to pick another device.`
       : offline
         ? `Sailfish: "${device}" is registered but not reachable (unplugged, asleep, or another network). Click to change.`
         : device
         ? `Sailfish: deploy device "${device}" (click to change)`
         : 'Sailfish: select a deploy device';
-    this.device.backgroundColor = unregistered ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
+    const stopHint = sessionTooltip(device, sessions);
+    this.device.tooltip = stopHint ? `${baseTooltip}\n\n${stopHint}` : baseTooltip;
+    this.device.backgroundColor = unregistered || debugging ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
+    this.debugAction.text = debugActionText(sessions);
     this.buildType.text = buildTypeText(buildType);
     this.buildType.tooltip = 'Sailfish: build type (click to change)';
     this.deployMethod.text = deployMethodText(method);
@@ -69,11 +79,11 @@ export class BuildConfigStatusBar {
     for (const item of items) item.show();
   }
 
-  /** Re-checks the selected device against the SDK whenever the Devices view reloads its lists. */
+  /** Re-checks the selected device against the SDK whenever the Devices view reloads its lists (not on session-only re-renders, which must not run sfdk). */
   watchDevices(devices: {
     listInstalledForPick(): Promise<SfdkDeviceInfo[]>;
     reachabilityOf(device: SfdkDeviceInfo): Reachability;
-    onDidChangeTreeData: vscode.Event<unknown>;
+    onDidReloadLists: vscode.Event<unknown>;
   }): vscode.Disposable {
     const load = async (): Promise<void> => {
       const installed = await devices.listInstalledForPick();
@@ -81,7 +91,7 @@ export class BuildConfigStatusBar {
       this.refresh();
     };
     void load();
-    return devices.onDidChangeTreeData(() => void load());
+    return devices.onDidReloadLists(() => void load());
   }
 
   dispose(): void {
@@ -137,6 +147,7 @@ export function activateBuildConfigStatusBar(ctx: vscode.ExtensionContext, servi
       if (value) await saveFolderSetting(services, 'deploy.method', value);
     }),
     services.projects.onDidChange(() => statusBar.refresh()),
+    deviceSessions.onDidChange(() => statusBar.refresh()),
     services.settings.onDidChange('device', () => statusBar.refresh()),
     services.settings.onDidChange('build.type', () => statusBar.refresh()),
     services.settings.onDidChange('deploy.method', () => statusBar.refresh()),

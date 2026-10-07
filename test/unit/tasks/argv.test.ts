@@ -1,5 +1,14 @@
 import * as assert from 'assert';
-import { buildArgs, checkArgs, cleanArgs, deployArgs, isValidAppName, packageArgs, runArgs } from '../../../src/tasks/argv';
+import {
+  DEBUG_GLOBAL_CFLAGS,
+  buildArgs,
+  checkArgs,
+  cleanArgs,
+  deployArgs,
+  isValidAppName,
+  packageArgs,
+  runArgs,
+} from '../../../src/tasks/argv';
 
 describe('argv.buildArgs (FR-5.3)', () => {
   it('default: --no-check when runHarbourCheck is false', () => {
@@ -22,9 +31,34 @@ describe('argv.buildArgs (FR-5.3)', () => {
     ]);
   });
 
-  it('debug:true adds -d', () => {
+  it('debug:true adds -d and an unoptimised %__global_cflags for rpmbuild', () => {
     const argv = buildArgs({ command: 'build', debug: true, noCheck: false }, { runHarbourCheck: true, jobs: 0 });
-    assert.deepStrictEqual(argv, ['build', '-d']);
+    assert.deepStrictEqual(argv, ['build', '-d', '--', '--define', `__global_cflags ${DEBUG_GLOBAL_CFLAGS}`]);
+    assert.match(DEBUG_GLOBAL_CFLAGS, /^-O0 -g /);
+    assert.doesNotMatch(DEBUG_GLOBAL_CFLAGS, /-O[1-3s]|_FORTIFY_SOURCE/);
+  });
+
+  it('debug: the user\'s extraArgs follow the debug define, so their own define wins', () => {
+    const argv = buildArgs(
+      { command: 'build', debug: true, noCheck: false, jobs: 2, extraArgs: ['--define', '__global_cflags -Og -g'] },
+      { runHarbourCheck: true, jobs: 0 },
+    );
+    assert.deepStrictEqual(argv, [
+      'build',
+      '-d',
+      '-j',
+      '2',
+      '--',
+      '--define',
+      `__global_cflags ${DEBUG_GLOBAL_CFLAGS}`,
+      '--define',
+      '__global_cflags -Og -g',
+    ]);
+  });
+
+  it('release: no define and no -- without extraArgs', () => {
+    const argv = buildArgs({ command: 'build', debug: false, noCheck: false }, { runHarbourCheck: true, jobs: 0 });
+    assert.deepStrictEqual(argv, ['build']);
   });
 
   it('prepare:true adds --prepare before --no-check', () => {

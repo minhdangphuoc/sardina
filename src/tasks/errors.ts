@@ -19,6 +19,9 @@ export function mapDeployError(stderr: string): MappedError | undefined {
         'The device refuses unsigned packages. On the device, open Settings → Developer tools and turn on "Allow installing untrusted software" (it needs Developer Mode), then deploy again',
     };
   }
+  if (/User aborted/i.test(stderr)) {
+    return { message: 'The installation was declined or not confirmed on the device' };
+  }
   if (/required configuration option 'device' is not set/i.test(stderr)) {
     return { message: 'No device selected — pick a default device or emulator', actionLabel: 'Select device' };
   }
