@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // Structural validation of package.json against the source tree (validation §6.6).
-import { readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -129,6 +129,15 @@ if (pkg.contributes?.views) {
     const builtIn = ['explorer', 'debug', 'scm', 'test'];
     if (!viewsContainerIds.has(containerKey) && !builtIn.includes(containerKey)) {
       problems.push(`views container key not declared in viewsContainers: ${containerKey}`);
+    }
+  }
+}
+
+// 9. The Device Monitor page bundle must exist once the extension has been built (dist/ present).
+if (existsSync(path.join(root, 'dist', 'extension.js'))) {
+  for (const f of ['media/monitor/monitor.js', 'media/monitor/monitor.css']) {
+    if (!existsSync(path.join(root, f))) {
+      problems.push(`monitor page bundle missing after build: ${f}`);
     }
   }
 }

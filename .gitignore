@@ -19,5 +19,8 @@ device-agent/sailfish-devagent
 device-agent/documentation.list
 device-agent/RPMS/
 device-agent/.sfdk/
+# Monitor page bundle (esbuild.mjs).
+media/monitor/monitor.js
+media/monitor/monitor.css
 HANDOFF.md
 REVIEW-mirror.md

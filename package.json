@@ -989,7 +989,7 @@
     "build": "node esbuild.mjs",
     "build:watch": "node esbuild.mjs --watch",
     "build:tests": "tsc -p tsconfig.test.json",
-    "check:types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit",
+    "check:types": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.test.json --noEmit && tsc -p src/monitor/webview/tsconfig.json",
     "lint": "eslint src test --max-warnings=0",
     "test:unit": "npm run build:tests && mocha \"out/test/unit/**/*.test.js\"",
     "test:fuzz": "npm run build:tests && mocha \"out/test/fuzz/**/*.test.js\"",
