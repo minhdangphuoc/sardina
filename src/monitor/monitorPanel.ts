@@ -669,13 +669,16 @@ export class MonitorPanel {
         this.statsSrc?.setVisible(m.on);
         return;
       case 'resume':
-        this.resume(m.what);
+        await this.resume(m.what);
         return;
     }
   }
 
-  private resume(what: ResumeTarget): void {
+  /** The probe runs again on Resume (§4), so a phone-side change (logs switched back on, agent started) is picked up. */
+  private async resume(what: ResumeTarget): Promise<void> {
     this.clearBanner();
+    await this.refreshAgent();
+    if (this.disposed) return;
     if (what === 'logs' || what === 'all') this.startLogs();
     if (what === 'app' || what === 'all') this.refreshApp(true);
   }
