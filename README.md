@@ -83,11 +83,10 @@ see [Part 3](#part-3-install-vs-code-and-this-extension) to build it.
 **Device agent: screenshots, logs, screen mirror and control**
 
 - **Take Device Screenshot** saves a PNG where you choose and opens it.
-- **Show Device Logs** opens the Device Monitor on its Logs section: a
-  Logcat-style view of the phone's system log (see
-  [Part 11](#part-11-device-monitor)).
-- A **Device Monitor** tab per device: overview, sessions, live app stats, logs
-  and actions (Part 11).
+- **Show Device Logs** streams the phone's system log into the **Sailfish
+  Device Log** output channel (also reachable from the Device Monitor).
+- A **Device Monitor** tab per device: connection, live app stats and actions
+  (Part 11).
 - **Mirror Device Screen** shows the phone's screen live in an editor tab, as
   VP8 video over an SSH forward when possible. A one-line status strip and an
   ⓘ **Mirror details** popover show the transport, codec and frame rate. With agent 1.7.0 or newer you
@@ -267,28 +266,31 @@ flowchart LR
     SHL["sfdk device exec<br/>proc script and probes"]
   end
   subgraph SRC["Sources in src/monitor"]
-    LS["logSource.ts"]
+    LS["logSource.ts<br/>deviceLog.ts"]
     SS["statsSource.ts"]
     DP["deviceProbe.ts<br/>overview"]
   end
+  OUT["Output channel<br/>Sailfish Device Log"]
   PNL["monitorPanel.ts<br/>one tab per device"]
-  WV["Page in media/monitor<br/>Logs, App, Overview, Sessions, Actions"]
+  WV["Page in media/monitor<br/>narrow column: connection, App, Actions"]
   AGL -->|"agent 1.10.0 or newer"| LS
   AGL -.->|"older agent: plain text lines"| LS
   AGS --> SS
   SHL -.->|"no stats stream: poll every 5 s"| SS
   SHL --> DP
-  LS --> PNL
+  LS -->|"Show logs"| OUT
+  LS -.->|"crash markers"| PNL
   SS --> PNL
   DP --> PNL
-  PNL -->|"init, overview, sessions, app, log.append, log.state"| WV
-  WV -->|"ready, log.ack, log.pause, action, session.stop, resume"| PNL
+  PNL -->|"init, overview, app, actions, banner, notice"| WV
+  WV -->|"ready, action, ui.visible, resume"| PNL
 ```
 
 - **Logs** need the agent: `logSource.ts` sends the `logs` request (JSON format
-  and a cursor with agent 1.10.0 or newer, so a stream resumes after an
-  update; plain text lines with older agents). The monitor never reads the
-  journal through the SSH login itself.
+  with agent 1.10.0 or newer, plain text lines with older agents) and
+  `deviceLog.ts` writes the formatted lines into the one **Sailfish Device Log**
+  output channel. The monitor never reads the journal through the SSH login
+  itself and has no log view of its own.
 - **App** stats come from the agent's `stats` stream once a second, or, when the
   agent lacks it, from a small script run through `sfdk device exec` every
   `sailfish.monitor.pollIntervalSeconds` seconds while the tab is visible
@@ -297,8 +299,6 @@ flowchart LR
   you refresh.
 - Every message from the page goes through `parsePageMessage`
   (`monitor/protocol.ts`), which accepts only known types and bounded values.
-  The page acknowledges log batches (`log.ack`), so a slow tab never lets the
-  host's buffer grow without limit.
 
 ### Where things live
 
@@ -673,10 +673,12 @@ emulator. This extension includes agent **1.10.0**.
    the PNG (the dialog remembers the folder). The picture opens in VS Code, and
    the notice offers **Reveal in folder**. If you cancel the dialog, nothing is
    saved.
-4. **Read the logs.** **Sailfish: Show Device Logs** opens the Device Monitor
-   on its Logs section, which streams the device's system log (Part 11). The
-   old **Sailfish Device Log** output channel is gone. Stop the stream with the
-   Stop button in the Logs section.
+4. **Read the logs.** **Sailfish: Show Device Logs** streams the device's system
+   log into the **Sailfish Device Log** output channel (JSON with levels and
+   tags with agent 1.10.0 or newer, plain text lines with older agents; ANSI
+   colours are removed). Stop the stream with **Cancel** on the progress
+   notification, or choose **Stop** when you run the command again. Changing
+   the selected device also stops it.
 5. **Mirror the screen.** **Sailfish: Mirror Device Screen**, or the mirror
    button on the device, opens the screen in a tab beside the editor.
    **Check:** the tab shows the current screen and follows what you do on the
@@ -751,38 +753,36 @@ notice says the developer agent is running.
 
 ### Part 11: Device Monitor
 
-The Device Monitor is one tab per device that shows what runs on the phone or
-emulator, how your app is doing and what the system log says, without leaving
-the editor.
+The Device Monitor is one narrow tab per device that shows whether the phone
+or emulator is reachable and how your app is doing. It is a single column, so
+it fits beside the editor.
 
 1. **Open it.** **Ctrl+Shift+P** → **Sailfish: Open Device Monitor**, or use
    the device's context menu in the Devices view, or the link in the device's
-   status bar tooltip. **Sailfish: Show Device Logs** opens it on the Logs
-   section. Pressing **Debug** opens it beside the editor without taking focus;
-   turn that off with `sailfish.debug.openDeviceMonitor`. Opening a second time
-   shows the tab that is already open.
-2. **Sections.**
-   - **Overview:** device, architecture, OS version, connection (USB, Wi-Fi),
-     agent version.
-   - **Sessions:** what the extension runs on the device (debugging, app, logs,
-     mirror, monitor), each with Stop.
-   - **App:** the launched app's process id, CPU, memory, uptime, restarts and
-     crashes, live while it runs. With agent 1.10.0 it updates every second;
-     without it, every 5 seconds through `sfdk`.
-   - **Logs:** a Logcat-style viewer with level, tag and "my app" filters, a
-     query bar, colours, folding of multi-line entries, process start and exit
-     markers, click on a QML `file:line` to open it, and Pause, Clear and
-     Save. The log needs the device agent; with agent 1.10.0 or newer it
-     carries levels and tags, with older agents it shows plain text lines and
-     offers **Update Device Agent**.
-   - **Actions:** restart or stop the app, take a screenshot, open the mirror.
-3. **Settings.** `sailfish.monitor.logBufferLines` (10000),
-   `sailfish.monitor.pollIntervalSeconds` (5) and `sailfish.monitor.logLines`
-   (500, the initial tail).
+   status bar tooltip. Pressing **Debug** opens it beside the editor without
+   taking focus; turn that off with `sailfish.debug.openDeviceMonitor`.
+   Opening a second time shows the tab that is already open.
+2. **What it shows.**
+   - **Connection:** a dot with **Connected** or **Offline**, then
+     `Wi-Fi · aarch64 · OS 5.1.0.11 · agent 1.10.0` (connection, architecture,
+     OS version, agent version).
+   - **App:** the launched app's name, process id and mode, CPU and memory with
+     a small line graph each, and `up m:ss · restarts N · crashes N`, live
+     while it runs. With agent 1.10.0 it updates every second; without it,
+     every 5 seconds through `sfdk`. When the app is not running the card says
+     so and offers **Run installed app**.
+   - **Actions:** **Restart app**, **Stop app**, **Screenshot**, **Mirror** and
+     **Show logs**, which streams the device log into the **Sailfish Device
+     Log** output channel (Part 10, step 4). The monitor has no log view and no
+     session list of its own; the status bar tooltip and the Devices view list
+     what runs on the device.
+3. **Settings.** `sailfish.monitor.pollIntervalSeconds` (5, the poll interval
+   without a stats stream) and `sailfish.monitor.logLines` (500, the initial
+   tail of Show Device Logs).
 4. **The phone decides.** If the phone turned system logs off in Settings →
-   System → Developer agent, the Logs section says so. Changing the selected
-   device stops the monitor's streams; the tab stays open and offers
-   **Resume**. After an agent update the log continues where it stopped.
+   System → Developer agent, Show logs says so. Changing the selected device
+   stops the monitor's stats stream and the log stream; the tab stays open and
+   offers **Resume**. An unreachable device shows **Offline** with **Retry**.
 
 ## How the device agent stays safe
 
@@ -834,9 +834,9 @@ with test fixtures, but not yet confirmed on a real phone:
   the emulator.
 - Long sessions on a phone (memory over 10 minutes or more), and behaviour when
   the phone's screen turns off during a mirror.
-- The Device Monitor on a phone: the log fields an app started by `invoker`
-  writes (which decide the "my app" filter), `journalctl --output-fields` on
-  the phone's systemd, and app stats on a phone. It is tested with fixtures
+- The Device Monitor on a phone: the journal fields an app started by
+  `invoker` writes (which decide crash detection), `journalctl --output-fields`
+  on the phone's systemd, and app stats on a phone. It is tested with fixtures
   only, not on the emulator or a phone.
 - The monitor's four-theme check: the page has not been looked at in every
   VS Code colour theme (light, dark, high contrast light and dark).
