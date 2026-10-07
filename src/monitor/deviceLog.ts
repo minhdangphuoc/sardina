@@ -127,6 +127,7 @@ export class DeviceLog {
     this.line(`[streaming the journal of "${device}"; cancel the notification to stop]`);
     out.show(true);
     src.onEntries((batch) => {
+      if (this.running !== r) return;
       for (const e of batch) this.line(formatEntryLine(e));
       for (const l of [...listeners]) l(device, batch);
     });
