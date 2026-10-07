@@ -1,0 +1,1 @@
+hand-written: 1.7.0 input capability and focus-lease fixture derived from agent-forward. The image frame reports "capture":"native", because the extension only enables input for natively captured frames.

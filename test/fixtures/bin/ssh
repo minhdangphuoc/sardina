@@ -1,0 +1,279 @@
+#!/usr/bin/env node
+'use strict';
+/*
+ * Fake ssh for the mirror-forward integration tests (device-agent/PLAN-mirror-forward.md, O12).
+ * It honours only the forward argv shape the extension builds (`-N` and one `-L <local>:<remote>`);
+ * anything else gets `fake ssh: unrecognized`, exit 255 and a line in test/fixtures/sfdk/unrecorded.log.
+ * Behaviour comes from the scenario file `ssh_forward.mode` (same lookup as the fake sfdk):
+ *   serve (default), auth-fail, hostkey-changed, hostkey-changed-once, remote-refused, never-listen.
+ * `serve` replays `ssh_forward.frames.json`: a JSON array whose first entry is {"status": {...}} and
+ * whose other entries are {"header": {...}, "payload"?: "png1x1", "payloadBase64"?: "...", "afterMs"?: N}; a
+ * header with "ok": false is fatal and the connection is closed after it. A header "ts": "now" becomes Date.now().
+ * An entry {"settings": {...}} is a header-only record (agent 1.9.0 phone settings message) sent only when the
+ * request contains "phoneState":true; a status with "ok": false is sent and the connection is closed.
+ * Like agent 1.6.0, it answers a request without "encoding":"vp8" with JPEG/PNG only: a "vp8" status
+ * becomes "binary" (no bitrate, window 2) and VP8 records are skipped; a VP8 request skips image
+ * records of other formats. Upstream "keyframe" and "set" lines are logged as events.
+ */
+
+const fs = require('fs');
+const net = require('net');
+const path = require('path');
+const core = require('./_fake-core');
+
+// 1x1 PNG, the same image as default/device_exec.base64.stdout.
+const PNG_1X1 = Buffer.from(
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGP4z8AAAAMBAQDJ/pLvAAAAAElFTkSuQmCC',
+  'base64',
+);
+
+const HOSTKEY_CHANGED = [
+  '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@',
+  '@    WARNING: REMOTE HOST IDENTIFICATION HAS CHANGED!     @',
+  '@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@',
+  'IT IS POSSIBLE THAT SOMEONE IS DOING SOMETHING NASTY!',
+  'Someone could be eavesdropping on you right now (man-in-the-middle attack)!',
+  'It is also possible that a host key has just been changed.',
+  'The fingerprint for the ED25519 key sent by the remote host is',
+  'SHA256:0000000000000000000000000000000000000000000.',
+  'Please contact your system administrator.',
+  'Add correct host key in /dev/null to get rid of this message.',
+  'Offending ED25519 key in /dev/null:1',
+  'Host key for sailfish-test has changed and you have requested strict checking.',
+  'Host key verification failed.',
+  '',
+].join('\n');
+
+/** @returns {{local: string, remote: string} | null} null when argv is not the forward shape */
+function parseForwardArgv(argv) {
+  let noCommand = false;
+  let spec = null;
+  let lCount = 0;
+  const valueOptions = new Set(['-F', '-o', '-i', '-p']);
+  for (let i = 0; i < argv.length; i++) {
+    const a = argv[i];
+    if (a === '--') break;
+    if (a === '-N') noCommand = true;
+    else if (a === '-T') continue;
+    else if (a === '-L') {
+      spec = argv[++i];
+      lCount++;
+    } else if (valueOptions.has(a)) i++;
+    else return null;
+  }
+  if (!noCommand || lCount !== 1 || typeof spec !== 'string') return null;
+  const colon = spec.indexOf(':');
+  if (colon <= 0 || colon === spec.length - 1) return null;
+  return { local: spec.slice(0, colon), remote: spec.slice(colon + 1) };
+}
+
+function encodeRecord(header, payload) {
+  const h = Buffer.from(JSON.stringify(header), 'utf8');
+  const len = Buffer.alloc(4);
+  len.writeUInt32BE(h.length, 0);
+  return Buffer.concat([len, h, payload || Buffer.alloc(0)]);
+}
+
+function loadFrames(scenario) {
+  const p = core.resolveFile(scenario, 'ssh_forward', 'frames.json');
+  return p ? JSON.parse(fs.readFileSync(p, 'utf8')) : [];
+}
+
+function fixHeader(h) {
+  return h && h.ts === 'now' ? { ...h, ts: Date.now() } : h;
+}
+
+function requestedEncoding(requestLine) {
+  try {
+    return JSON.parse(requestLine).encoding;
+  } catch {
+    return undefined;
+  }
+}
+
+async function replay(socket, frames, requestLine) {
+  const video = requestedEncoding(requestLine) === 'vp8';
+  const status = frames.find((f) => f.status);
+  if (status) {
+    const obj = { ...status.status };
+    if (!video && obj.encoding === 'vp8') {
+      obj.encoding = 'binary';
+      obj.window = 2;
+      delete obj.bitrate;
+    }
+    if (obj.lease === '$request') {
+      const lease = /"lease"\s*:\s*(\d+)/.exec(requestLine);
+      if (lease) obj.lease = Number(lease[1]);
+      else delete obj.lease;
+    }
+    if (obj.input === '$request') {
+      obj.input = /"input"\s*:\s*true/.test(requestLine);
+      if (!obj.input) delete obj.inputLease;
+    }
+    socket.write(JSON.stringify(obj) + '\n');
+    if (obj.ok === false) {
+      socket.end();
+      return;
+    }
+  }
+  const phoneState = /"phoneState"\s*:\s*true/.test(requestLine);
+  for (const f of frames) {
+    if (f.settings) {
+      // agent 1.9.0 in-stream settings message: header only, sent only to a request with phoneState:true
+      if (phoneState) socket.write(encodeRecord(f.settings));
+      continue;
+    }
+    if (!f.header) continue;
+    if (f.afterMs) await core.sleep(f.afterMs);
+    if (socket.destroyed) return;
+    const header = fixHeader(f.header);
+    if (typeof header.format === 'string' && (header.format === 'vp8') !== video) continue;
+    const payload = f.payload === 'png1x1' ? PNG_1X1 : typeof f.payloadBase64 === 'string' ? Buffer.from(f.payloadBase64, 'base64') : undefined;
+    socket.write(encodeRecord(header, payload));
+    if (header.ok === false) {
+      socket.end();
+      return;
+    }
+  }
+}
+
+function serve(scenario, logPath, local, onFirstConnect) {
+  const frames = loadFrames(scenario);
+  const sockets = new Set();
+  process.umask(0o177);
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on('error', () => {});
+    socket.on('close', () => {
+      sockets.delete(socket);
+      core.logEvent(logPath, { bin: 'ssh', event: 'closed', key: 'ssh_forward.closed' });
+    });
+    if (onFirstConnect && onFirstConnect(socket)) return;
+    let buf = '';
+    let started = false;
+    socket.on('data', (chunk) => {
+      buf += chunk.toString('utf8');
+      let nl;
+      while ((nl = buf.indexOf('\n')) !== -1) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        if (!started) {
+          started = true;
+          core.logEvent(logPath, { bin: 'ssh', event: 'request', key: 'ssh_forward.request', line });
+          void replay(socket, frames, line);
+          continue;
+        }
+        let msg = null;
+        try {
+          msg = JSON.parse(line);
+        } catch {
+          // ignore malformed lines, like the daemon
+        }
+        if (msg && typeof msg.ack === 'number') {
+          core.logEvent(logPath, { bin: 'ssh', event: 'ack', key: 'ssh_forward.ack', frame: msg.ack });
+        } else if (msg && msg.keyframe === true) {
+          core.logEvent(logPath, { bin: 'ssh', event: 'keyframe', key: 'ssh_forward.keyframe' });
+        } else if (msg && typeof msg.set === 'object' && msg.set !== null) {
+          core.logEvent(logPath, { bin: 'ssh', event: 'set', key: 'ssh_forward.set', line });
+        } else if (msg && typeof msg.keepalive === 'number') {
+          core.logEvent(logPath, { bin: 'ssh', event: 'keepalive', key: 'ssh_forward.keepalive', seq: msg.keepalive });
+          socket.write(encodeRecord({ pong: msg.keepalive, ts: Date.now() }));
+        } else if (msg && msg.input && typeof msg.input.type === 'string') {
+          core.logEvent(logPath, { bin: 'ssh', event: 'input', key: 'ssh_forward.input', input: msg.input });
+        }
+      }
+    });
+  });
+  try {
+    fs.unlinkSync(local);
+  } catch {
+    // StreamLocalBindUnlink
+  }
+  server.listen(local);
+  return {
+    stop() {
+      for (const s of sockets) s.destroy();
+      server.close();
+      try {
+        fs.unlinkSync(local);
+      } catch {
+        // already gone
+      }
+    },
+  };
+}
+
+async function main(argv) {
+  const logPath = process.env.SFDK_FAKE_LOG || '';
+  const cwd = process.cwd();
+  const scenario = core.resolveScenarioAlias(process.env.SFDK_FAKE_SCENARIO || 'default');
+  const fwd = parseForwardArgv(argv);
+
+  if (!fwd) {
+    process.stderr.write('fake ssh: unrecognized\n');
+    core.appendUnrecorded(argv, cwd, scenario, 'ssh_forward', 'ssh');
+    core.logEvent(logPath, { bin: 'ssh', argv, cwd, scenario, key: 'ssh_unrecognized' });
+    process.exitCode = 255;
+    return;
+  }
+
+  let stop = () => {};
+  const onSignal = (signal) => {
+    core.logEvent(logPath, { bin: 'ssh', event: 'killed', signal, key: 'ssh_forward' });
+    stop();
+    process.exit(0);
+  };
+  process.on('SIGTERM', () => onSignal('SIGTERM'));
+  process.on('SIGINT', () => onSignal('SIGINT'));
+  core.logEvent(logPath, { bin: 'ssh', argv, cwd, scenario, key: 'ssh_forward' });
+
+  const modePath = core.resolveFile(scenario, 'ssh_forward', 'mode');
+  const mode = modePath ? fs.readFileSync(modePath, 'utf8').trim() : 'serve';
+  const keepAlive = setInterval(() => {}, 1 << 30);
+
+  const fail = (text) => {
+    clearInterval(keepAlive);
+    process.stderr.write(text);
+    process.exitCode = 255;
+  };
+
+  switch (mode) {
+    case 'auth-fail':
+      fail('defaultuser@192.168.2.15: Permission denied (publickey).\n');
+      return;
+    case 'hostkey-changed':
+      fail(HOSTKEY_CHANGED);
+      return;
+    case 'hostkey-changed-once': {
+      const marker = path.join(path.dirname(logPath || '/tmp/x'), 'ssh-rekey.marker');
+      if (!fs.existsSync(marker)) {
+        fs.writeFileSync(marker, 'seen\n');
+        fail(HOSTKEY_CHANGED);
+        return;
+      }
+      stop = serve(scenario, logPath, fwd.local).stop;
+      return;
+    }
+    case 'remote-refused': {
+      let told = false;
+      stop = serve(scenario, logPath, fwd.local, (socket) => {
+        if (!told) {
+          told = true;
+          process.stderr.write('channel 2: open failed: connect failed: No such file or directory\n');
+        }
+        socket.destroy();
+        return true;
+      }).stop;
+      return;
+    }
+    case 'never-listen':
+      return; // stays alive without listening until signalled
+    default:
+      stop = serve(scenario, logPath, fwd.local).stop;
+  }
+}
+
+main(process.argv.slice(2)).catch((err) => {
+  process.stderr.write(String((err && err.stack) || err) + '\n');
+  process.exitCode = 1;
+});

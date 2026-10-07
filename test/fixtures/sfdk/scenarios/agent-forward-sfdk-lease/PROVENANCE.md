@@ -1,0 +1,1 @@
+hand-written: 1.2.0 ping with the default device list (missing key, so the forward is ineligible) and a text mirror whose status reports "lease":60; stdin lines are logged (I15, the lease on the sfdk fallback).

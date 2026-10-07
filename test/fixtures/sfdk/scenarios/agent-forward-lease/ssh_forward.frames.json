@@ -1,0 +1,21 @@
+[
+ {
+  "status": {
+   "ok": true,
+   "stream": "mirror",
+   "fps": 4,
+   "width": 360,
+   "quality": 60,
+   "encoding": "binary",
+   "window": 2,
+   "lease": "$request"
+  }
+ },
+ {
+  "header": {
+   "ok": false,
+   "error": "lease expired"
+  },
+  "afterMs": 1000
+ }
+]

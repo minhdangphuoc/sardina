@@ -1,0 +1,1 @@
+VP8 frames recorded from sailfish-devagent 1.6.0 on the Sailfish OS 5.1.0.11 emulator (90x200, a key frame and 9 deltas, through mirror-probe.mjs --save-ivf), replayed by the fake ssh forward; ping and status hand-written for agent 1.6.0. The PNG record is sent only when the request is not VP8 (the JPEG fallback).
