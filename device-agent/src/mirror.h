@@ -2,33 +2,149 @@
 #define MIRROR_H
 
 #include <QByteArray>
+#include <QElapsedTimer>
+#include <QHash>
+#include <QList>
 #include <QObject>
+#include <QPointer>
+#include <QSize>
 #include <QString>
 #include <QTimer>
 
-class Capture;
-class QLocalSocket;
+#include "pacer.h"
 
-// Streams the device screen to one client as JSON lines until it disconnects: a timer at `fps`
-// captures a frame through Capture (lipstick), scales and JPEG-encodes it, and writes one line.
-// A tick is skipped while a capture is running or the socket still has unsent bytes (back-pressure).
+class Capture;
+class QImage;
+class QJsonObject;
+class Recorder;
+class QLocalSocket;
+class Settings;
+class StreamIndicator;
+class TouchOverlay;
+class VideoEncoder;
+class MirrorInput;
+
+// Text and Binary carry JPEG/PNG images; Vp8 (agent 1.6.0) uses the binary framing with VP8 video.
+enum class MirrorEncoding { Text, Binary, Vp8 };
+
+// Streams the device screen to one client until it disconnects: a timer at `fps` captures a frame
+// through Recorder (lipstick's Wayland recorder, agent 1.3.0) or, when that cannot bind (older
+// lipstick, no access), through Capture (lipstick's saveScreenshot, which posts a notice per
+// frame); then scales and JPEG-encodes it, and writes it. Text encoding: one JSON
+// line per frame with base64 data (agent 1.1.0). Binary encoding: length-prefixed records with
+// raw image bytes; the client acknowledges image records and a tick is skipped while `window`
+// are unacknowledged. A tick is also skipped while a capture is running or the socket still has
+// unsent bytes. With a lease (leaseSeconds > 0) the stream ends by itself when no keepalive line
+// arrived for that long. Adaptive quality (agent 1.4.0, binary only, when the request has
+// "adapt":true): image headers also report the JPEG quality, the ack round trip and the tick
+// counters the client needs to judge the link (q, rtt and rttFrame, ticks, skips), and an upstream
+// {"set":{"width":W,"quality":Q}}
+// line changes width and quality from the next frame on (clamped to the requested values). The
+// client decides; the agent only measures and applies. VP8 video (agent 1.6.0, "encoding":"vp8"):
+// the binary framing with one VP8 frame per image record. Capture follows the compositor's frame
+// events instead of the timer (a frame is requested without a repaint and arrives when the screen
+// changes), at most `fps` (up to 30) per second; frames are scaled, converted to I420 and encoded
+// in real time at a target bitrate. Key frames come first, on request ({"keyframe":true} upstream)
+// and after a size change (agents 1.6.0 and 1.7.0 also sent one every 10 s). Encoded frames are
+// never dropped: while the link is behind, raw captures are dropped instead and the screen is
+// captured again once it has room. Frame pacing (agent 1.8.0): requests keep to a steady grid of
+// frame slots anchored on the frames' arrival, half a slot ahead so the compositor's next frame
+// lands on it. The slot length is the requested interval, or 1.5, 2, 3 or 4 times it while the
+// phone's convert-and-encode time does not keep up, one step at a time (pacer.h, agent 1.8.1);
+// frame headers report it as "pace" (ms). When the screen stops changing,
+// the last picture is encoded again up to twice ("refresh":true, it sharpens) and then a "same"
+// message goes out once a second, so the client can tell an idle screen from a stalled stream.
 // Owned by the socket, like LogStream.
 class MirrorStream : public QObject
 {
     Q_OBJECT
 public:
-    MirrorStream(QLocalSocket *socket, int fps, int width, int quality);
+    MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding = MirrorEncoding::Text,
+                 int window = 2, int leaseSeconds = 0, StreamIndicator *indicator = nullptr, bool adapt = false,
+                 int bitrateKbps = 0, bool inputRequested = false, const Settings *settings = nullptr,
+                 bool phoneState = false);
     ~MirrorStream();
+
+    // Writes the fatal reply {"ok":false,"error":...} in the stream's encoding, flushes,
+    // disconnects and cleans up.
+    void finish(const QString &error);
+
+    // The phone's settings (agent 1.9.0). Called synchronously from the Settings change, before
+    // the D-Bus reply: "screenView" off ends the stream; "control" and "touchIndicator" go to the
+    // input hooks below and, when the request opted in with "phoneState":true, a "settings"
+    // message tells the client (PLAN-settings-page.md section 7.3).
+    void applySetting(const QString &key);
+
+    // For the Settings page's status (read only).
+    bool active() const { return !m_cleaned; }
+    bool inputActive() const { return m_inputActive; }
+    qint64 startedAt() const { return m_startedAt; } // ms since the epoch
+    QString encodingName() const;
+    QString captureName() const; // "native", "screenshot", or "" before the first frame
+
+signals:
+    // The stream stopped or its capture path changed.
+    void stateChanged();
 
 private slots:
     void tick();
     void onCaptured(const QString &error);
+    void onRecorderFrame(const QImage &view, bool yInverted);
+    void onRecorderFailed(const QString &error, bool fatal);
+    void onRecorderTimeout();
     void onClientGone();
+    void onUpstream();
+    void onLeaseExpired();
+    void onInputLeaseExpired();
+    void pumpVideo();
+    void onPace();
+    void onBytesWritten();
+    void onIdle();
 
 private:
+    // S6: enforce the phone's "Allow control" in the input path (allowed=false: setInputActive(false),
+    // m_inputEnabled = false, refusal "control disabled on the phone"; allowed=true: re-enable a
+    // stream refused for that reason). Returns the "input"/"inputLease"/"inputError" fields for the
+    // "settings" message (leading comma, or empty when the request did not ask for input).
+    QByteArray applyControlSetting(bool allowed);
+    // S7: show or hide the debug touch circle at once (it never draws unless control is active).
+    void applyTouchIndicatorSetting(bool on);
+    // The input fields of the status line, from the current state (read only).
+    QByteArray inputFields() const;
+    // The "settings" message (only when the request asked for "phoneState").
+    void sendPhoneSettings(const QByteArray &inputFields);
+
     void writeLine(const QByteArray &line);
+    void writeRecord(const QByteArray &headerJson, const QByteArray &payload);
+    // A message without payload: a text line, or a payload-less record in binary mode.
+    void writeMessage(const QByteArray &json);
+    void handleUpstreamLine(const QByteArray &line);
+    void handleSet(const QJsonObject &set);
+    void handleInput(const QJsonObject &input);
+    void setInputActive(bool active);
+    bool allowInputMessage();
+    bool allowKeyRequest();
     void softError(const QString &message);
+    // Opens the recorder on first use, or again once after a fatal error if it had delivered frames.
+    bool ensureRecorder();
+    void setCapturePath(bool native, const QString &reason);
+    QByteArray captureFields(bool native) const;
+    void sendFrame(const QByteArray &hash, const QByteArray &data, const QByteArray &format, const QSize &screen,
+                   const QSize &size, qint64 captureMs, const QElapsedTimer &agentClock, bool native);
     void cleanup();
+    bool isVideo() const { return m_encoding == MirrorEncoding::Vp8; }
+    bool binaryFraming() const { return m_encoding != MirrorEncoding::Text; }
+    bool linkBusy() const;
+    void handleKeyRequest();
+    // Encodes one captured frame and sends it, or drops it while the link is behind.
+    void videoFrame(const uchar *rows, int width, int height, int bytesPerLine, bool yInverted, bool native);
+    void sendVideoFrame(const QByteArray &data, bool key, qint64 pts, const QSize &screen, const QSize &size,
+                        qint64 encodeMs, qint64 convertMs, bool native, bool refresh = false);
+    // Frame pacing (agent 1.8.0).
+    double paceInterval() const;
+    qint64 nextRequestAt() const;
+    void notePaceArrival(qint64 at);
+    void notePaceCost(double ms, qint64 now);
 
     QLocalSocket *m_socket;
     int m_fps;
@@ -36,6 +152,15 @@ private:
     int m_quality;
     QTimer m_timer;
     Capture *m_capture;
+    Recorder *m_recorder;
+    bool m_recorderOff;       // the recorder could not be opened: Capture for the rest of the stream
+    bool m_recorderDelivered; // the current recorder delivered a frame (worth reopening after a failure)
+    QString m_recorderError;  // last recorder failure, the reason when falling back
+    bool m_pathKnown;         // a capture path was reported (journal line, frame fields)
+    bool m_pathNative;
+    QString m_pathReason;
+    bool m_recorderStale;     // the pending frame already timed out: drop it when it arrives
+    QTimer m_frameTimeout;
     QString m_capturePath;
     qint64 m_captureTs;
     qint64 m_frame;
@@ -44,6 +169,67 @@ private:
     QByteArray m_lastHash;
     bool m_slow;
     bool m_cleaned;
+    MirrorEncoding m_encoding;
+    int m_window;
+    int m_leaseSeconds;
+    QTimer m_lease;
+    QPointer<StreamIndicator> m_indicator;
+    bool m_indicated; // streamStarted() was called, so cleanup() owes one streamStopped()
+    QByteArray m_upstream;
+    qint64 m_unacked;
+    qint64 m_lastImageFrame;
+    qint64 m_lastAcked;
+    QElapsedTimer m_captureClock;
+    QString m_stopReason;
+    // The phone's settings (agent 1.9.0).
+    const Settings *m_settings;
+    bool m_phoneState;     // the request asked for "settings" messages
+    bool m_inputRequested; // the request asked for input
+    qint64 m_startedAt;
+    // Adaptive quality (binary only).
+    bool m_adapt;
+    int m_maxWidth;   // the requested width (0 = native): a set width is clamped to it
+    int m_maxQuality; // the requested quality: a set quality is clamped to it
+    qint64 m_ticks;   // ticks that reached the skip decision
+    qint64 m_linkSkips; // of those, skipped because of the link (unsent bytes or a full window)
+    qint64 m_rttMs;   // round trip of the latest acknowledged image, -1 before the first ack
+    qint64 m_rttFrame; // that image's frame number
+    QElapsedTimer m_streamClock;
+    QHash<qint64, qint64> m_sentAt; // image frame -> m_streamClock ms when it was written
+    // Remote touch input (agent 1.7.0). The request must opt in, then focused-view heartbeats keep
+    // a short lease alive. Every input object except immediate deactivation consumes this bounded
+    // dispatch budget before validation; valid gestures are therefore still capped at 20/s.
+    MirrorInput *m_input;
+    TouchOverlay *m_touchOverlay;
+    bool m_controlAllowed;
+    bool m_inputEnabled;
+    bool m_inputActive;
+    bool m_controlRefusalLogged;
+    QTimer m_inputLease;
+    QList<qint64> m_inputMessageTimes;
+    qint64 m_lastInputControlAt;
+    // VP8 video (agent 1.6.0).
+    VideoEncoder *m_video;
+    int m_bitrate;       // target kbit/s
+    int m_maxBitrate;    // the requested bitrate: a set bitrate is clamped to it
+    QTimer m_pace;       // single shot: the next frame request (fps cap), or a skipped slot while the link is behind
+    qint64 m_lastRequestAt; // m_streamClock ms of the last frame request, -1 before the first
+    qint64 m_lastKeyAt;  // m_streamClock ms of the last key frame, -1 before the first
+    qint64 m_lastPts;    // pts (stream ms) of the last encoded frame, -1 before the first
+    bool m_forceKey;     // the next encoded frame is a key frame
+    bool m_needRepaint;  // the next request asks for a repaint (start, key frame request, new level)
+    bool m_dirty;        // a capture was dropped while the link was behind: capture again when it has room
+    bool m_repaintAsked; // the pending request asked for a repaint (a timeout applies)
+    qint64 m_keyRequests;
+    QList<qint64> m_keyRequestTimes;
+    // Frame pacing and the idle screen (agent 1.8.0).
+    Pacer m_pacer;        // the slot length (1, 1.5, 2, 3, 4 frame intervals), from the convert + encode time
+    double m_gridAt;      // m_streamClock ms of the last frame's slot, -1 before the first frame
+    QTimer m_idle;        // single shot: the screen has not changed for a while
+    int m_refreshes;      // re-encodes of the last picture since it last changed
+    QSize m_lastScreen;   // the last encoded frame's screen and output sizes, for refresh frames
+    QSize m_lastSize;
+    bool m_lastNative;
 };
 
 #endif
