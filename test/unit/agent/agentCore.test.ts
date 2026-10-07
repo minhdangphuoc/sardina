@@ -153,6 +153,14 @@ describe('agentCore.classifyPing', () => {
     const p = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.7.0","developerMode":true,"mirrorInput":["tap",3]}', stderr: '' });
     assert.deepStrictEqual(p, { state: 'running', version: '1.7.0', developerMode: true });
   });
+  it('passes the 1.10.0 logFormats and stats capabilities through and drops wrong types', () => {
+    const ok = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.10.0","developerMode":true,"logFormats":["text","json"],"stats":true}', stderr: '' });
+    assert.ok(ok.state === 'running');
+    assert.deepStrictEqual(ok.logFormats, ['text', 'json']);
+    assert.strictEqual(ok.stats, true);
+    const bad = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.10.0","developerMode":true,"logFormats":["text",1],"stats":"yes"}', stderr: '' });
+    assert.deepStrictEqual(bad, { state: 'running', version: '1.10.0', developerMode: true });
+  });
   it('keeps unknown fields out of the probe', () => {
     const p = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.3.0","developerMode":false,"future":1}', stderr: '' });
     assert.deepStrictEqual(p, { state: 'running', version: '1.3.0', developerMode: false });

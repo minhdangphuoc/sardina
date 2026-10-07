@@ -69,7 +69,7 @@ export class BuildConfigStatusBar {
         ? `Sailfish: deploy device "${device}" (click to change)`
         : 'Sailfish: select a deploy device';
     const stopHint = sessionTooltip(device, sessions);
-    this.device.tooltip = stopHint ? `${baseTooltip}\n\n${stopHint}` : baseTooltip;
+    this.device.tooltip = deviceTooltip(baseTooltip, stopHint, !!device && !unregistered);
     this.device.backgroundColor = unregistered || debugging ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
     this.debugAction.text = debugActionText(sessions);
     this.buildType.text = buildTypeText(buildType);
@@ -97,6 +97,17 @@ export class BuildConfigStatusBar {
   dispose(): void {
     for (const item of [this.device, this.buildType, this.deployMethod, ...this.actions]) item.dispose();
   }
+}
+
+/** The device item's tooltip: the existing text, plus a link to the Device Monitor (a trusted command link) for a registered device. */
+function deviceTooltip(base: string, stopHint: string | undefined, withMonitorLink: boolean): string | vscode.MarkdownString {
+  const text = stopHint ? `${base}\n\n${stopHint}` : base;
+  if (!withMonitorLink) return text;
+  const md = new vscode.MarkdownString(undefined, true);
+  md.isTrusted = { enabledCommands: ['sailfish.monitor.open'] };
+  md.appendText(text);
+  md.appendMarkdown('\n\n[Open Device Monitor](command:sailfish.monitor.open)');
+  return md;
 }
 
 function actionItem(priority: number, text: string, command: string, tooltip: string): vscode.StatusBarItem {

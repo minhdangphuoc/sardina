@@ -334,7 +334,7 @@ export async function installedAppThen(
 }
 
 /** Stops a running instance (unless disabled), then launches the app in its own terminal. */
-async function launchApp(
+export async function launchApp(
   services: Services,
   app: DeployedApp,
   progress: vscode.Progress<{ message?: string }>,
@@ -347,11 +347,35 @@ async function launchApp(
   // The app outlives this progress notification: its output and stop control live in a terminal.
   launchInAppTerminal(services, {
     appName: app.project.name,
+    binary: app.project.appBinaryPath,
     launchArgs: app.launchArgs,
     target: app.target,
     device: app.device,
     cwd: app.cwd,
   });
+}
+
+/**
+ * Launches the installed app again without building, deploying or the "not installed" prompt (the
+ * Device Monitor's Restart app). Returns false when no project or no device is selected.
+ */
+export async function relaunchInstalled(services: Services): Promise<boolean> {
+  const project = await activeProjectOrWarn(services);
+  if (!project) return false;
+  const folderUri = project.folder.uri;
+  const device = services.settings.get('device', folderUri) || undefined;
+  if (!device) return false;
+  const app: DeployedApp = {
+    project,
+    target: services.settings.get('target', folderUri) || undefined,
+    device,
+    cwd: folderUri.fsPath,
+    ...launchPlan(services, project),
+  };
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Sailfish: Restart App', cancellable: true }, (progress, token) =>
+    launchApp(services, app, progress, token),
+  );
+  return true;
 }
 
 /** FR-5.10 exception: build -> deploy -> run via SfdkRunner directly. */

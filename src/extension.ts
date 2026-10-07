@@ -15,6 +15,7 @@ import { watchDeviceChange } from './devices/switchCleanup';
 import { activateDevices } from './devices/commands';
 import { activateBuildView } from './build/buildView';
 import { activateDeviceAgent } from './agent/deviceAgent';
+import { activateMonitor } from './monitor/index';
 import { FORWARD_TIMING, MIRROR_TIMING } from './agent/mirror';
 import { activateQtQml } from './qtqml/silence';
 import { activateWalkthrough } from './walkthrough/index';
@@ -43,6 +44,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   ctx.subscriptions.push(buildConfigStatusBar.watchDevices(devicesProvider));
   const buildView = activateBuildView(ctx, services, devicesProvider);
   activateDeviceAgent(ctx, services);
+  activateMonitor(ctx, services);
   watchDeviceChange(ctx, services);
   activateQtQml(ctx, services);
   activateWalkthrough(ctx, services);

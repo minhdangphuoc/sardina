@@ -59,6 +59,10 @@ export interface AgentReply {
   settings?: PhoneSettings;
   /** Agent 1.9.0+: true when the agent installed its Settings page. */
   settingsPage?: boolean;
+  /** Agent 1.10.0+: log formats the `logs` request accepts (`text`, `json`). */
+  logFormats?: string[];
+  /** Agent 1.10.0+: true when the agent offers the `stats` stream. */
+  stats?: boolean;
 }
 
 export const INDICATOR_LEVELS = ['normal', 'quiet', 'minimal'] as const;
@@ -116,6 +120,8 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
       const settings = parsePhoneSettings(parsed.settings);
       if (settings !== undefined) reply.settings = settings;
       if (typeof parsed.settingsPage === 'boolean') reply.settingsPage = parsed.settingsPage;
+      if (Array.isArray(parsed.logFormats) && parsed.logFormats.every((e) => typeof e === 'string')) reply.logFormats = parsed.logFormats;
+      if (typeof parsed.stats === 'boolean') reply.stats = parsed.stats;
       return reply;
     } catch {
       return undefined;
@@ -125,7 +131,7 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
 }
 
 export type AgentProbe =
-  | { state: 'running'; version: string; developerMode: boolean; socket?: string; mirrorEncodings?: string[]; mirrorInput?: string[]; settings?: PhoneSettings; settingsPage?: boolean }
+  | { state: 'running'; version: string; developerMode: boolean; socket?: string; mirrorEncodings?: string[]; mirrorInput?: string[]; settings?: PhoneSettings; settingsPage?: boolean; logFormats?: string[]; stats?: boolean }
   | { state: 'not-running' }
   | { state: 'not-installed' }
   | { state: 'unreachable'; detail: string };
@@ -140,6 +146,8 @@ export function classifyPing(result: { exitCode: number; stdout: string; stderr:
     if (reply.mirrorInput !== undefined) running.mirrorInput = reply.mirrorInput;
     if (reply.settings !== undefined) running.settings = reply.settings;
     if (reply.settingsPage !== undefined) running.settingsPage = reply.settingsPage;
+    if (reply.logFormats !== undefined) running.logFormats = reply.logFormats;
+    if (reply.stats !== undefined) running.stats = reply.stats;
     return running;
   }
   if (result.exitCode === 3 || reply?.error === 'agent not running') {
