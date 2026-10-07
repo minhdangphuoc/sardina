@@ -55,6 +55,8 @@ const LONG_RUNNING_COMMANDS = new Set(['build', 'deploy', 'qmake', 'make', 'pack
  */
 const SERIALIZED_FAMILIES = new Set(['tools', 'emulator']);
 const SIGKILL_GRACE_MS = 5000;
+/** After a killed sfdk exited, how long its pipes get to close before the run finishes anyway. */
+const CLOSE_AFTER_KILL_GRACE_MS = 1000;
 
 /** The sfdk subcommand, skipping leading `-c key=value` session options. */
 function commandName(args: string[]): string {
@@ -313,6 +315,13 @@ export class SfdkRunner {
           timedOut,
           cancelled,
         });
+      });
+      // 'close' waits for stdout/stderr to close. After a cancel or timeout kill, an ssh that sfdk
+      // started can outlive it and hold the pipes open, which would keep the caller (and its
+      // progress notification) waiting forever; finish shortly after sfdk itself exited.
+      child.on('exit', (code, signal) => {
+        if (!cancelled && !timedOut) return;
+        setTimeout(() => finish(code, signal), CLOSE_AFTER_KILL_GRACE_MS).unref?.();
       });
       child.on('close', finish);
     });
