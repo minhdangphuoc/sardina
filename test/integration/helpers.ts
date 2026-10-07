@@ -4,7 +4,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import type { prompts as PromptsModule } from '../../src/ui/prompts';
-import type { ActionName, ActionState, AppStatsView, BannerAction, HostMessage, LogFormat, LogStatus, OverviewRow, SessionRow } from '../../src/monitor/protocol';
+import type { ActionName, ActionState, AppStatsView, BannerAction, ConnectionState, HostMessage } from '../../src/monitor/protocol';
 
 /**
  * Integration test helpers (validation §6.3). All UI-prompt stubbing goes
@@ -322,22 +322,21 @@ export async function removeWorkspaceFolder(folder: vscode.WorkspaceFolder): Pro
   await waitFor(() => (vscode.workspace.workspaceFolders?.length ?? 0) < before, 8000);
 }
 
-type LogAppend = Extract<HostMessage, { type: 'log.append' }>;
 type AppMessage = Extract<HostMessage, { type: 'app' }>;
 
 /** What `sailfish._test.monitor(device, 'view')` returns: the host's view model of one Device Monitor panel. */
 export interface MonitorView {
   device: string;
-  overview: OverviewRow[];
-  sessions: SessionRow[];
-  app: { app?: AppMessage['app']; stats: AppStatsView | null; counters: AppMessage['counters']; source: string };
-  log: { status: LogStatus; reason?: string; format?: LogFormat; entries: LogAppend['entries']; cursor?: string };
+  state: ConnectionState;
+  /** The connection line: `Wi‑Fi · aarch64 · OS 5.1.0.11 · agent 1.10.0`. */
+  line: string;
+  app: { app?: AppMessage['app']; mode?: 'run' | 'debug'; stats: AppStatsView | null; counters: AppMessage['counters'] };
   actions: Partial<Record<ActionName, ActionState>>;
   banner?: { text: string; actions: BannerAction[] };
   panels: number;
 }
 
-/** Example: `const view = await monitorView('My Phone'); assert.strictEqual(view.log.status, 'live');` (TEST_MODE=full seam). */
+/** Example: `const view = await monitorView('My Phone'); assert.strictEqual(view.state, 'connected');` (TEST_MODE=full seam). */
 export async function monitorView(device: string): Promise<MonitorView> {
   return await vscode.commands.executeCommand<MonitorView>('sailfish._test.monitor', device, 'view');
 }

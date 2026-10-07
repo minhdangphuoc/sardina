@@ -254,12 +254,12 @@ function cppdbgConfiguration(services: Services, app: DeployedApp, recipe: Debug
   };
 }
 
-/** Opens the Device Monitor beside the editor (focus stays put) with the log revealed, when the setting allows it. */
+/** Opens the Device Monitor beside the editor (focus stays put) when the setting allows it. */
 async function openMonitorForDebug(services: Services, folder: vscode.WorkspaceFolder): Promise<void> {
   if (!services.settings.get('debug.openDeviceMonitor', folder.uri)) return;
   const device = services.settings.get('device', folder.uri);
   if (!device) return; // the build step reports the missing device
-  await vscode.commands.executeCommand('sailfish.monitor.open', { device, preserveFocus: true, reveal: 'logs' });
+  await vscode.commands.executeCommand('sailfish.monitor.open', { device, preserveFocus: true });
 }
 
 /** "Sailfish: Debug on Device": build, deploy, start the app under gdbserver and attach VS Code's debugger. */

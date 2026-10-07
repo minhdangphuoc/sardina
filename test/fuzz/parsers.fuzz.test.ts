@@ -3,7 +3,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { allParsers } from '../../src/sfdk/parsers/index';
 import type { ParseResult } from '../../src/core/types';
-import { findSourceRefs, foldMessage, LogBuffer, parseJournalJsonLine, parseQuery, parseShortPreciseLine } from '../../src/monitor/logModel';
+import { formatEntryLine, parseJournalJsonLine, parseShortPreciseLine } from '../../src/monitor/logModel';
 import { parseAppStatsOutput, parseProcStat, parseStatsStreamLine } from '../../src/monitor/appStats';
 import { validatePageMessage } from '../../src/monitor/protocol';
 import { classifyConnection, parseIpAddrOutput, parseOsRelease } from '../../src/monitor/overview';
@@ -212,7 +212,6 @@ const monitorSeeds: Record<string, string[]> = {
     '{"ok":false,"error":"stopped from the phone"}',
   ],
   text: ['Oct 05 13:42:01.123456 host harbour-demo[4321]: qml: hello', 'Oct  5 13:42:01 host kernel: usb 1-1: new device'],
-  query: ['hello -world tag:a pid:12 level:w', '/hel+o w/i', '/(a+)+$/'],
   stat: [
     '4321 (my (app)) S 1 2 3 4 5 6 7 8 9 10 120 30 0 0 20 0 9 0 1000 123456 789 18446744073709551615',
     'pid 4321\n4321 (a) S 1 2 3 4 5 6 7 8 9 10 1 2 0 0 20 0 3 0 100 1 2 3\n--\nVmRSS:\t10 kB\nThreads:\t3\n--\n100.5 200.1\ncpu  1 2 3 4 5 6 7 8\n',
@@ -221,11 +220,9 @@ const monitorSeeds: Record<string, string[]> = {
   stream: ['{"ts":1733500000123,"pid":4321,"state":"S","cpu":12.4,"rssKb":48216,"started":1733499990000,"sys":{"cpu":31}}', '{"event":"exit","pid":4321,"ts":5}'],
   os: ['NAME="Sailfish OS"\nVERSION_ID=5.0.0.62\nPRETTY_NAME="Sailfish OS 5.0.0.62"\nSAILFISH_FLAVOUR=release\n'],
   page: [
-    '{"type":"log.save","filteredOnly":true,"format":"log","filter":{"minLevel":"warning","tags":["a"],"mine":true,"query":"x","deriveLevels":false}}',
-    '{"type":"openSource","file":"/usr/share/a/x.qml","line":3,"col":4}',
-    '{"type":"log.ack","upTo":12}',
     '{"type":"action","name":"restartApp"}',
-    '{"type":"session.stop","id":3}',
+    '{"type":"resume","what":"all"}',
+    '{"type":"ui.visible","on":true}',
   ],
   net: ['192.168.2.1 51234 192.168.2.15 22\n5: rndis0    inet 192.168.2.15/24 brd 192.168.2.255 scope global rndis0\n7: wlan0    inet 10.0.2.15/24 scope global wlan0'],
 };
@@ -233,23 +230,7 @@ const monitorSeeds: Record<string, string[]> = {
 const monitorTargets: { name: string; seeds: string[]; run: (input: string) => unknown }[] = [
   { name: 'parseJournalJsonLine', seeds: monitorSeeds.json, run: (s) => parseJournalJsonLine(s, 0) },
   { name: 'parseShortPreciseLine', seeds: monitorSeeds.text, run: (s) => parseShortPreciseLine(s, 0) },
-  {
-    name: 'parseQuery',
-    seeds: monitorSeeds.query,
-    run: (s) => {
-      const q = parseQuery(s);
-      return foldMessage(s) && findSourceRefs(s) && q;
-    },
-  },
-  {
-    name: 'LogBuffer',
-    seeds: monitorSeeds.json,
-    run: (s) => {
-      const b = new LogBuffer(3, 1000);
-      for (const line of s.split('\n')) b.push(parseJournalJsonLine(line, 0));
-      return b.since(0);
-    },
-  },
+  { name: 'formatEntryLine', seeds: monitorSeeds.json, run: (s) => formatEntryLine(parseJournalJsonLine(s, 0)) },
   { name: 'parseProcStat', seeds: monitorSeeds.stat, run: (s) => parseProcStat(s) },
   { name: 'parseAppStatsOutput', seeds: monitorSeeds.stat, run: (s) => parseAppStatsOutput(s, 0) },
   { name: 'parseStatsStreamLine', seeds: monitorSeeds.stream, run: (s) => parseStatsStreamLine(s, 0) },

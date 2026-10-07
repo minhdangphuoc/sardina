@@ -23,7 +23,6 @@ export interface SailfishSettings {
   'run.customCommand': string;
   'run.killBeforeLaunch': boolean;
   'debug.openDeviceMonitor': boolean;
-  'monitor.logBufferLines': number;
   'monitor.pollIntervalSeconds': number;
   'monitor.logLines': number;
   'qtqml.silenceQmlls': boolean;
@@ -52,7 +51,6 @@ export const DEFAULTS: SailfishSettings = {
   'run.customCommand': '',
   'run.killBeforeLaunch': true,
   'debug.openDeviceMonitor': true,
-  'monitor.logBufferLines': 10000,
   'monitor.pollIntervalSeconds': 5,
   'monitor.logLines': 500,
   'qtqml.silenceQmlls': true,

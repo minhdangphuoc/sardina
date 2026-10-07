@@ -407,15 +407,7 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Open the Device Monitor tab (overview, app stats and device log) beside the editor when you start **Debug on Device** or **Debug Installed App**. The editor keeps the focus."
-        },
-        "sailfish.monitor.logBufferLines": {
-          "type": "integer",
-          "default": 10000,
-          "minimum": 1000,
-          "maximum": 100000,
-          "scope": "window",
-          "markdownDescription": "How many device log lines the Device Monitor keeps (oldest lines are dropped first). The buffer is also capped at 16 MiB of text."
+          "markdownDescription": "Open the Device Monitor tab (connection, app stats and actions) beside the editor when you start **Debug on Device** or **Debug Installed App**. The editor keeps the focus."
         },
         "sailfish.monitor.pollIntervalSeconds": {
           "type": "integer",
@@ -431,7 +423,7 @@
           "minimum": 1,
           "maximum": 10000,
           "scope": "window",
-          "markdownDescription": "How many of the newest device log lines the Device Monitor asks for when its log stream starts."
+          "markdownDescription": "How many of the newest device log lines **Show Device Logs** asks for when its stream starts."
         },
         "sailfish.build.revealLog": {
           "type": "boolean",
