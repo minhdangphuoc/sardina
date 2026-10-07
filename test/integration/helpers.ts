@@ -342,6 +342,18 @@ export async function monitorView(device: string): Promise<MonitorView> {
   return await vscode.commands.executeCommand<MonitorView>('sailfish._test.monitor', device, 'view');
 }
 
+export interface DeviceLogView {
+  device?: string;
+  running: boolean;
+  /** Lines written to the "Sailfish Device Log" output channel. */
+  lines: string[];
+}
+
+/** Example: `const log = await deviceLogView(); assert.ok(log.lines.some((l) => l.includes('stopped')));` (TEST_MODE=full seam). */
+export async function deviceLogView(): Promise<DeviceLogView> {
+  return await vscode.commands.executeCommand<DeviceLogView>('sailfish._test.deviceLog');
+}
+
 /**
  * Makes the offline guard's TCP probe (tools check, Debug on Device, root shells) answer `online`
  * for every device, since fixture devices sit at addresses nothing listens on. Returns the undo.

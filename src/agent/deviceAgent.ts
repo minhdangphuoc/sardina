@@ -34,6 +34,7 @@ import {
 } from './agentCore';
 import { agentUpdateNotice, agentUpdateAvailable, bundledAgentVersion } from './mirrorCore';
 import { activateMirror } from './mirror';
+import { activateDeviceLog, deviceLog } from '../monitor/deviceLog';
 
 /**
  * The on-device developer agent (device-agent/): install, uninstall, status, screenshots and
@@ -139,24 +140,24 @@ export async function offerAgentUpdate(
 }
 
 /**
- * True when the agent is running with Developer Mode on. Otherwise explains, offers the install
- * when the agent is missing, and returns false.
+ * The agent's probe when it is running with Developer Mode on and the phone allows `need`.
+ * Otherwise explains, offers the install when the agent is missing, and returns undefined.
  */
-export async function ensureAgent(
+export async function ensureAgentProbe(
   ctx: vscode.ExtensionContext,
   services: Services,
   device: string,
   need?: 'screenView' | 'logs',
-): Promise<boolean> {
+): Promise<AgentProbe | undefined> {
   const state = await probe(services, device);
   if (state.state === 'running' && state.developerMode) {
     // The phone's own settings win: say so before asking for something it will refuse.
     const refusal = need ? phoneRefusal(state, need) : undefined;
     if (refusal) {
       void services.prompts.showErrorMessage(`Sailfish: "${device}": ${refusal}`);
-      return false;
+      return undefined;
     }
-    return true;
+    return state;
   }
   if (state.state === 'not-installed' || state.state === 'not-running') {
     const choice = await services.prompts.showWarningMessage(
@@ -164,16 +165,21 @@ export async function ensureAgent(
       INSTALL_AGENT,
     );
     if (choice === INSTALL_AGENT) {
-      return installAgentOn(ctx, services, device);
+      return (await installAgentOn(ctx, services, device)) ? await probe(services, device) : undefined;
     }
-    return false;
+    return undefined;
   }
   void services.prompts.showErrorMessage(
     state.state === 'running'
       ? `Sailfish: Developer Mode is off on "${device}", so the device agent refuses screenshots and logs. Turn it on in Settings → Developer tools.`
       : describeProbe(device, state),
   );
-  return false;
+  return undefined;
+}
+
+/** True when `ensureAgentProbe` found a usable agent. */
+export async function ensureAgent(ctx: vscode.ExtensionContext, services: Services, device: string, need?: 'screenView' | 'logs'): Promise<boolean> {
+  return (await ensureAgentProbe(ctx, services, device, need)) !== undefined;
 }
 
 /** The agent RPM architecture from `uname -m`; an error message when it cannot be told or is not supported. */
@@ -417,12 +423,13 @@ function takeScreenshot(ctx: vscode.ExtensionContext, services: Services) {
   };
 }
 
-/** Show Device Logs: opens the Device Monitor with the Logs section revealed and focused. */
-function showLogs(services: Services) {
+/** Show Device Logs: streams the device journal into the "Sailfish Device Log" output channel until stopped. */
+function showLogs(ctx: vscode.ExtensionContext, services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
-    await vscode.commands.executeCommand('sailfish.monitor.open', { device, reveal: 'logs' });
+    const agent = await ensureAgentProbe(ctx, services, device, 'logs');
+    if (agent) await deviceLog().show(device, agent);
   };
 }
 
@@ -432,7 +439,8 @@ export function activateDeviceAgent(ctx: vscode.ExtensionContext, services: Serv
     vscode.commands.registerCommand('sailfish.agent.uninstall', uninstallAgent(services)),
     vscode.commands.registerCommand('sailfish.agent.status', agentStatus(ctx, services)),
     vscode.commands.registerCommand('sailfish.agent.screenshot', takeScreenshot(ctx, services)),
-    vscode.commands.registerCommand('sailfish.agent.logs', showLogs(services)),
+    vscode.commands.registerCommand('sailfish.agent.logs', showLogs(ctx, services)),
   );
+  activateDeviceLog(ctx, services, clientArgs);
   activateMirror(ctx, services);
 }
