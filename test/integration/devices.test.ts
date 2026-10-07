@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { clearFakeLog, extensionApi, readFakeLog, restoreAllStubs, stubMessages, stubQuickPick, waitFor, waitForContext, withScenario } from './helpers';
+import { clearFakeLog, extensionApi, forceDeviceReachability, readFakeLog, restoreAllStubs, stubMessages, stubQuickPick, waitFor, waitForContext, withScenario } from './helpers';
 import { DeviceTreeItem, type DevicesTreeDataProvider } from '../../src/devices/tree';
 import type { Services } from '../../src/core/services';
 import type { SfdkDeviceInfo } from '../../src/core/types';
@@ -591,6 +591,33 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       });
     } finally {
       await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+    }
+  });
+
+  test('installTools on an offline device says so (Open Devices view / Retry) and never runs the check or an install', async function () {
+    if (!ready) {
+      this.skip();
+      return;
+    }
+    this.timeout(20000);
+    const restoreReachability = forceDeviceReachability(false);
+    try {
+      await withScenario('default', async () => {
+        clearFakeLog();
+        const messages = stubMessages();
+        const name = 'Xperia 10 - Dual SIM (ARM)';
+        await vscode.commands.executeCommand('sailfish.device.installTools', { device: { name } });
+        const warning = messages.calls.find((c) => c.kind === 'warning');
+        assert.ok(warning, JSON.stringify(messages.calls));
+        assert.strictEqual(warning.message, `Sailfish: "${name}" is offline — connect it (USB or Wi-Fi, Developer Mode on) and try again.`);
+        assert.deepStrictEqual(warning.items, ['Open Devices view', 'Retry']);
+        const execs = readFakeLog().invocations.filter((i) => i.key.startsWith('device_exec'));
+        assert.deepStrictEqual(execs.map((i) => i.key), [], 'no check, no devel-su');
+        assert.ok(!messages.calls.some((c) => /Installing only these|installed/.test(c.message)), JSON.stringify(messages.calls));
+      });
+    } finally {
+      restoreReachability();
+      restoreAllStubs();
     }
   });
 });

@@ -4,6 +4,7 @@ import { APP_STATS_SCRIPT } from '../../src/monitor/appStats';
 import type { PageMessage } from '../../src/monitor/protocol';
 import {
   clearFakeLog,
+  forceDeviceReachability,
   monitorView,
   readFakeLog,
   stubMessages,
@@ -94,15 +95,17 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     await setSetting('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
-  test('I-M1 open: one tab per device, a second call reveals it, ping then logs then stats', async function () {
+  test('I-M1 open: one tab per device, a second call reveals it, ping before the logs and stats streams', async function () {
     this.timeout(30000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
       await vscode.commands.executeCommand('sailfish.monitor.open');
       await new Promise((r) => setTimeout(r, 300));
       assert.strictEqual(monitorTabs().length, 1, 'a second open reveals the existing tab');
-      await waitFor(() => keys().includes('device_exec.sailfish-devagent.stats'), 10000);
-      assertInOrder(keys(), ['device_exec.sailfish-devagent.ping', 'device_exec.sailfish-devagent.logs', 'device_exec.sailfish-devagent.stats']);
+      await waitFor(() => keys().includes('device_exec.sailfish-devagent.stats') && keys().includes('device_exec.sailfish-devagent.logs'), 10000);
+      // The probe decides both formats, so ping comes first; the two streams start together and either may spawn first.
+      assertInOrder(keys(), ['device_exec.sailfish-devagent.ping', 'device_exec.sailfish-devagent.logs']);
+      assertInOrder(keys(), ['device_exec.sailfish-devagent.ping', 'device_exec.sailfish-devagent.stats']);
       const logs = all('device_exec.sailfish-devagent.logs')[0];
       const argv = logs.argv;
       const pair = (flag: string): string | undefined => argv[argv.indexOf(flag) + 1];
@@ -118,24 +121,30 @@ suite('Device Monitor (I-M1..I-M10)', () => {
   test('I-M2 debug: opens the tab beside and keeps the editor focused; off means no tab', async function () {
     this.timeout(40000);
     if (!vscode.extensions.getExtension('ms-vscode.cpptools')) return this.skip();
-    await withScenario('monitor-agent', async () => {
-      stubMessages();
-      const before = vscode.window.activeTextEditor?.document.uri.toString();
-      await setSetting('debug.openDeviceMonitor', true);
-      void vscode.commands.executeCommand('sailfish.debugOnDevice');
-      await waitFor(() => monitorTabs().length === 1, 20000);
-      const tab = monitorTabs()[0];
-      const group = vscode.window.tabGroups.all.find((g) => g.tabs.includes(tab));
-      assert.ok(group && !group.isActive, 'the monitor opens beside the active editor group');
-      assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), before, 'the editor keeps focus');
+    // The fixture device's address does not answer; let Debug on Device's offline guard pass.
+    const restoreReachability = forceDeviceReachability(true);
+    try {
+      await withScenario('monitor-agent', async () => {
+        stubMessages();
+        const before = vscode.window.activeTextEditor?.document.uri.toString();
+        await setSetting('debug.openDeviceMonitor', true);
+        void vscode.commands.executeCommand('sailfish.debugOnDevice');
+        await waitFor(() => monitorTabs().length === 1, 20000);
+        const tab = monitorTabs()[0];
+        const group = vscode.window.tabGroups.all.find((g) => g.tabs.includes(tab));
+        assert.ok(group && !group.isActive, 'the monitor opens beside the active editor group');
+        assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), before, 'the editor keeps focus');
 
-      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-      await waitFor(() => monitorTabs().length === 0, 5000);
-      await setSetting('debug.openDeviceMonitor', false);
-      void vscode.commands.executeCommand('sailfish.debugOnDevice');
-      await new Promise((r) => setTimeout(r, 3000));
-      assert.strictEqual(monitorTabs().length, 0, 'no monitor tab with the setting off');
-    });
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await waitFor(() => monitorTabs().length === 0, 5000);
+        await setSetting('debug.openDeviceMonitor', false);
+        void vscode.commands.executeCommand('sailfish.debugOnDevice');
+        await new Promise((r) => setTimeout(r, 3000));
+        assert.strictEqual(monitorTabs().length, 0, 'no monitor tab with the setting off');
+      });
+    } finally {
+      restoreReachability();
+    }
   });
 
   test('I-M3 sessions: device logs and app monitor listed; stopping one ends only that one', async function () {
@@ -145,6 +154,8 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       const view = await viewWhen((v) => v.sessions.some((s) => s.label.includes('device logs')) && v.sessions.some((s) => s.label.includes('app monitor')), 10000);
       const logsSession = view.sessions.find((s) => s.label.includes('device logs'));
       assert.ok(logsSession, JSON.stringify(view.sessions));
+      // A session is registered before its process starts; stop it only once both fakes run (and log a kill).
+      await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs') && keys().includes('device_exec.sailfish-devagent.stats'), 10000);
       clearFakeLog();
       await send({ type: 'session.stop', id: logsSession.id });
       await waitFor(() => readFakeLog().killed.length >= 1, 8000);
@@ -162,14 +173,17 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     this.timeout(40000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
-      const before = await viewWhen((v) => v.log.status === 'live' && v.log.entries.length > 0 && v.log.cursor !== undefined, 10000);
-      const cursor = before.log.entries[before.log.entries.length - 1].cursor ?? before.log.cursor;
-      assert.ok(cursor, 'the last entry has a cursor');
+      await viewWhen((v) => v.log.status === 'live' && v.log.entries.length > 0 && v.log.cursor !== undefined, 10000);
+      await waitFor(() => keys().includes('device_exec.sailfish-devagent.stats'), 10000);
       clearFakeLog();
       await setSetting('device', OTHER_DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
       await waitFor(() => readFakeLog().killed.length >= 2, 10000);
       assert.strictEqual(monitorTabs().length, 1, 'the tab stays open');
       const view = await viewWhen((v) => v.banner !== undefined, 8000);
+      // The streams are stopped now, so the buffer's last journal entry is the one to resume after.
+      const cursor = view.log.entries.filter((e) => e.cursor !== undefined).pop()?.cursor;
+      assert.ok(cursor, 'the last entry has a cursor');
+      assert.strictEqual(view.log.cursor, cursor, 'the view keeps the cursor of the stopped stream');
       assert.ok(view.banner?.actions.some((a) => a.resume !== undefined), JSON.stringify(view.banner));
       assert.ok(/device logs, app monitor/.test(view.banner?.text ?? '') || view.sessions.length === 0, JSON.stringify(view.banner));
       await setSetting('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
@@ -185,14 +199,16 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     this.timeout(40000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
-      const view = await viewWhen((v) => v.log.entries.length >= 20, 12000);
+      // All 40 fixture lines (markers from the stats stream do not count).
+      const view = await viewWhen((v) => v.log.entries.filter((e) => e.source === 'json').length >= 40, 12000);
       assert.strictEqual(view.log.status, 'live');
       assert.strictEqual(view.log.format, 'json');
       assert.ok(view.log.entries.some((e) => e.tag === 'harbour-demo' && e.priority === 4), 'a warning of the app');
       assert.ok(view.log.entries.some((e) => e.tag === 'lipstick' && e.priority === 6), 'an info line');
-      assert.ok(view.log.entries.some((e) => e.priority === 3), 'an error line');
+      // Error is journal priority 3 to 0 (§5.2); console.error arrives as 2 (T4-2 recording).
+      assert.ok(view.log.entries.some((e) => e.tag === 'harbour-demo' && e.priority !== undefined && e.priority <= 3), 'an error line');
 
-      // The fixture's ReferenceError points at qml/harbour-demo.qml:12:5 (PLAN §9.2 names FirstPage.qml).
+      // The fixture's ReferenceError points at qml/harbour-demo.qml:12 (PLAN §9.2 names FirstPage.qml).
       const folder = vscode.workspace.workspaceFolders?.[0];
       assert.ok(folder);
       await send({ type: 'openSource', file: '/usr/share/harbour-demo/qml/harbour-demo.qml', line: 12, col: 5 });
@@ -234,8 +250,10 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       assert.ok(logs && !logs.argv.includes('--format'), JSON.stringify(logs?.argv));
       const sh = all('device_exec.sh');
       for (const call of sh) {
-        const at = call.argv.indexOf('-c');
-        assert.ok(at >= 0 && call.argv[at + 1] === APP_STATS_SCRIPT, JSON.stringify(call.argv));
+        // The first `-c` is sfdk's own `-c device=…`; the script follows `sh -c`.
+        const at = call.argv.indexOf('sh') + 1;
+        assert.strictEqual(call.argv[at], '-c', JSON.stringify(call.argv));
+        assert.ok(call.argv[at + 1] === APP_STATS_SCRIPT, JSON.stringify(call.argv));
         assert.deepStrictEqual(call.argv.slice(at + 2), ['sh', APP_BINARY]);
       }
       const gap = sh[1].ts - sh[0].ts;
@@ -265,7 +283,9 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       await openMonitor();
       const view = await viewWhen((v) => v.log.status === 'needsAgent', 10000);
       assert.ok(view.overview.some((r) => /not installed/i.test(r.value)), JSON.stringify(view.overview));
-      assert.ok(/install/i.test(view.log.reason ?? ''), JSON.stringify(view.log));
+      // §8: `Logs need the device agent on "<device>".` plus the Install Device Agent button (the page shows it for needsAgent).
+      assert.strictEqual(view.log.reason, `Logs need the device agent on "${DEVICE}".`, JSON.stringify(view.log));
+      assert.strictEqual(view.actions.installAgent?.enabled, true, JSON.stringify(view.actions));
       assert.strictEqual(view.actions.screenshot?.enabled, false, JSON.stringify(view.actions));
       assert.strictEqual(view.actions.openMirror?.enabled, false, JSON.stringify(view.actions));
       clearFakeLog();

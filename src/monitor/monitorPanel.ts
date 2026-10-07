@@ -113,6 +113,8 @@ export class MonitorPanel {
 
   private logSrc: JournalLogSource | undefined;
   private logFormat: LogFormat | undefined;
+  /** The last journal cursor delivered (JSON mode); kept across stopped streams so Resume continues after it (§4.1, D5). */
+  private lastLogCursor: string | undefined;
   private logStatus: LogStatus = 'starting';
   private logReason: string | undefined;
   private logPaused = false;
@@ -424,6 +426,7 @@ export class MonitorPanel {
       format,
       logLines: clampLogLines(this.services.settings.get('monitor.logLines')),
       clientArgs: clientArgs(),
+      after: format === 'json' ? this.lastLogCursor : undefined,
       sessions: this.sessionsProxy(() => {
         if (this.logSrc === src) this.logSrc = undefined;
         this.setLog('stopped', 'stopped');
@@ -445,7 +448,8 @@ export class MonitorPanel {
   private onLogEnd(src: JournalLogSource, end: LogEnd): void {
     if (this.logSrc === src) this.logSrc = undefined;
     src.dispose();
-    const status: LogStatus = end.reason === 'refused' ? 'off' : 'stopped';
+    // Only the logs switch is "off"; a stop from the phone ("Stop all sessions now") is a stopped stream with Resume.
+    const status: LogStatus = end.reason === 'refused' && end.agentError !== 'stopped from the phone' ? 'off' : 'stopped';
     this.setLog(status, end.text);
   }
 
@@ -453,6 +457,7 @@ export class MonitorPanel {
     const identity = this.appIdentity();
     for (const e of batch) {
       this.buf.push(e);
+      if (e.cursor && e.source === 'json') this.lastLogCursor = e.cursor;
       const ev = identity ? coredumpEvent(e, identity) : undefined;
       if (ev && ev.type === 'exited') {
         if (this.counter.exited(e.coredumpPid, ev.exit)) this.postApp();
@@ -528,6 +533,11 @@ export class MonitorPanel {
     return pollIntervalMs(this.services.settings.get('monitor.pollIntervalSeconds')) / 1000;
   }
 
+  /**
+   * Samples and `start` events arrive only while this monitor's own `app monitor` session is registered, so every
+   * PID change it sees happens "while a session is registered" (§4.3) and counts as a restart (I-M6), also for an
+   * app relaunched on the phone with no Run or Debug session in VS Code.
+   */
   private startStats(app: AppRef): void {
     const src = new AppStatsSource(this.services, {
       device: this.device,
@@ -548,7 +558,7 @@ export class MonitorPanel {
       this.lastStats = statsView(u.sample, u.cpu, u.sysCpu);
       if (u.sample.pid > 0) {
         this.pids.add(u.sample.pid);
-        this.counter.pidSeen(u.sample.pid, deviceSessions.activeFor(this.device).some((s) => s.kind === 'app' || s.kind === 'debug'));
+        this.counter.pidSeen(u.sample.pid, true);
       }
       this.statsText = statsSourceText(this.statsMode, this.intervalSec(), this.visible);
       this.postApp();
@@ -557,7 +567,7 @@ export class MonitorPanel {
       const name = this.app?.name ?? 'app';
       if (t.type === 'start') {
         this.pids.add(t.pid);
-        this.counter.pidSeen(t.pid, deviceSessions.activeFor(this.device).some((s) => s.kind === 'app' || s.kind === 'debug'));
+        this.counter.pidSeen(t.pid, true);
         this.pushMarker({ type: 'started', app: name, pid: t.pid, mode: this.app?.mode });
       } else {
         this.lastStats = { ...(this.lastStats ?? {}), pid: undefined, cpu: undefined };
@@ -664,13 +674,16 @@ export class MonitorPanel {
         this.statsSrc?.setVisible(m.on);
         return;
       case 'resume':
-        this.resume(m.what);
+        await this.resume(m.what);
         return;
     }
   }
 
-  private resume(what: ResumeTarget): void {
+  /** The probe runs again on Resume (§4), so a phone-side change (logs switched back on, agent started) is picked up. */
+  private async resume(what: ResumeTarget): Promise<void> {
     this.clearBanner();
+    await this.refreshAgent();
+    if (this.disposed) return;
     if (what === 'logs' || what === 'all') this.startLogs();
     if (what === 'app' || what === 'all') this.refreshApp(true);
   }
@@ -819,7 +832,7 @@ export class MonitorPanel {
     if (this.app) v.app.app = this.app.binary ? { name: this.app.name, binary: this.app.binary } : { name: this.app.name };
     if (this.logReason !== undefined) v.log.reason = this.logReason;
     if (this.logFormat) v.log.format = this.logFormat;
-    const cursor = this.logSrc?.lastCursor;
+    const cursor = this.logSrc?.lastCursor ?? this.lastLogCursor;
     if (cursor) v.log.cursor = cursor;
     if (this.banner) v.banner = this.banner;
     return v;

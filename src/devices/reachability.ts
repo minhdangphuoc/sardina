@@ -18,7 +18,8 @@ export function isReachable(host: string, port: number, timeoutMs = PROBE_TIMEOU
     socket.once('connect', () => done(true));
     socket.once('timeout', () => done(false));
     socket.once('error', () => done(false));
-    socket.connect(port, host);
+    // An IPv6 address comes as `[addr]` in `user@[addr]:port`; net wants it bare.
+    socket.connect(port, host.replace(/^\[(.*)\]$/, '$1'));
   });
 }
 

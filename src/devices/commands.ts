@@ -13,6 +13,7 @@ import { buildWlanSshLaunch, isValidPort } from './connectWlan';
 import { addDevice, removeDevice } from './addDevice';
 import { deviceFromItem, sfdkDeviceName } from './listParsing';
 import { installDeviceTools } from './devicePackages';
+import { setDeviceDirectory } from './offlineGuard';
 
 /** Structural check, not `instanceof DeviceTreeItem`: the item may come from a different copy of the `tree` module. */
 export const deviceFrom = deviceFromItem;
@@ -348,6 +349,9 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
     vscode.window.registerTreeDataProvider('sailfish.devices', provider.section('devices')),
   );
   ctx.subscriptions.push(provider);
+  // The offline guard (tools check, Debug on Device) finds the device's endpoint through the view's lists.
+  setDeviceDirectory(provider);
+  ctx.subscriptions.push({ dispose: () => setDeviceDirectory(undefined) });
 
   ctx.subscriptions.push(
     vscode.commands.registerCommand('sailfish.devices.refresh', () => provider.refresh()),

@@ -6,7 +6,7 @@ import { buildDeployThen, installedAppThen, type DeployedApp } from '../tasks/co
 import { cppdbgArchitecture } from '../tasks/buildConfig';
 import { parseDebugRecipe, type DebugRecipe } from './recipe';
 import { DebugLifecycle, SESSION_ID_FIELD, gdbserverExitsAfterSession, gdbserverPkillArgs, isRestartRequest, withConnectRetry } from './debugSessionCore';
-import { INSTALL_ON_DEVICE, checkDeviceTools, installOnDevice } from '../devices/devicePackages';
+import { INSTALL_ON_DEVICE, checkDeviceToolsGuarded, installOnDevice } from '../devices/devicePackages';
 
 const CPPTOOLS_ID = 'ms-vscode.cpptools';
 const INSTALL_CPPTOOLS = 'Install C/C++ extension';
@@ -45,10 +45,15 @@ async function ensureDebugBuild(services: Services, folder: vscode.WorkspaceFold
   return true;
 }
 
-/** true/false when the device answered; undefined when it could not be asked (unreachable, no device…). */
-async function deviceHasGdbserver(services: Services, device: string, cwd: string | undefined): Promise<boolean | undefined> {
-  const missing = await checkDeviceTools(services, device, cwd);
-  return missing === undefined ? undefined : !missing.includes(GDBSERVER_PACKAGE);
+/**
+ * true/false when the device answered; 'stop' when it is offline (the user was told, with Retry)
+ * or the check was cancelled; undefined when the check ran but could not tell (later steps report it).
+ */
+async function deviceHasGdbserver(services: Services, device: string, cwd: string | undefined): Promise<boolean | 'stop' | undefined> {
+  const outcome = await checkDeviceToolsGuarded(services, device, cwd);
+  if (outcome.kind === 'checked') return !outcome.missing.includes(GDBSERVER_PACKAGE);
+  if (outcome.kind === 'unreachable' || outcome.kind === 'cancelled') return 'stop';
+  return undefined;
 }
 
 type GdbserverCheck = 'ready' | 'run-instead' | 'cancel';
@@ -58,7 +63,9 @@ async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolde
   const device = services.settings.get('device', folder.uri);
   if (!device) return 'ready'; // buildDeployThen reports the missing device itself
   const cwd = folder.uri.fsPath;
-  if ((await deviceHasGdbserver(services, device, cwd)) !== false) return 'ready'; // unknown: later steps report it
+  const has = await deviceHasGdbserver(services, device, cwd);
+  if (has === 'stop') return 'cancel';
+  if (has !== false) return 'ready'; // unknown: later steps report it
 
   const choice = await services.prompts.showWarningMessage(
     `Sailfish: gdbserver is not installed on "${device}", so the debugger can't attach.`,
@@ -74,7 +81,9 @@ async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolde
 
   // undefined: the password box was cancelled (or sfdk couldn't start) — not a failed install.
   if ((await installOnDevice(services, device, [GDBSERVER_PACKAGE])) === undefined) return 'cancel';
-  if (await deviceHasGdbserver(services, device, cwd)) return 'ready';
+  const after = await deviceHasGdbserver(services, device, cwd);
+  if (after === true) return 'ready';
+  if (after === 'stop') return 'cancel';
   void services.prompts.showErrorMessage(
     `Sailfish: gdbserver is still missing on "${device}". The device downloads it from Jolla's repositories, ` +
       `so it needs internet access (Wi-Fi or mobile data; the USB link alone is not enough), and the password must be ` +

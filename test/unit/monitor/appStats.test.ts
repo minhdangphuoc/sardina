@@ -1,4 +1,8 @@
 import * as assert from 'assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execFileSync, spawn } from 'node:child_process';
 import {
   APP_STATS_SCRIPT,
   AppCounter,
@@ -105,8 +109,31 @@ describe('parseAppStatsOutput', () => {
   });
   it('passes the binary only as a positional argument', () => {
     assert.ok(APP_STATS_SCRIPT.includes('"$1"'));
-    assert.ok(APP_STATS_SCRIPT.includes('pgrep -x -f'));
+    assert.ok(!APP_STATS_SCRIPT.includes('pgrep'), 'busybox pgrep -x -f misses invoker-started apps (T4-3)');
     assert.ok(!APP_STATS_SCRIPT.includes('harbour'));
+  });
+  it('finds the process whose first argument is the binary, not the shell that runs the script', function () {
+    if (process.platform !== 'linux' || !fs.existsSync('/proc/self/comm')) return this.skip();
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'app-stats-'));
+    const binary = path.join(dir, 'harbour-demo');
+    fs.copyFileSync('/bin/sleep', binary);
+    fs.chmodSync(binary, 0o755);
+    const child = spawn(binary, ['30'], { stdio: 'ignore' });
+    try {
+      const deadline = Date.now() + 2000;
+      let out = '';
+      while (Date.now() < deadline) {
+        out = execFileSync('sh', ['-c', APP_STATS_SCRIPT, 'sh', binary], { encoding: 'utf8' });
+        if (out.startsWith(`pid ${child.pid}\n`)) break;
+      }
+      assert.ok(out.startsWith(`pid ${child.pid}\n`), out.slice(0, 200));
+      assert.strictEqual(parseAppStatsOutput(out, 1)?.pid, child.pid);
+      const none = execFileSync('sh', ['-c', APP_STATS_SCRIPT, 'sh', path.join(dir, 'not-running')], { encoding: 'utf8' });
+      assert.ok(none.startsWith('pid 0\n'), none);
+    } finally {
+      child.kill();
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
   });
 });
 

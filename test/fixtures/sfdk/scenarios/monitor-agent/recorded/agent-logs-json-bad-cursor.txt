@@ -1,0 +1,2 @@
+Failed to seek to cursor: Invalid argument
+rc=0

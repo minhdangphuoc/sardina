@@ -122,6 +122,8 @@ export interface LogEnd {
   reason: LogEndReason;
   /** User-facing text for `refused`/`error`/`ended`; empty for `stopped`. */
   text: string;
+  /** For `refused`: the agent's error string, e.g. `logs disabled on the phone` or `stopped from the phone`. */
+  agentError?: string;
 }
 
 export interface LogSourceOptions {
@@ -132,6 +134,8 @@ export interface LogSourceOptions {
   logLines: number;
   /** `['--client', name]` words; empty when the host name is unusable. */
   clientArgs?: readonly string[];
+  /** JSON mode: resume after this cursor (the last entry a previous stream delivered, §4.1). */
+  after?: string;
   /** The agent probe (ping), used to refuse before starting when the phone has logs off. */
   probe?: () => Promise<AgentProbe>;
   sessions?: DeviceSessions;
@@ -164,7 +168,9 @@ export class JournalLogSource {
   constructor(
     private readonly services: Services_,
     private readonly opts: LogSourceOptions,
-  ) {}
+  ) {
+    this.cursor = opts.after;
+  }
 
   get running(): boolean {
     return this.cts !== undefined;
@@ -183,7 +189,7 @@ export class JournalLogSource {
       const probeResult = await this.opts.probe();
       const refusal = phoneRefusal(probeResult, 'logs');
       if (refusal) {
-        this.endEmitter.fire({ reason: 'refused', text: refusal });
+        this.endEmitter.fire({ reason: 'refused', text: refusal, agentError: 'logs disabled on the phone' });
         return false;
       }
       if (this.disposed) return false;
@@ -297,10 +303,12 @@ export class JournalLogSource {
               this.push(parsed.entry);
               break;
             case 'end':
-              end = { reason: 'refused', text: parsed.text };
+              end = { reason: 'refused', text: parsed.text, agentError: parsed.error };
               break;
             case 'seekFailed':
+              // The agent sends nothing after this line and keeps the connection open, so end it here.
               retryWithoutCursor = true;
+              cts.cancel();
               break;
             case 'skip':
               break;

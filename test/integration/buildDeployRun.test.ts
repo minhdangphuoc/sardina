@@ -42,6 +42,10 @@ suite('sailfish.buildDeployRun (FR-5.10, AC-1.7)', () => {
     await setSetting('target', TARGET);
     await setSetting('device', 'Xperia 10 III');
     await setSetting('deploy.method', 'sdk');
+    // Changing `device` and `target` clears the Devices lists at once and reloads them through a 2 s
+    // debounce (tree.ts). Let that reload finish here, or it lands inside the first test's sequence as
+    // `emulator_list`/`device_list` (a Run session registering in that window re-renders the tree too).
+    await new Promise((r) => setTimeout(r, 2500));
     ready = await sfdkReady();
     if (!ready) {
       console.log('[buildDeployRun] SfdkRunner is still unimplemented; skipping sfdk-backed assertions');
