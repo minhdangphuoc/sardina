@@ -41,6 +41,18 @@ export interface BuildArgvSettings extends SigningSettings {
   buildType?: 'release' | 'debug';
 }
 
+/**
+ * The generic part of the platform's `%optflags` for a Debug build. `sfdk build -d` alone only keeps
+ * the debuginfo packages: `%optflags` still starts with `-O2 -g`, and `%qmake5` (and `%cmake`) pass
+ * it to the compiler. Redefining `%__global_cflags` keeps the per-architecture part of `%optflags`
+ * (`-march`, `-mfloat-abi=hard`, ...) and drops `-O2` and `-D_FORTIFY_SOURCE=2`, which glibc warns
+ * about without optimisation. Verified with the 5.1.0.11 targets.
+ */
+export const DEBUG_GLOBAL_CFLAGS = '-O0 -g -pipe -Wall -fexceptions -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security';
+
+/** rpmbuild arguments (after `sfdk build --`) that make a Debug build unoptimised. */
+export const DEBUG_RPMBUILD_ARGS: readonly string[] = ['--define', `__global_cflags ${DEBUG_GLOBAL_CFLAGS}`];
+
 /** FR-5.3. `-c target=`/`-c device=` are passed to SfdkRunner as options, not included here. */
 export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSettings): string[] {
   const args: string[] = signingConfigArgs(settings);
@@ -55,15 +67,18 @@ export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSe
   if (noCheck) {
     args.push('--no-check');
   }
-  if (def.debug ?? settings.buildType === 'debug') {
+  const debug = def.debug ?? settings.buildType === 'debug';
+  if (debug) {
     args.push('-d');
   }
   const jobs = def.jobs !== undefined && def.jobs > 0 ? def.jobs : settings.jobs > 0 ? settings.jobs : undefined;
   if (jobs !== undefined) {
     args.push('-j', String(jobs));
   }
-  if (def.extraArgs && def.extraArgs.length > 0) {
-    args.push('--', ...def.extraArgs);
+  // The user's own rpmbuild arguments come last, so their own `--define '__global_cflags …'` wins.
+  const rpmbuildArgs = [...(debug ? DEBUG_RPMBUILD_ARGS : []), ...(def.extraArgs ?? [])];
+  if (rpmbuildArgs.length > 0) {
+    args.push('--', ...rpmbuildArgs);
   }
   return args;
 }

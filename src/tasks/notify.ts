@@ -1,10 +1,20 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
+import { buildLog } from './buildLog';
 
 /** M1.17/R34: wires up every action button offered on a build/deploy/run error notification. */
-export async function runNotificationAction(services: Services, choice: string | undefined): Promise<void> {
+/** `outputTarget: 'build'` makes "Show output" open the "Sailfish OS Build" channel instead of the main one. */
+export async function runNotificationAction(
+  services: Services,
+  choice: string | undefined,
+  outputTarget: 'main' | 'build' = 'main',
+): Promise<void> {
   if (choice === 'Show output' || choice === 'Show Output') {
-    services.output.show();
+    if (outputTarget === 'build') {
+      buildLog.show();
+    } else {
+      services.output.show();
+    }
   } else if (choice === 'Select target') {
     await vscode.commands.executeCommand('sailfish.selectTarget');
   } else if (choice === 'Open Devices view') {
@@ -15,6 +25,8 @@ export async function runNotificationAction(services: Services, choice: string |
     await vscode.commands.executeCommand('sailfish.device.setDefault');
   } else if (choice === 'Set up signing') {
     await vscode.commands.executeCommand('sailfish.setupSigning');
+  } else if (choice === 'Clean & Rebuild') {
+    await vscode.commands.executeCommand('sailfish.rebuild');
   } else if (choice === 'Build') {
     await vscode.commands.executeCommand('sailfish.build');
   }

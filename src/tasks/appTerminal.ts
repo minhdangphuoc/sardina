@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
+import { deviceSessions } from '../core/deviceSessions';
 import { NO_TIMEOUT } from '../sfdk/runner';
 
 export interface AppLaunch {
@@ -20,6 +21,16 @@ export function launchInAppTerminal(services: Services, launch: AppLaunch): void
   const write = new vscode.EventEmitter<string>();
   const close = new vscode.EventEmitter<number | void>();
   let finished = false;
+  let stopped!: () => void;
+  const ended = new Promise<void>((resolve) => (stopped = resolve));
+  const registration = launch.device
+    ? deviceSessions.register(launch.device, 'app', launch.appName, async () => {
+        if (finished) return;
+        cts.cancel(); // cancelling the invoker run stops the app, as Ctrl+C does
+        await ended;
+        close.fire(); // the terminal goes with the app
+      })
+    : undefined;
 
   const pty: vscode.Pseudoterminal = {
     onDidWrite: write.event,
@@ -38,11 +49,16 @@ export function launchInAppTerminal(services: Services, launch: AppLaunch): void
         })
         .then((result) => {
           finished = true;
+          registration?.dispose();
+          stopped();
           const how = result.cancelled ? 'stopped' : `exited with code ${result.exitCode}`;
           write.fire(`\r\n[${launch.appName} ${how}] Press any key to close this terminal.\r\n`);
         });
     },
-    close: () => cts.cancel(),
+    close: () => {
+      cts.cancel();
+      registration?.dispose();
+    },
     handleInput: (data) => {
       if (finished) {
         close.fire();

@@ -1,0 +1,227 @@
+[
+ {
+  "status": {
+   "ok": true,
+   "stream": "mirror",
+   "fps": 30,
+   "width": 720,
+   "quality": 60,
+   "encoding": "vp8",
+   "window": 4,
+   "bitrate": 2000,
+   "adapt": true,
+   "lease": "$request"
+  }
+ },
+ {
+  "header": {
+   "frame": 1,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 33,
+   "bytes": 24,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI",
+  "afterMs": 500
+ },
+ {
+  "header": {
+   "frame": 2,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 66,
+   "bytes": 424,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UQsA44tfxNNYnYBis6uTVJnfO5dW0b5Se3/KuMAa/J3KDrARTv+TohRl2WxJ7lddHE9qah7//RamGR7lYI8V3TxU3XjUjUv6S1rfQgBsWJwA+5Yn+o70vOsV8degLwAAswAALQAAyCjGRtLBb+5rWMdMzjW2UXXfQj+80UHUsLRapDgqXxBD34H65Umnkmze9EGsQsC6zpsAXNDqtWtjw0vuhAvnWS8xrrVl5s/3soLRF/n/0FjEiFHyuoZocD/E7UsRYuvjT3CCj5cIXQ+Evb79srI/g9Onv+EavVj1n93mFaurt9UXu8ZXKg6oEJ/ltolXA6hmfjAJiAAd7RYnaHAaTvAYjvn8XHaR58DJOsBSEdKofiAFsl8UPc+Z+qHDJjmXIX4AjfjN5xOb+LvzGz/2Hv65//tH/SAQ3ro+m4SW0yrMu4BToIRSW8Ur2Fj5qMs+2iYPoy0YIE2J47bLlztXUJgQnOGWpjiKvXmNLMc1HOCpgBwqNpD2GRCZ75fd4iMCcNC9XfPW0hAB20Gqz0tYWkkdj/AWcGyKexd6x8617wFJEX5gAA==",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 3,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 99,
+   "bytes": 24,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI",
+  "afterMs": 500
+ },
+ {
+  "header": {
+   "frame": 4,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 132,
+   "bytes": 424,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UQsA44tfxNNYnYBis6uTVJnfO5dW0b5Se3/KuMAa/J3KDrARTv+TohRl2WxJ7lddHE9qah7//RamGR7lYI8V3TxU3XjUjUv6S1rfQgBsWJwA+5Yn+o70vOsV8degLwAAswAALQAAyCjGRtLBb+5rWMdMzjW2UXXfQj+80UHUsLRapDgqXxBD34H65Umnkmze9EGsQsC6zpsAXNDqtWtjw0vuhAvnWS8xrrVl5s/3soLRF/n/0FjEiFHyuoZocD/E7UsRYuvjT3CCj5cIXQ+Evb79srI/g9Onv+EavVj1n93mFaurt9UXu8ZXKg6oEJ/ltolXA6hmfjAJiAAd7RYnaHAaTvAYjvn8XHaR58DJOsBSEdKofiAFsl8UPc+Z+qHDJjmXIX4AjfjN5xOb+LvzGz/2Hv65//tH/SAQ3ro+m4SW0yrMu4BToIRSW8Ur2Fj5qMs+2iYPoy0YIE2J47bLlztXUJgQnOGWpjiKvXmNLMc1HOCpgBwqNpD2GRCZ75fd4iMCcNC9XfPW0hAB20Gqz0tYWkkdj/AWcGyKexd6x8617wFJEX5gAA==",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 5,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 165,
+   "bytes": 24,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI",
+  "afterMs": 500
+ },
+ {
+  "header": {
+   "frame": 6,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 198,
+   "bytes": 424,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UQsA44tfxNNYnYBis6uTVJnfO5dW0b5Se3/KuMAa/J3KDrARTv+TohRl2WxJ7lddHE9qah7//RamGR7lYI8V3TxU3XjUjUv6S1rfQgBsWJwA+5Yn+o70vOsV8degLwAAswAALQAAyCjGRtLBb+5rWMdMzjW2UXXfQj+80UHUsLRapDgqXxBD34H65Umnkmze9EGsQsC6zpsAXNDqtWtjw0vuhAvnWS8xrrVl5s/3soLRF/n/0FjEiFHyuoZocD/E7UsRYuvjT3CCj5cIXQ+Evb79srI/g9Onv+EavVj1n93mFaurt9UXu8ZXKg6oEJ/ltolXA6hmfjAJiAAd7RYnaHAaTvAYjvn8XHaR58DJOsBSEdKofiAFsl8UPc+Z+qHDJjmXIX4AjfjN5xOb+LvzGz/2Hv65//tH/SAQ3ro+m4SW0yrMu4BToIRSW8Ur2Fj5qMs+2iYPoy0YIE2J47bLlztXUJgQnOGWpjiKvXmNLMc1HOCpgBwqNpD2GRCZ75fd4iMCcNC9XfPW0hAB20Gqz0tYWkkdj/AWcGyKexd6x8617wFJEX5gAA==",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 7,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 231,
+   "bytes": 24,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI",
+  "afterMs": 500
+ },
+ {
+  "header": {
+   "frame": 8,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 264,
+   "bytes": 424,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UQsA44tfxNNYnYBis6uTVJnfO5dW0b5Se3/KuMAa/J3KDrARTv+TohRl2WxJ7lddHE9qah7//RamGR7lYI8V3TxU3XjUjUv6S1rfQgBsWJwA+5Yn+o70vOsV8degLwAAswAALQAAyCjGRtLBb+5rWMdMzjW2UXXfQj+80UHUsLRapDgqXxBD34H65Umnkmze9EGsQsC6zpsAXNDqtWtjw0vuhAvnWS8xrrVl5s/3soLRF/n/0FjEiFHyuoZocD/E7UsRYuvjT3CCj5cIXQ+Evb79srI/g9Onv+EavVj1n93mFaurt9UXu8ZXKg6oEJ/ltolXA6hmfjAJiAAd7RYnaHAaTvAYjvn8XHaR58DJOsBSEdKofiAFsl8UPc+Z+qHDJjmXIX4AjfjN5xOb+LvzGz/2Hv65//tH/SAQ3ro+m4SW0yrMu4BToIRSW8Ur2Fj5qMs+2iYPoy0YIE2J47bLlztXUJgQnOGWpjiKvXmNLMc1HOCpgBwqNpD2GRCZ75fd4iMCcNC9XfPW0hAB20Gqz0tYWkkdj/AWcGyKexd6x8617wFJEX5gAA==",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 100,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    1,
+    1
+   ],
+   "format": "png",
+   "bytes": 69,
+   "cms": 12,
+   "ems": 3
+  },
+  "payload": "png1x1"
+ }
+]

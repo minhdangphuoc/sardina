@@ -10,15 +10,19 @@ import { mapBuildError, mapDeployError, type MappedError } from './errors';
 import { runNotificationAction } from './notify';
 import { NO_TIMEOUT } from '../sfdk/runner';
 import { deployInstallsApp } from './buildConfig';
+import { buildTypeCleanArgv } from './buildTypeGuard';
 import { whitespacePathWarning } from './pathGuard';
 import { resolveSigningUser } from './signingGuard';
+import { buildState, stageForArgv } from '../build/buildStateCore';
 
 const SHOW_OUTPUT_ACTION = 'Show output';
 /** The tasks that can sign: they run `sfdk build` or `sfdk package`. */
+/** The tasks the Build view reports on. */
+const TRACKED_COMMANDS = new Set<SailfishTaskDefinitionLike['command']>(['build', 'deploy', 'run', 'package', 'check']);
 const SIGNED_COMMANDS = new Set<SailfishTaskDefinitionLike['command']>(['build', 'deploy', 'run', 'package']);
 
 /** One `sfdk engine exec -- pwd` probe cache per extension-host session (FR-5.9). */
-const sessionPathMapCache = new PathMapCache();
+export const sessionPathMapCache = new PathMapCache();
 
 interface Step {
   argv: string[];
@@ -47,7 +51,10 @@ function stepsFor(
   switch (def.command) {
     case 'build': {
       const extraArgs = def.extraArgs ?? services.settings.get('build.extraArgs', folderUri);
+      const debug = def.debug ?? services.settings.get('build.type', folderUri) === 'debug';
+      const cleanArgv = buildTypeCleanArgv(project, debug ? 'debug' : 'release');
       return [
+        ...(cleanArgv ? [{ argv: cleanArgv, ensureEngine: true }] : []),
         {
           argv: buildArgs(
             { ...def, extraArgs },
@@ -123,6 +130,7 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
   private readonly cts = new vscode.CancellationTokenSource();
   private launchStarted = false;
   private finished = false;
+  private stateId: number | undefined;
   onDidWrite = this.writeEmitter.event;
   onDidClose = this.closeEmitter.event;
 
@@ -150,6 +158,11 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
   open(): void {
     // First line within 1s of task start (FR-5.7).
     this.write(`$ sfdk ${this.def.command}\n`);
+    if (TRACKED_COMMANDS.has(this.def.command)) {
+      const id = buildState.start('starting', Date.now(), () => this.cts.cancel());
+      this.stateId = id;
+      this.closeEmitter.event((code) => buildState.end(id, code === 0 && !this.cts.token.isCancellationRequested, Date.now(), this.cts.token.isCancellationRequested));
+    }
     void this.run();
   }
 
@@ -227,6 +240,7 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
         break;
       }
       this.write(`$ sfdk ${step.argv.join(' ')}\n`);
+      if (this.stateId !== undefined) buildState.setStage(this.stateId, stageForArgv(step.argv));
       if (step.isLaunch) {
         this.launchStarted = true;
       }

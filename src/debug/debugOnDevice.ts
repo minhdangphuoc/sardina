@@ -1,9 +1,12 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
+import { deviceSessions } from '../core/deviceSessions';
 import { NO_TIMEOUT } from '../sfdk/runner';
 import { buildDeployThen, installedAppThen, type DeployedApp } from '../tasks/commands';
+import { cppdbgArchitecture } from '../tasks/buildConfig';
 import { parseDebugRecipe, type DebugRecipe } from './recipe';
-import { INSTALL_ON_DEVICE, installOnDevice } from '../devices/devicePackages';
+import { DebugLifecycle, SESSION_ID_FIELD, gdbserverExitsAfterSession, gdbserverPkillArgs, isRestartRequest, withConnectRetry } from './debugSessionCore';
+import { INSTALL_ON_DEVICE, checkDeviceTools, installOnDevice } from '../devices/devicePackages';
 
 const CPPTOOLS_ID = 'ms-vscode.cpptools';
 const INSTALL_CPPTOOLS = 'Install C/C++ extension';
@@ -11,6 +14,7 @@ const SWITCH_TO_DEBUG = 'Switch to Debug';
 const DEBUG_ANYWAY = 'Debug anyway';
 const LISTEN_TIMEOUT_MS = 30_000;
 const GDBSERVER_INSTALL_HINT = 'devel-su sh -c "pkcon refresh && pkcon install -y gdb-gdbserver"';
+const GDBSERVER_PACKAGE = 'gdb-gdbserver';
 const RUN_WITHOUT_DEBUGGER = 'Run without debugger';
 
 /** C++ debugging goes through the C/C++ extension's `cppdbg` debugger driving the SDK's GDB. */
@@ -43,16 +47,8 @@ async function ensureDebugBuild(services: Services, folder: vscode.WorkspaceFold
 
 /** true/false when the device answered; undefined when it could not be asked (unreachable, no device…). */
 async function deviceHasGdbserver(services: Services, device: string, cwd: string | undefined): Promise<boolean | undefined> {
-  const result = await services.runner.run({
-    args: ['device', 'exec', '--', 'sh', '-c', 'command -v gdbserver'],
-    device,
-    cwd,
-    timeoutMs: 30_000,
-  });
-  if (result.exitCode === 0 && result.stdout.trim()) return true;
-  // sh's `command -v` exits 1 (or 127 on some shells) with no output when the command is missing.
-  if ((result.exitCode === 1 || result.exitCode === 127) && !result.stdout.trim()) return false;
-  return undefined;
+  const missing = await checkDeviceTools(services, device, cwd);
+  return missing === undefined ? undefined : !missing.includes(GDBSERVER_PACKAGE);
 }
 
 type GdbserverCheck = 'ready' | 'run-instead' | 'cancel';
@@ -77,7 +73,7 @@ async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolde
   if (choice !== INSTALL_ON_DEVICE) return 'cancel';
 
   // undefined: the password box was cancelled (or sfdk couldn't start) — not a failed install.
-  if ((await installOnDevice(services, device, ['gdb-gdbserver'])) === undefined) return 'cancel';
+  if ((await installOnDevice(services, device, [GDBSERVER_PACKAGE])) === undefined) return 'cancel';
   if (await deviceHasGdbserver(services, device, cwd)) return 'ready';
   void services.prompts.showErrorMessage(
     `Sailfish: gdbserver is still missing on "${device}". The device downloads it from Jolla's repositories, ` +
@@ -87,83 +83,165 @@ async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolde
   return 'cancel';
 }
 
-/**
- * Runs gdbserver on the device in a terminal that also shows the debugged app's output; resolves
- * once gdbserver listens, or rejects with a readable reason. Returns a stop function.
- */
-function startGdbserver(services: Services, app: DeployedApp, recipe: DebugRecipe, token: vscode.CancellationToken): Promise<() => void> {
-  return new Promise((resolve, reject) => {
-    const cts = new vscode.CancellationTokenSource();
-    token.onCancellationRequested(() => cts.cancel());
-    const write = new vscode.EventEmitter<string>();
-    const close = new vscode.EventEmitter<number | void>();
-    let listening = false;
-    const stderrTail: string[] = [];
-    const timer = setTimeout(() => {
-      if (!listening) {
-        cts.cancel();
-        reject(new Error(`gdbserver did not start listening within ${LISTEN_TIMEOUT_MS / 1000}s`));
-      }
-    }, LISTEN_TIMEOUT_MS);
-
-    const pty: vscode.Pseudoterminal = {
-      onDidWrite: write.event,
-      onDidClose: close.event,
-      open: () => {
-        write.fire(`Debugging ${app.project.name}${app.device ? ` on ${app.device}` : ''}: app output appears here.\r\n\r\n`);
-        void services.runner
-          .run({
-            args: ['device', 'exec', '--', ...recipe.gdbserver],
-            target: app.target,
-            device: app.device,
-            cwd: app.cwd,
-            token: cts.token,
-            timeoutMs: NO_TIMEOUT,
-            onLine: (line, stream) => {
-              write.fire(`${line}\r\n`);
-              if (stream === 'stderr') stderrTail.push(line);
-              if (!listening && /Listening on port/i.test(line)) {
-                listening = true;
-                clearTimeout(timer);
-                resolve(() => cts.cancel());
-              }
-            },
-          })
-          .then((result) => {
-            write.fire(`\r\n[gdbserver ${result.cancelled ? 'stopped' : `exited with code ${result.exitCode}`}]\r\n`);
-            if (!listening) {
-              clearTimeout(timer);
-              const output = `${stderrTail.join('\n')}\n${result.stdout}`;
-              reject(
-                new Error(
-                  /gdbserver: (command )?not found|No such file/i.test(output) || result.exitCode === 127
-                    ? `gdbserver is not installed on the device. Install it there with: ${GDBSERVER_INSTALL_HINT}`
-                    : `gdbserver exited (code ${result.exitCode}): ${output.trim().split('\n').pop() ?? ''}`,
-                ),
-              );
-            }
-          });
-      },
-      close: () => cts.cancel(),
-    };
-    vscode.window.createTerminal({ name: `${app.project.name} (debug)`, pty, iconPath: new vscode.ThemeIcon('debug-alt') }).show(true);
-  });
+/** One gdbserver run on the device: resolves once it listens; `done` settles when it exits. */
+interface GdbserverRun {
+  stop(): void;
+  done: Promise<void>;
+  finished: boolean;
 }
 
-function cppdbgConfiguration(app: DeployedApp, recipe: DebugRecipe): vscode.DebugConfiguration {
+/**
+ * The debug terminal: runs gdbserver on the device and shows the debugged app's output. A restart
+ * runs gdbserver again in the same terminal (sfdk's `--once` makes it exit when GDB disconnects).
+ */
+class GdbserverTerminal {
+  private readonly write = new vscode.EventEmitter<string>();
+  private readonly close = new vscode.EventEmitter<number | void>();
+  private readonly opened: Promise<void>;
+  private terminal: vscode.Terminal | undefined;
+  private current: GdbserverRun | undefined;
+  private closed = false;
+
+  constructor(private readonly services: Services, private readonly app: DeployedApp, private readonly recipe: DebugRecipe) {
+    let markOpened: () => void = () => undefined;
+    this.opened = new Promise((resolve) => (markOpened = resolve));
+    const pty: vscode.Pseudoterminal = {
+      onDidWrite: this.write.event,
+      onDidClose: this.close.event,
+      open: () => {
+        this.write.fire(`Debugging ${app.project.name}${app.device ? ` on ${app.device}` : ''}: app output appears here.\r\n\r\n`);
+        markOpened();
+      },
+      close: () => {
+        this.closed = true;
+        this.current?.stop();
+      },
+    };
+    this.terminal = vscode.window.createTerminal({ name: `${app.project.name} (debug)`, pty, iconPath: new vscode.ThemeIcon('debug-alt') });
+    this.terminal.show(true);
+  }
+
+  print(text: string): void {
+    this.write.fire(`${text}\r\n`);
+  }
+
+  /** Waits (up to `ms`) for the current gdbserver to exit by itself, then stops it. */
+  async settlePrevious(ms: number): Promise<void> {
+    const run = this.current;
+    if (!run) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const exited = await Promise.race([
+      run.done.then(() => true),
+      new Promise<boolean>((resolve) => (timer = setTimeout(() => resolve(false), ms))),
+    ]);
+    clearTimeout(timer);
+    if (!exited) {
+      run.stop();
+      await this.killOnDevice();
+    }
+  }
+
+  /** Stops the local run and, as a backstop, gdbserver on the device (cancelling sfdk alone may not end it there). */
+  async stop(): Promise<void> {
+    const run = this.current;
+    if (!run || run.finished) return;
+    run.stop();
+    await this.killOnDevice();
+  }
+
+  private async killOnDevice(): Promise<void> {
+    try {
+      await this.services.runner.run({
+        args: gdbserverPkillArgs(this.recipe.gdbserver),
+        target: this.app.target,
+        device: this.app.device,
+        cwd: this.app.cwd,
+        timeoutMs: 30_000,
+      });
+    } catch {
+      // best effort: gdbserver normally exits by itself once GDB disconnects (--once)
+    }
+  }
+
+  /** Starts gdbserver; resolves once it listens, rejects with a readable reason. */
+  async start(token?: vscode.CancellationToken): Promise<void> {
+    await this.opened;
+    if (this.closed) throw new Error('the debug terminal was closed');
+    const { services, app, recipe } = this;
+    const cts = new vscode.CancellationTokenSource();
+    token?.onCancellationRequested(() => cts.cancel());
+    let markDone: () => void = () => undefined;
+    const done = new Promise<void>((resolve) => (markDone = resolve));
+    const run: GdbserverRun = { stop: () => cts.cancel(), done, finished: false };
+    this.current = run;
+    return new Promise((resolve, reject) => {
+      let listening = false;
+      const stderrTail: string[] = [];
+      const timer = setTimeout(() => {
+        if (!listening) {
+          cts.cancel();
+          reject(new Error(`gdbserver did not start listening within ${LISTEN_TIMEOUT_MS / 1000}s`));
+        }
+      }, LISTEN_TIMEOUT_MS);
+      void services.runner
+        .run({
+          args: ['device', 'exec', '--', ...recipe.gdbserver],
+          target: app.target,
+          device: app.device,
+          cwd: app.cwd,
+          token: cts.token,
+          timeoutMs: NO_TIMEOUT,
+          onLine: (line, stream) => {
+            this.write.fire(`${line}\r\n`);
+            if (stream === 'stderr') stderrTail.push(line);
+            if (!listening && /Listening on port/i.test(line)) {
+              listening = true;
+              clearTimeout(timer);
+              resolve();
+            }
+          },
+        })
+        .then((result) => {
+          run.finished = true;
+          markDone();
+          if (!this.closed) this.write.fire(`\r\n[gdbserver ${result.cancelled ? 'stopped' : `exited with code ${result.exitCode}`}]\r\n`);
+          if (!listening) {
+            clearTimeout(timer);
+            const output = `${stderrTail.join('\n')}\n${result.stdout}`;
+            reject(
+              new Error(
+                /gdbserver: (command )?not found|No such file/i.test(output) || result.exitCode === 127
+                  ? `gdbserver is not installed on the device. Install it there with: ${GDBSERVER_INSTALL_HINT}`
+                  : `gdbserver exited (code ${result.exitCode}): ${output.trim().split('\n').pop() ?? ''}`,
+              ),
+            );
+          }
+        });
+    });
+  }
+}
+
+function cppdbgConfiguration(services: Services, app: DeployedApp, recipe: DebugRecipe, sessionId: string): vscode.DebugConfiguration {
+  // cpptools refuses to launch without it ("Specified argument was out of the range of valid values (Parameter 'arch')").
+  const targetArchitecture = cppdbgArchitecture(app.target);
+  if (!targetArchitecture) services.output.log('warn', `Debug: unknown architecture for target "${app.target}"; cppdbg targetArchitecture not set.`);
   return {
     type: 'cppdbg',
     request: 'launch',
     name: `Sailfish: ${app.project.name}${app.device ? ` on ${app.device}` : ''}`,
     program: recipe.program,
     cwd: app.cwd,
+    ...(targetArchitecture ? { targetArchitecture } : {}),
     MIMode: 'gdb',
     miDebuggerPath: recipe.gdbPath,
     // sfdk's own GDB setup (sysroot, source mapping, extended-remote, remote exec-file, file, args),
     // in place of cppdbg's default local launch; exec-run then starts the app on the device.
-    customLaunchSetupCommands: recipe.initCommands.map((text) => ({ text, ignoreFailures: false })),
+    // With connect retries, so that after Restart the new GDB waits for gdbserver to start again.
+    customLaunchSetupCommands: withConnectRetry(recipe.initCommands).map((text) => ({ text, ignoreFailures: false })),
     launchCompleteCommand: 'exec-run',
     stopAtEntry: false,
+    // Restart relaunches this same configuration; the id ties the new session to this run.
+    [SESSION_ID_FIELD]: sessionId,
   };
 }
 
@@ -231,32 +309,119 @@ async function attachDebugger(
     return;
   }
 
-  let stopGdbserver: () => void;
+  const terminal = new GdbserverTerminal(services, app, recipe);
   try {
-    stopGdbserver = await startGdbserver(services, app, recipe, token);
+    await terminal.start(token);
   } catch (err) {
     void services.prompts.showErrorMessage(`Sailfish: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
-  const config = cppdbgConfiguration(app, recipe);
-  const started = await vscode.debug.startDebugging(app.project.folder, config);
-  if (!started) {
-    stopGdbserver();
-    void services.prompts.showErrorMessage('Sailfish: VS Code could not start the debug session.');
-    return;
-  }
-  const sub = vscode.debug.onDidTerminateDebugSession((session) => {
-    if (session.configuration.name === config.name) {
-      stopGdbserver();
-      sub.dispose();
-    }
+  const sessionId = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+  const config = cppdbgConfiguration(services, app, recipe, sessionId);
+  const ours = (session: vscode.DebugSession): boolean =>
+    session.configuration[SESSION_ID_FIELD] === undefined
+      ? session.configuration.name === config.name
+      : session.configuration[SESSION_ID_FIELD] === sessionId;
+  let debugSession: vscode.DebugSession | undefined;
+  const subs: vscode.Disposable[] = [];
+
+  const lifecycle = new DebugLifecycle({
+    relaunchGdbserver: async () => {
+      if (!gdbserverExitsAfterSession(recipe.gdbserver)) return true; // still listening for the new GDB
+      terminal.print('\r\n[Restart: starting the app again under gdbserver; nothing is rebuilt or deployed]');
+      services.output.log('info', `Debug: restarting ${app.project.name}${app.device ? ` on ${app.device}` : ''}.`);
+      await terminal.settlePrevious(3_000);
+      if (app.pkillArgs) {
+        // Before gdbserver listens, so the new GDB (still retrying its connect) cannot have started the app yet.
+        await services.runner.run({ args: app.pkillArgs, target: app.target, device: app.device, cwd: app.cwd, timeoutMs: 30_000 });
+      }
+      try {
+        await terminal.start();
+        return true;
+      } catch (err) {
+        void services.prompts.showErrorMessage(`Sailfish: restart failed: ${err instanceof Error ? err.message : String(err)}`);
+        return false;
+      }
+    },
+    cleanup: (reason) => {
+      services.output.log('info', `Debug: session for ${app.project.name} ended (${reason}).`);
+      liveLifecycles.delete(sessionId);
+      for (const s of subs) s.dispose();
+      registration?.dispose();
+      void terminal.stop();
+    },
+    stopSession: () => {
+      if (debugSession) void Promise.resolve(vscode.debug.stopDebugging(debugSession)).catch(() => undefined);
+    },
+    setTimer: (ms, fn) => {
+      const t = setTimeout(fn, ms);
+      return () => clearTimeout(t);
+    },
   });
+  liveLifecycles.set(sessionId, { lifecycle, owns: ours });
+  subs.push(
+    vscode.debug.onDidStartDebugSession((session) => {
+      if (!ours(session)) return;
+      debugSession = session;
+      lifecycle.sessionStarted();
+    }),
+    vscode.debug.onDidTerminateDebugSession((session) => {
+      if (ours(session)) lifecycle.sessionTerminated();
+    }),
+  );
+  // Declared after the lifecycle that uses it: nothing can end the run before this line runs.
+  const registration = app.device
+    ? deviceSessions.register(app.device, 'debug', 'debugging', async () => {
+        // Ends the debug session first (GDB kills the app), then gdbserver.
+        if (debugSession) await vscode.debug.stopDebugging(debugSession);
+        lifecycle.stop();
+      })
+    : undefined;
+
+  let started = false;
+  try {
+    started = await vscode.debug.startDebugging(app.project.folder, config);
+  } catch (err) {
+    services.output.log('error', `startDebugging failed: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (!started) {
+    lifecycle.stop();
+    void services.prompts.showErrorMessage('Sailfish: VS Code could not start the debug session.');
+  }
 }
+
+/** Debug runs in progress, by their session id, so the adapter tracker can route DAP messages to them. */
+const liveLifecycles = new Map<string, { lifecycle: DebugLifecycle; owns: (session: vscode.DebugSession) => boolean }>();
+
+function lifecycleFor(session: vscode.DebugSession): DebugLifecycle | undefined {
+  const id: unknown = session.configuration[SESSION_ID_FIELD];
+  if (typeof id === 'string') return liveLifecycles.get(id)?.lifecycle;
+  for (const entry of liveLifecycles.values()) if (entry.owns(session)) return entry.lifecycle;
+  return undefined;
+}
+
+/**
+ * Sees the DAP traffic of our cppdbg sessions: a new adapter for one of our runs is a (re)start,
+ * and a disconnect/terminate with `restart: true` is VS Code's Restart, not Stop.
+ */
+const restartTracker: vscode.DebugAdapterTrackerFactory = {
+  createDebugAdapterTracker(session) {
+    const lifecycle = lifecycleFor(session);
+    if (!lifecycle) return undefined;
+    lifecycle.sessionStarted();
+    return {
+      onWillReceiveMessage: (message: unknown) => {
+        if (isRestartRequest(message)) lifecycle.noteRestartRequested();
+      },
+    };
+  },
+};
 
 export function activateDebug(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(
     vscode.commands.registerCommand('sailfish.debugOnDevice', () => debugOnDevice(services)),
     vscode.commands.registerCommand('sailfish.debugInstalled', () => debugInstalled(services)),
+    vscode.debug.registerDebugAdapterTrackerFactory('cppdbg', restartTracker),
   );
 }

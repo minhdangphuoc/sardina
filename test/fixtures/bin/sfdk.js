@@ -132,6 +132,21 @@ async function main(rawArgv) {
 
   core.logInvocation(logPath, rawArgv, cwd, scenario, key, stdin);
 
+  // `<key>.stdin-log`: while the fake is alive, log each stdin line as {event:'stdin', key, line}.
+  if (!hasStdinEcho && core.resolveFile(scenario, key, 'stdin-log') !== null) {
+    let pendingLine = '';
+    process.stdin.setEncoding('utf8');
+    process.stdin.on('data', (chunk) => {
+      pendingLine += chunk;
+      let nl;
+      while ((nl = pendingLine.indexOf('\n')) !== -1) {
+        core.logEvent(logPath, { event: 'stdin', key, line: pendingLine.slice(0, nl) });
+        pendingLine = pendingLine.slice(nl + 1);
+      }
+    });
+    process.stdin.on('error', () => {});
+  }
+
   const stdoutPath = core.resolveStdout(scenario, key, localizedActive);
   const stderrPath = core.resolveFile(scenario, key, 'stderr');
 
@@ -150,8 +165,8 @@ async function main(rawArgv) {
     }
   }
 
-  const stdoutText = core.readFileIfExists(stdoutPath) ?? '';
-  const stderrText = core.readFileIfExists(stderrPath) ?? '';
+  const stdoutText = core.substituteFixturesRoot(core.readFileIfExists(stdoutPath) ?? '');
+  const stderrText = core.substituteFixturesRoot(core.readFileIfExists(stderrPath) ?? '');
 
   const streamPath = core.resolveFile(scenario, key, 'stream');
   if (streamPath && stdoutText) {

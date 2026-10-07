@@ -25,8 +25,8 @@ const EXPECTED_ACTIVATION_EVENTS = [
   'onCommand:sailfish.device.add',
   'onCommand:sailfish.device.remove',
   'onCommand:sailfish.setupSigning',
+  'onView:sailfish.build',
   'onView:sailfish.sdk',
-  'onView:sailfish.emulators',
   'onView:sailfish.devices',
   'onLanguage:qml',
 ];
@@ -47,6 +47,7 @@ const EXPECTED_ROWS: RowSpec[] = [
   { key: 'sailfish.showSnapshotTargets', type: 'boolean', default: false, scope: 'window' },
   { key: 'sailfish.build.jobs', type: 'integer', default: 0, scope: 'resource' },
   { key: 'sailfish.build.runHarbourCheck', type: 'boolean', default: false, scope: 'resource' },
+  { key: 'sailfish.build.revealLog', type: 'boolean', default: true, scope: 'resource' },
   { key: 'sailfish.build.extraArgs', type: 'array', default: [], scope: 'resource' },
   {
     key: 'sailfish.deploy.method',

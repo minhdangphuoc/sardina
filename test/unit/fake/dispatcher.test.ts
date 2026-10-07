@@ -281,3 +281,47 @@ describe('fake sfdk: spawned process behaviour', () => {
     assert.match(res.stdout, /SailfishOS-4\.4\.0\.58-aarch64/);
   });
 });
+
+describe('fake sfdk: @FIXTURES_ROOT@ substitution', () => {
+  it('replaces @FIXTURES_ROOT@ in stdout with the FIXTURES_ROOT environment value', () => {
+    const res = runFake(['device', 'list'], { SFDK_FAKE_SCENARIO: 'agent-forward', FIXTURES_ROOT: '/opt/fx' });
+    assert.strictEqual(res.status, 0);
+    assert.match(res.stdout, /private-key: \/opt\/fx\/ssh\/fake_key/);
+    assert.ok(!res.stdout.includes('@FIXTURES_ROOT@'));
+  });
+});
+
+describe('fake ssh', () => {
+  const FAKE_SSH = path.join(FIXTURES_BIN, 'ssh');
+  const run = (args: string[], scenario: string): ReturnType<typeof spawnSync> =>
+    spawnSync(process.execPath, [FAKE_SSH, ...args], {
+      encoding: 'utf8',
+      env: { ...process.env, SFDK_FAKE_SCENARIO: scenario, SFDK_FAKE_LOG: '' },
+      timeout: 10000,
+    });
+  const FORWARD = ['-N', '-L', '/tmp/x.sock:/run/user/100000/sailfish-devagent/agent.sock', '--', 'u@h'];
+
+  it('auth-fail prints the Permission denied line and exits 255', () => {
+    const res = run(FORWARD, 'agent-forward-auth');
+    assert.strictEqual(res.status, 255);
+    assert.match(String(res.stderr), /Permission denied \(publickey\)\./);
+  });
+
+  it('hostkey-changed prints the changed-key block and exits 255', () => {
+    const res = run(FORWARD, 'agent-forward-hostkey');
+    assert.strictEqual(res.status, 255);
+    assert.match(String(res.stderr), /REMOTE HOST IDENTIFICATION HAS CHANGED/);
+    assert.match(String(res.stderr), /Host key verification failed/);
+  });
+
+  it('refuses any argv that is not the forward shape and records it', () => {
+    const unrecordedPath = path.join(FIXTURES_SFDK, 'unrecorded.log');
+    const before = fs.existsSync(unrecordedPath) ? fs.readFileSync(unrecordedPath, 'utf8') : '';
+    const res = run(['-v', 'host', 'ls'], 'default');
+    assert.strictEqual(res.status, 255);
+    assert.match(String(res.stderr), /fake ssh: unrecognized/);
+    const after = fs.readFileSync(unrecordedPath, 'utf8');
+    assert.match(after.slice(before.length), /"bin":"ssh"/);
+    fs.writeFileSync(unrecordedPath, before, 'utf8');
+  });
+});

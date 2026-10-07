@@ -1,6 +1,6 @@
 import * as assert from 'assert';
 import * as vscode from 'vscode';
-import { clearFakeLog, extensionApi, readFakeLog, restoreAllStubs, stubMessages, waitFor, waitForContext, withScenario } from './helpers';
+import { clearFakeLog, extensionApi, readFakeLog, restoreAllStubs, stubMessages, stubQuickPick, waitFor, waitForContext, withScenario } from './helpers';
 import { DeviceTreeItem, type DevicesTreeDataProvider } from '../../src/devices/tree';
 import type { Services } from '../../src/core/services';
 import type { SfdkDeviceInfo } from '../../src/core/types';
@@ -63,9 +63,6 @@ function isEmptyStateItem(item: vscode.TreeItem): boolean {
   return item.contextValue === 'devices-empty';
 }
 
-function isAvailableRootItem(item: vscode.TreeItem): boolean {
-  return item.contextValue === 'devices-root-available';
-}
 
 function fakeDevice(overrides: Partial<SfdkDeviceInfo> & Pick<SfdkDeviceInfo, 'name'>): SfdkDeviceInfo {
   return { index: 0, kind: 'hardware-device', origin: 'user-defined', flags: [], extra: [], ...overrides };
@@ -112,6 +109,15 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         'expected a "Could not list" child while SfdkRunner is unimplemented',
       );
     }
+  });
+
+  test('the Devices view has the two groups Emulators and Devices as roots (emulators are merged into it)', async () => {
+    await refreshAndWait(provider());
+    const roots = (await provider().section('devices').getChildren(undefined)) ?? [];
+    assert.deepStrictEqual(
+      roots.map((r) => r.label),
+      ['Emulators', 'Devices'],
+    );
   });
 
   test('SDK root lists location, sfdk, build engine and build targets from the fake sfdk', async function () {
@@ -164,15 +170,9 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       assert.ok(typeof tooltip === 'string' && tooltip.includes('private-key: /Users/mersdk/.ssh/sdk'));
       assert.match(String(installed[0].contextValue), /^emulator(\.(running|stopped))?$/);
 
-      const availableRoot = emulatorChildren.find((c) => isAvailableRootItem(c));
-      assert.ok(availableRoot, 'expected the collapsed "Available to install" node');
-      const availableChildren = await p.getChildren(availableRoot);
-      assert.ok(availableChildren && availableChildren.some((c) => deviceOf(c)));
-      const availableEmulator = availableChildren.find((c) => deviceOf(c));
-      assert.strictEqual(
-        availableEmulator!.contextValue,
-        'emulator-available',
-        'FR-6.3: an "Available to install" child must not expose start/stop/status, only install',
+      assert.ok(
+        !emulatorChildren.some((c) => c.contextValue === 'devices-root-available' || c.label === 'Available to install'),
+        'the Emulators group has no "Available to install" child',
       );
 
       const deviceChildren = await p.getChildren(devicesRoot);
@@ -226,13 +226,17 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       await refreshAndWait(p);
       const emulatorChildren = await p.getChildren((await p.getChildren())![0]);
       const target = emulatorChildren!.find((c) => deviceOf(c))!;
+      // The fake emulator's endpoint is 127.0.0.1:2223, the real Sailfish emulator's SSH port. When that
+      // emulator runs on this machine, the reachability probe marks the fake one running and start is
+      // (correctly) skipped as "already running". Drop the endpoint so this checks argv and refresh only.
+      const startItem = { device: { ...deviceOf(target)!, host: undefined, port: undefined } };
 
       let changeFired = false;
       const changeSub = p.onDidChangeTreeData(() => {
         changeFired = true;
       });
 
-      await vscode.commands.executeCommand('sailfish.emulator.start', target);
+      await vscode.commands.executeCommand('sailfish.emulator.start', startItem);
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'emulator_start'), 5000);
 
       const afterStart = readFakeLog();
@@ -396,7 +400,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
     });
   });
 
-  test('S12: emulator.installAvailable expands and installs, with argv ["emulator","install",<name>]', async function () {
+  test('S12: emulator.installAvailable (title button) picks and installs, with argv ["emulator","install",<name>]', async function () {
     if (!ready) {
       this.skip();
       return;
@@ -406,13 +410,16 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       const p = provider();
       await refreshAndWait(p);
       const emulatorChildren = await p.getChildren((await p.getChildren())![0]);
-      const availableRoot = emulatorChildren!.find((c) => isAvailableRootItem(c))!;
-      const availableChildren = await p.getChildren(availableRoot);
-      const target = availableChildren!.find((c) => deviceOf(c))!;
-      assert.strictEqual(deviceOf(target)!.name, 'Sailfish OS Emulator 4.5.0.24');
+      assert.ok(!emulatorChildren!.some((c) => c.contextValue === 'devices-root-available'));
+      const picks: string[][] = [];
+      stubQuickPick((items: readonly string[]) => {
+        picks.push([...items]);
+        return items.find((n) => n === 'Sailfish OS Emulator 4.5.0.24');
+      });
 
-      await vscode.commands.executeCommand('sailfish.emulator.installAvailable', target);
+      await vscode.commands.executeCommand('sailfish.emulator.installAvailable');
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'emulator_install'), 5000);
+      assert.ok(picks[0]?.includes('Sailfish OS Emulator 4.5.0.24'), 'the picker lists the available emulators');
       const install = readFakeLog().invocations.find((i) => i.key === 'emulator_install');
       assert.deepStrictEqual(install!.argv.filter((a) => a !== '--no-pager'), [
         'emulator',

@@ -65,7 +65,8 @@ suite('sailfish.buildDeployRun (FR-5.10, AC-1.7)', () => {
 
       const { invocations } = readFakeLog();
       // Excludes the status bar's own background poll, not part of the sequence under test.
-      const keys = invocations.map((i) => i.key).filter((k) => k !== 'tools_target_list');
+      const keys = invocations.map((i) => i.key).filter((k) => k !== 'tools_target_list' && k !== 'engine_exec.pwd');
+      // The build log maps engine paths with the cached `engine exec -- pwd` probe (run once per session, so filtered out).
       // FR-1.5: engine already running in the `default` scenario, so no `engine start`.
       assert.deepStrictEqual(keys, ['engine_status', 'build', 'deploy', 'device_exec.pkill', 'device_exec.invoker']);
 

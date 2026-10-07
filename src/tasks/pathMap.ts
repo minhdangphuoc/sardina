@@ -25,13 +25,21 @@ export function prefixSpecLine(line: string, specPathRelativeToWorkspace: string
 export class PathMapCache {
   private readonly cache = new Map<string, string>();
 
-  async ensure(services: Services, folder: vscode.WorkspaceFolder): Promise<string | null> {
+  has(folder: vscode.WorkspaceFolder): boolean {
+    return this.cache.has(folder.uri.toString());
+  }
+
+  async ensure(
+    services: Services,
+    folder: vscode.WorkspaceFolder,
+    onEngineLine?: (line: string, stream: 'stdout' | 'stderr') => void,
+  ): Promise<string | null> {
     const key = folder.uri.toString();
     const cached = this.cache.get(key);
     if (cached !== undefined) {
       return cached;
     }
-    const enginePath = await probeEnginePath(services, folder);
+    const enginePath = await probeEnginePath(services, folder, onEngineLine);
     if (enginePath !== null) {
       this.cache.set(key, enginePath);
     }
@@ -43,12 +51,17 @@ export class PathMapCache {
   }
 }
 
-async function probeEnginePath(services: Services, folder: vscode.WorkspaceFolder): Promise<string | null> {
+async function probeEnginePath(
+  services: Services,
+  folder: vscode.WorkspaceFolder,
+  onEngineLine?: (line: string, stream: 'stdout' | 'stderr') => void,
+): Promise<string | null> {
   try {
     const result = await services.runner.run({
       args: ['engine', 'exec', '--', 'pwd'],
       cwd: folder.uri.fsPath,
       ensureEngine: true,
+      onEngineLine,
     });
     if (result.exitCode !== 0) {
       return null;

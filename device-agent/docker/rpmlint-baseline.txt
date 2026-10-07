@@ -1,0 +1,26 @@
+# Known advisory rpmlint findings for sailfish-devagent, one per line, in the normalised form
+# `build.sh --docker` prints: the "<package>.<arch>: " prefix removed, e.g.
+#   W: no-manual-page-for-binary sailfish-devagent
+# `build.sh --docker` fails on any E: line that is not listed here and only reports new W: lines.
+# rpmlint is the one mb2 runs after every build (2.0.0 with the SDK's sailfish.toml, which treats
+# errors as warnings); the sfdk build prints the same findings. Recorded on 2026-10-07 from the
+# 1.9.0 Docker builds; identical for aarch64, armv7hl and i486.
+# - non-standard-dir-perm / non-readable / non-standard-uid / non-standard-gid: intended. The
+#   settings directory is root:privileged 0770 and settings.json defaultuser:privileged 0660 so
+#   that the SSH login cannot change the phone's settings (see the spec and PLAN-settings-page.md).
+# - dangerous-command-in-%postun rm: intended, removes the settings directory on uninstall.
+# - unstripped-binary / position-independent-executable-suggested / invalid-license /
+#   no-changelogname-tag: SDK defaults and the SPDX licence name; harmless.
+# - description-line-too-long: cosmetic; the line is listed verbatim, so it reappears as new if
+#   the %description is rewrapped (then just drop it here).
+E: description-line-too-long through libvpx) and streams the system journal, over a Unix socket that only the device user can open; VS Code reaches
+E: no-changelogname-tag
+E: non-readable /var/lib/sailfish-devagent/settings.json 660
+E: non-standard-dir-perm /var/lib/sailfish-devagent 770
+W: dangerous-command-in-%postun rm
+W: invalid-license GPL-3.0-or-later
+W: non-standard-gid /var/lib/sailfish-devagent privileged
+W: non-standard-gid /var/lib/sailfish-devagent/settings.json privileged
+W: non-standard-uid /var/lib/sailfish-devagent/settings.json defaultuser
+W: position-independent-executable-suggested /usr/bin/sailfish-devagent
+W: unstripped-binary-or-object /usr/bin/sailfish-devagent

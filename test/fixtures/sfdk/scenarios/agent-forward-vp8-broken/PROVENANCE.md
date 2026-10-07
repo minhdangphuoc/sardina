@@ -1,0 +1,1 @@
+Key frames truncated to 24 bytes (a valid VP8 tag and start code, no picture data) from agent-forward-vp8: the page cannot decode them, so after three decode errors the panel reconnects with JPEG; the fake ssh then sends the PNG record only.

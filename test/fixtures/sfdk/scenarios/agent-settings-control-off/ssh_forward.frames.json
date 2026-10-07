@@ -1,0 +1,26 @@
+[
+  {
+    "status": {
+      "ok": true,
+      "stream": "mirror",
+      "fps": 4,
+      "width": 360,
+      "quality": 60,
+      "encoding": "binary",
+      "window": 2,
+      "lease": "$request",
+      "input": false,
+      "inputError": "control disabled on the phone"
+    }
+  },
+  {
+    "settings": { "settings": { "control": false, "touchIndicator": false }, "input": false, "inputError": "control disabled on the phone" }
+  },
+  {
+    "header": { "frame": 1, "ts": "now", "screen": [720, 1600], "size": [1, 1], "format": "png", "bytes": 69, "cms": 12, "ems": 3, "capture": "native" },
+    "payload": "png1x1"
+  },
+  {
+    "header": { "frame": 2, "ts": "now", "same": true }
+  }
+]

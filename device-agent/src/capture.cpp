@@ -2,11 +2,11 @@
 #include "paths.h"
 
 #include <QDBusConnection>
-#include <QDBusInterface>
 #include <QDBusMessage>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QVariantList>
 
 namespace {
 
@@ -35,18 +35,23 @@ void Capture::start()
     }
     QFile::setPermissions(staging, QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
 
-    // A fresh connection per request: the session bus may not have existed when the daemon started.
+    // One named connection, made on first use and kept: the session bus may not have existed when
+    // the daemon started, and a connection per capture leaked memory in Qt (about 6 KB a frame).
     QDBusConnection bus = QDBusConnection::connectToBus(Paths::sessionBusAddress(), QLatin1String(BUS_NAME));
     if (!bus.isConnected()) {
         QDBusConnection::disconnectFromBus(QLatin1String(BUS_NAME));
         fail(QStringLiteral("session bus not available: ") + bus.lastError().message());
         return;
     }
-    QDBusInterface lipstick(QStringLiteral("org.nemomobile.lipstick"),
-                            QStringLiteral("/org/nemomobile/lipstick/screenshot"),
-                            QStringLiteral("org.nemomobile.lipstick"), bus);
-    const QDBusMessage result = lipstick.call(QStringLiteral("saveScreenshot"), m_stagingPath);
-    QDBusConnection::disconnectFromBus(QLatin1String(BUS_NAME));
+    QDBusMessage call = QDBusMessage::createMethodCall(QStringLiteral("org.nemomobile.lipstick"),
+                                                       QStringLiteral("/org/nemomobile/lipstick/screenshot"),
+                                                       QStringLiteral("org.nemomobile.lipstick"),
+                                                       QStringLiteral("saveScreenshot"));
+    call.setArguments(QVariantList() << m_stagingPath);
+    const QDBusMessage result = bus.call(call);
+    if (!bus.isConnected()) {
+        QDBusConnection::disconnectFromBus(QLatin1String(BUS_NAME)); // the bus went away: reconnect next time
+    }
     if (result.type() == QDBusMessage::ErrorMessage) {
         fail(QStringLiteral("lipstick refused: ") + result.errorName() + QStringLiteral(": ") + result.errorMessage());
         return;

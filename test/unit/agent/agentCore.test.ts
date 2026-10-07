@@ -9,6 +9,11 @@ import {
   archFromOutput,
   archFromRpmQuery,
   classifyPing,
+  clientName,
+  describeAgentRefusal,
+  describePhoneSettings,
+  parsePhoneSettings,
+  phoneRefusal,
   decodeBase64Output,
   describeProbe,
   installConsentDetail,
@@ -113,6 +118,45 @@ describe('agentCore.parseAgentReply', () => {
 });
 
 describe('agentCore.classifyPing', () => {
+  it('passes the 1.2.0 socket and mirrorEncodings through', () => {
+    const stdout =
+      '{"ok":true,"version":"1.2.0","developerMode":true,"socket":"/run/user/100000/sailfish-devagent/agent.sock","mirrorEncodings":["text","binary"]}\n';
+    assert.deepStrictEqual(classifyPing({ exitCode: 0, stdout, stderr: '' }), {
+      state: 'running',
+      version: '1.2.0',
+      developerMode: true,
+      socket: '/run/user/100000/sailfish-devagent/agent.sock',
+      mirrorEncodings: ['text', 'binary'],
+    });
+  });
+  it('passes the 1.7.0 mirrorInput capability through', () => {
+    const stdout =
+      '{"ok":true,"version":"1.7.0","developerMode":true,"socket":"/run/user/100000/sailfish-devagent/agent.sock","mirrorEncodings":["text","binary","vp8"],"mirrorInput":["tap","swipe"]}\n';
+    const p = classifyPing({ exitCode: 0, stdout, stderr: '' });
+    assert.ok(p.state === 'running');
+    assert.deepStrictEqual(p.mirrorInput, ['tap', 'swipe']);
+  });
+  it('a 1.1.0 ping has no socket or mirrorEncodings keys at all', () => {
+    const p = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.1.0","developerMode":true}', stderr: '' });
+    assert.deepStrictEqual(p, { state: 'running', version: '1.1.0', developerMode: true });
+    assert.ok(!('socket' in p) && !('mirrorEncodings' in p));
+  });
+  it('drops socket and mirrorEncodings of the wrong type', () => {
+    const p = classifyPing({
+      exitCode: 0,
+      stdout: '{"ok":true,"version":"1.2.0","developerMode":true,"socket":7,"mirrorEncodings":["text",3]}',
+      stderr: '',
+    });
+    assert.deepStrictEqual(p, { state: 'running', version: '1.2.0', developerMode: true });
+  });
+  it('drops mirrorInput unless every item is a string', () => {
+    const p = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.7.0","developerMode":true,"mirrorInput":["tap",3]}', stderr: '' });
+    assert.deepStrictEqual(p, { state: 'running', version: '1.7.0', developerMode: true });
+  });
+  it('keeps unknown fields out of the probe', () => {
+    const p = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.3.0","developerMode":false,"future":1}', stderr: '' });
+    assert.deepStrictEqual(p, { state: 'running', version: '1.3.0', developerMode: false });
+  });
   it('exit 0 with ok reply is running', () => {
     assert.deepStrictEqual(
       classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.0.0","developerMode":true}\n', stderr: '' }),
@@ -276,6 +320,8 @@ describe('agentCore scripts and messages', () => {
     assert.ok(t.includes('"My Phone"'));
     assert.ok(t.includes('sailfish-devagent'));
     assert.ok(/Developer Mode/.test(t));
+    assert.ok(t.includes('taps and swipes'));
+    assert.ok(t.includes('loses focus'));
   });
   it('describeProbe covers every state', () => {
     assert.match(describeProbe('D', { state: 'running', version: '1.0.0', developerMode: true }), /1\.0\.0 is running.*Developer Mode is on/);
@@ -283,5 +329,83 @@ describe('agentCore scripts and messages', () => {
     assert.match(describeProbe('D', { state: 'not-running' }), /installed on "D" but not running/);
     assert.match(describeProbe('D', { state: 'not-installed' }), /not installed on "D"/);
     assert.match(describeProbe('D', { state: 'unreachable', detail: 'boom' }), /could not reach.*boom/);
+  });
+});
+
+describe('agentCore phone settings (agent 1.9.0)', () => {
+  const ALL_ON = '"screenView":true,"control":true,"logs":true,"indicator":"normal","muteNotifications":false,"touchIndicator":false';
+  const ping = (extra: string): string => `{"ok":true,"version":"1.9.0","developerMode":true${extra}}`;
+
+  it('parseAgentReply keeps a valid settings object and settingsPage', () => {
+    const reply = parseAgentReply(ping(`,"settingsPage":true,"settings":{${ALL_ON}}`));
+    assert.strictEqual(reply?.settingsPage, true);
+    assert.deepStrictEqual(reply?.settings, {
+      screenView: true,
+      control: true,
+      logs: true,
+      indicator: 'normal',
+      muteNotifications: false,
+      touchIndicator: false,
+    });
+  });
+  it('drops unknown keys, wrong types and a fourth indicator value', () => {
+    assert.deepStrictEqual(parsePhoneSettings({ control: 'no', screenView: false, extra: true, indicator: 'loud' }), { screenView: false });
+    assert.deepStrictEqual(parsePhoneSettings({ indicator: 'minimal' }), { indicator: 'minimal' });
+    assert.strictEqual(parsePhoneSettings('x'), undefined);
+    assert.strictEqual(parsePhoneSettings(null), undefined);
+    assert.strictEqual(parsePhoneSettings([true]), undefined);
+    assert.strictEqual(parseAgentReply(ping(',"settings":3'))?.settings, undefined);
+  });
+  it('a 1.8 reply has neither field', () => {
+    const reply = parseAgentReply(ping(''));
+    assert.strictEqual(reply?.settings, undefined);
+    assert.strictEqual(reply?.settingsPage, undefined);
+  });
+  it('classifyPing copies settings and settingsPage to running', () => {
+    const probe = classifyPing({ exitCode: 0, stderr: '', stdout: ping(`,"settingsPage":true,"settings":{"control":false}`) });
+    assert.deepStrictEqual(probe, {
+      state: 'running',
+      version: '1.9.0',
+      developerMode: true,
+      settings: { control: false },
+      settingsPage: true,
+    });
+  });
+
+  it('describeProbe: unchanged without settings, then none, one and three permissions off', () => {
+    const base = { state: 'running', version: '1.9.0', developerMode: true } as const;
+    assert.strictEqual(describeProbe('d', base), 'Sailfish: device agent 1.9.0 is running on "d"; Developer Mode is on.');
+    assert.match(describeProbe('d', { ...base, settings: { screenView: true, control: true, logs: true } }), /On the phone: the phone allows screen view, control and logs\.$/);
+    assert.match(describeProbe('d', { ...base, settings: { control: false } }), /the phone has turned off control \(Settings → System → Developer agent\)\.$/);
+    assert.match(describeProbe('d', { ...base, settings: { screenView: false, control: false, logs: false } }), /turned off screen view, control, logs /);
+  });
+  it('describePhoneSettings adds indicator, mute and touch indicator', () => {
+    const text = describePhoneSettings({ screenView: true, indicator: 'minimal', muteNotifications: true, touchIndicator: true });
+    assert.match(text, /session indicator minimal; agent notifications muted; touch indicator on\.$/);
+    assert.strictEqual(describePhoneSettings(undefined), '');
+    assert.strictEqual(describePhoneSettings({ indicator: 'normal' }), '');
+  });
+
+  it('describeAgentRefusal has texts for the new reasons and passes others through', () => {
+    assert.match(describeAgentRefusal('screen view disabled on the phone'), /Screen view is turned off on the phone/);
+    assert.match(describeAgentRefusal('logs disabled on the phone'), /System logs are turned off on the phone/);
+    assert.match(describeAgentRefusal('stopped from the phone'), /stopped from the phone/);
+    assert.match(describeAgentRefusal('developer mode is off'), /Developer Mode is off/);
+    assert.strictEqual(describeAgentRefusal('something else'), 'something else');
+  });
+  it('phoneRefusal only for a running agent whose phone setting is false', () => {
+    const base = { state: 'running', version: '1.9.0', developerMode: true } as const;
+    assert.match(phoneRefusal({ ...base, settings: { screenView: false } }, 'screenView') ?? '', /Screen view is turned off/);
+    assert.match(phoneRefusal({ ...base, settings: { logs: false } }, 'logs') ?? '', /logs are turned off/i);
+    assert.strictEqual(phoneRefusal({ ...base, settings: { logs: false } }, 'screenView'), undefined);
+    assert.strictEqual(phoneRefusal(base, 'logs'), undefined);
+    assert.strictEqual(phoneRefusal({ state: 'not-running' }, 'logs'), undefined);
+  });
+
+  it('clientName strips to the agent alphabet and cuts at 64', () => {
+    assert.strictEqual(clientName('my host (1).local'), 'my host 1.local');
+    assert.strictEqual(clientName('a$b;`c'), 'abc');
+    assert.strictEqual(clientName('(){}'), '');
+    assert.strictEqual(clientName('x'.repeat(100)).length, 64);
   });
 });

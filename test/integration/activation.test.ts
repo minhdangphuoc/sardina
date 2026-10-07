@@ -43,6 +43,7 @@ suite('activation/bare', () => {
       'sailfish.emulator.installAvailable',
       'sailfish.device.setDefault',
       'sailfish.device.setSfdkDefault',
+      'sailfish.device.stopSessions',
       'sailfish.device.openSsh',
       'sailfish.showOutput',
       'sailfish.setupSigning',

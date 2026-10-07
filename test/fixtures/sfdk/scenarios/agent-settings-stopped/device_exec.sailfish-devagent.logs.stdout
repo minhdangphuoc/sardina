@@ -1,0 +1,4 @@
+Oct 05 13:42:01.123456 Sailfish systemd[1]: Started sailfish-devagent.
+Oct 05 13:42:02.234567 Sailfish sailfish-devagent[812]: listening on /run/user/100000/sailfish-devagent/agent.sock
+Oct 05 13:42:03.345678 Sailfish lipstick[640]: screenshot requested
+{"ok":false,"error":"stopped from the phone"}

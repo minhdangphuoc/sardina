@@ -190,6 +190,39 @@ suite('device agent (T4)', () => {
     assert.ok(!messages.calls.some((m) => m.kind === 'error'), JSON.stringify(messages.calls));
   });
 
+  test('screenshot: screen view off on the phone is refused with the Settings place and fetches nothing', async () => {
+    await withScenario('agent-settings-view-off', async () => {
+      const messages = stubMessages();
+      await vscode.commands.executeCommand('sailfish.agent.screenshot');
+      const error = messages.calls.find((m) => m.kind === 'error');
+      assert.ok(error?.message.includes('Screen view is turned off on the phone'), JSON.stringify(messages.calls));
+      assert.ok(error);
+      assert.ok(error.message.includes('Settings → System → Developer agent'), error.message);
+      assert.ok(!keys().includes('device_exec.base64'), JSON.stringify(keys()));
+    });
+  });
+
+  test('I24 logs: logs off on the phone is refused before streaming', async () => {
+    await withScenario('agent-settings-logs-off', async () => {
+      const messages = stubMessages();
+      await vscode.commands.executeCommand('sailfish.agent.logs');
+      const error = messages.calls.find((m) => m.kind === 'error');
+      assert.ok(error?.message.includes('System logs are turned off on the phone'), JSON.stringify(messages.calls));
+      assert.ok(!keys().includes('device_exec.sailfish-devagent.logs'), JSON.stringify(keys()));
+    });
+  });
+
+  test('I25 logs: a stream the phone stops reports "stopped from the phone" although the exit code is 0', async function () {
+    this.timeout(20000);
+    await withScenario('agent-settings-stopped', async () => {
+      const messages = stubMessages();
+      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await waitFor(() => messages.calls.some((m) => m.kind === 'error'), 8000);
+      const error = messages.calls.find((m) => m.kind === 'error');
+      assert.ok(error?.message.includes('stopped from the phone'), JSON.stringify(messages.calls));
+    });
+  });
+
   test('uninstall: devel-su rpm -e, then a "removed" message', async () => {
     const messages = stubMessages();
     stubInputBox('secret');

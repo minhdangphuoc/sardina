@@ -1,0 +1,1 @@
+hand-written: agent 1.9.0 ping with settings (control off) and settingsPage. The forward status reports input:false with inputError, followed by a header-only settings record that the fake ssh sends only when the request has phoneState:true.

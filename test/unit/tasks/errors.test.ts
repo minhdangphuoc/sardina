@@ -92,6 +92,11 @@ describe('errors.mapBuildError (M1.17)', () => {
     assert.strictEqual(mapped?.actionLabel, 'Select target');
   });
 
+  it('maps a declined on-device installation', () => {
+    const mapped = mapDeployError('User aborted\nInstallation failed');
+    assert.match(mapped?.message ?? '', /^The installation was declined or not confirmed on the device$/);
+  });
+
   it('returns undefined for unrecognised stderr', () => {
     assert.strictEqual(mapBuildError('compile error at line 1'), undefined);
   });

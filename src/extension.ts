@@ -11,8 +11,11 @@ import { activateTasks } from './tasks/commands';
 import { activateSigning } from './tasks/signing';
 import { activateBuildConfigStatusBar } from './tasks/statusBar';
 import { activateDebug } from './debug/debugOnDevice';
+import { watchDeviceChange } from './devices/switchCleanup';
 import { activateDevices } from './devices/commands';
+import { activateBuildView } from './build/buildView';
 import { activateDeviceAgent } from './agent/deviceAgent';
+import { FORWARD_TIMING, MIRROR_TIMING } from './agent/mirror';
 import { activateQtQml } from './qtqml/silence';
 import { activateWalkthrough } from './walkthrough/index';
 import { getShownMessages } from './ui/prompts';
@@ -38,7 +41,9 @@ export function activate(ctx: vscode.ExtensionContext) {
   const buildConfigStatusBar = activateBuildConfigStatusBar(ctx, services);
   const devicesProvider = activateDevices(ctx, services);
   ctx.subscriptions.push(buildConfigStatusBar.watchDevices(devicesProvider));
+  const buildView = activateBuildView(ctx, services, devicesProvider);
   activateDeviceAgent(ctx, services);
+  watchDeviceChange(ctx, services);
   activateQtQml(ctx, services);
   activateWalkthrough(ctx, services);
 
@@ -54,9 +59,13 @@ export function activate(ctx: vscode.ExtensionContext) {
       getActivationMs: () => activationMs,
       getShownMessages,
       getDevicesProvider: () => devicesProvider,
+      getBuildView: () => buildView,
       getTargetStatusBar: () => targetStatusBar,
       getLastTargetList,
       resetLastTargetListForTests,
+      /** The mirror's mutable keepalive and forward timings (tests shorten them; no behaviour change). */
+      mirrorTiming: MIRROR_TIMING,
+      forwardTiming: FORWARD_TIMING,
     },
   };
 }

@@ -210,6 +210,23 @@ export function attachEmulatorEndpoints(emulators: SfdkDeviceInfo[], devices: Sf
   });
 }
 
+/** The device of a tree item (structural check: `{ device: SfdkDeviceInfo }`); pure so it is usable without `vscode`. */
+export function deviceFromItem(item: unknown): SfdkDeviceInfo | undefined {
+  if (!item || typeof item !== 'object' || !('device' in item)) {
+    return undefined;
+  }
+  const device = item.device;
+  if (
+    device &&
+    typeof device === 'object' &&
+    typeof (device as SfdkDeviceInfo).name === 'string' &&
+    typeof (device as SfdkDeviceInfo).kind === 'string'
+  ) {
+    return device as SfdkDeviceInfo;
+  }
+  return undefined;
+}
+
 /** The name sfdk's device options (`-c device=`, `device exec`) address this entry by. */
 export function sfdkDeviceName(device: SfdkDeviceInfo): string {
   return device.deviceName ?? device.name;

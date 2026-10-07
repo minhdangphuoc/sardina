@@ -1,0 +1,283 @@
+[
+ {
+  "status": {
+   "ok": true,
+   "stream": "mirror",
+   "fps": 30,
+   "width": 720,
+   "quality": 60,
+   "encoding": "vp8",
+   "window": 4,
+   "bitrate": 2000,
+   "adapt": true,
+   "lease": "$request"
+  }
+ },
+ {
+  "header": {
+   "frame": 1,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 33,
+   "bytes": 939,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI69zIs779APSAiYmpbgjuVog6rfdL+zYIdwDugP9Z6gHnz/Y5/ZX9q8Nd01ewPaU3RAbjCz9QnOZ+S/sB7ANshCZgBFD2/Sx/w9WQMt9759L3iDG5OEIVa+tlaQVAHmvrUzxCD3Xa+Ohrz5NnZtzwvqvjLdVHq+e00ayp/K0ZDHcEF8gndZiKmc1Fb3keqso6kNaO/1OAEUTMAl5xWYuSVtZ9hgAjAAChAQDEAAD+9S5hFmtwNlEC3rmkO9gHcjpH7WiKpnoR/X+zkYpnFJlYAPz94lUv8EyN6wro82lspvoJ8p0T4Xr5wUdzimoaTVMRs7t3c+6MmziB0qMI7GueSrZ4oeqcKrlG869d9SYLwsCtPEftzqJkzQ5XIid6HJIofyV0ynvD2XZS06Fg+A7/EuwQO3L7Ic8V92dbK4J7HK9uineheDTPgzTVTtLbLPn5hvqQszqX/+RdtCfBA7qObh/pYOtL/pHyNFhu/GagHO34UiHzdDWAfSdJoA1c1LDQ2kfzQsrlGpTwEmwXhs7UT2Xd38VSt+B6TlfHjf/5Xk8mKfNIhzdzjDx+GuafVHtvWzjpGNK2atnD9MD0HUL9/9QnB+xVwtyJotz90PDJ//dJQQtepvjiB/Qhmprk1sRRJfH6hd3Ot/c075C8U+0AIA3kPf3uEbV8ieU9P41vc2ybCZUB/x0YUXpbw7My/8ooVXnom7/ndq76QPxOvbXlcOCcfq5/ivErFavSx3G9HRz6L0bvvZgD9Bn72nj/bf+J1V7v4YauzcvaHyNoYuZURbHU7dpy4uQQuElgWl98/eQ0JEHR9a/0L14Q2qC7jqlrAP2PAZQy2zhtLl+h2iG30WHmUX0u2RJIghKjKx5uL+AfebOeG0yYw8eQwcLgT3ZPsoiDRQ3oBqt7j3wGELdAP8PTUCyfHSgGuJ5mph++fJwnn0a5gYFUaZzLYc8Jz7NRCJpJMEHdaMzHqMJhfC1XYgk+s3gX7FnpN2I+X2W+f5b9Pdo03GAsaj8jmv9w/mzXuo7c98IXT1BjSotI71qmg7AfUMLPhyVtw/XY88ICw/0Gdrm3HcP2lgXKUnHJeP7bofXqQYD8Bw9kLAgm1OGJt3mhlYiChwhaM+LMtPR2okl/u7e1iRT5D7GjDn/FgZxczO6TjeAm32ZVW07u05njN1ztDkej2gHlpBOj+egCYwoW0/SUCiE+h5wJinvCXrAAQRUA",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 2,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 151,
+   "bytes": 424,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "UQsA44tfxNNYnYBis6uTVJnfO5dW0b5Se3/KuMAa/J3KDrARTv+TohRl2WxJ7lddHE9qah7//RamGR7lYI8V3TxU3XjUjUv6S1rfQgBsWJwA+5Yn+o70vOsV8degLwAAswAALQAAyCjGRtLBb+5rWMdMzjW2UXXfQj+80UHUsLRapDgqXxBD34H65Umnkmze9EGsQsC6zpsAXNDqtWtjw0vuhAvnWS8xrrVl5s/3soLRF/n/0FjEiFHyuoZocD/E7UsRYuvjT3CCj5cIXQ+Evb79srI/g9Onv+EavVj1n93mFaurt9UXu8ZXKg6oEJ/ltolXA6hmfjAJiAAd7RYnaHAaTvAYjvn8XHaR58DJOsBSEdKofiAFsl8UPc+Z+qHDJjmXIX4AjfjN5xOb+LvzGz/2Hv65//tH/SAQ3ro+m4SW0yrMu4BToIRSW8Ur2Fj5qMs+2iYPoy0YIE2J47bLlztXUJgQnOGWpjiKvXmNLMc1HOCpgBwqNpD2GRCZ75fd4iMCcNC9XfPW0hAB20Gqz0tYWkkdj/AWcGyKexd6x8617wFJEX5gAA==",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 3,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 191,
+   "bytes": 180,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "sQgA5HGPxNdUKBtiV9Acexc/6AVPj4G1tRIkU4dHdA0adDze9DcuKwQIySmKMo03VYbMigN9lkFhqklVDpwWEFwia7p+hoGwCAAAIAAALQAA/us2you5mMCcKuzlCtB1JOO7VbB1s5pwRcagAYSoqgpZKn/TL7IEAF7AMeJoT52hmdqGJ7tLPnCqaAACn/WxEIDRPQUS3H3jjQZwqU/jL7NRwVDS0I7VjUuadAGpMekALoAA",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 4,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 207,
+   "bytes": 102,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "8QQA5FHPxSazqQtC2D3WLAB1fwcPu50YAEBONIQnuE239DChq/yGt7YgCAAAEgAAEQAA4GcnPiiwAACsIU0gfqIHFqc/ccnLYgI9AACziy2B+QR4xbqgfd0wHesgAMLCV9rEixQA",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 5,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 245,
+   "bytes": 150,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "MQYA5CIvxOcy6msD3p5d4AJBpX8QAL1KQ7zFaGg2g0F7PuXV5dWUzdMQZO7SKV6+tK0TABsAABcAABgAAP5Nq2Woo0OA5nqkQ7n/GyNxUlxkELU9/y8QAKQqMAggp0o0HuuLsQ97orpPyDgINcgAMfgKP8NsGEMmZle0uemcWoGa59BQCeoAagIHreyAw8PpGQaqctsA",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 6,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 285,
+   "bytes": 344,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "kQgA4/KPxLOaK8rE280MNVIsc7J656sP4LRW6N4QJtz5gAV18Z/1Bo4BWIOLdn3EPCYPoksTFUksTcturYNwqICRtQI+agChAAAhAAA1AAD+i30KW+i9JyiAJWu6P8ocBulYlFD03HujzQPBYPRl/krVmNkWogbogAIOWwtrrHbIb6dYUASCiilYeoaG5cgwj5W8pwrKYHoRJ/ehiv/ov5eDipkwTAR3JrhRLqKOMfvqY0FI06O/f5uOxmKxWo8gVRAH7d6iOmL/dWLHH7h/M5//s5uSyJdun91Azmm3lLBWfhCI2Vk02sYTsjYAT3hKACF7SriYTV3WjCAVtBJJAGVXnM1nWBpYRVXAZoJNWq79AH+koKamko0dK/fjQFPopRd7UA4eLZDLUbWGZ2hnbcYPP/Z4a7dj5iC1LHKigABUgiHl5sAAGn1/6xRDN9B8olOcDJJgWWA=",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 7,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 316,
+   "bytes": 462,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "0QsA5EHvxO8jaXsjWkL85fZha4CbYQ2JsA7YGagCV/+adOhTu+8IDT5hSIHGQYVPrpK1vlHSyU0GS0KaVxwx1iDx+XW3VxPRYYmFpH3oodqjj5s+w1YKn4PkIZYdzZAy0JwAAGQAAD8AAP4Igiq7kxfhQcpKXOQLPRy30eKH8sMPGZUWrTcOgZGL8XAOA+9Vyexx9N882tFzxLdrd9aoemm1ixZUTr0k4Zf0kKvEkLPVPnWKt0LPXcMhhTdhxGh7npu5VyhegPlW/9CXPhXlZmSIvV9nyFiToDniPNt5FzhuKNyRzJtW1PozYjW3U7B25Sm0Uu76Io39F1RcAdGwZV/foHiIAOFrLz6gQS0cD45EYGkFB+dyOihOejcTkny5W9mPqFHZ3AoBvIP/OaG7uIFT/8HxpfoeZ0Sl2MuoUcmtu59qW4+i+vm9P59UzwOHYJtlz6jNLxiJ+Ie/vg/jA//YjsH5OjoqAAAT9Lr4S7evzgaUDW9VHHNHz4/adDhnaam7cSN/s0ck+XjawE0s2UkCDKcP39oC2QXEYqA3Q69ozqc7YQEoAADbwNCsoJiududs0WxPrsIsN6sP1nGzhxWxvRMr3BizUMG/pAAA",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 8,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 363,
+   "bytes": 417,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "MQgA5BJPxP8CqtrkW4D7qc/ZsC2P8MVXX/1z+fM+kF/oAAIEpKQ5r9XPkPfBjE96EabR/p2Jui6HOp+uIglC4tQyfADJAAA+AAAwAAD8gZ5iT7yj3QYm9JF6+pPYHYR1irYEjIKIUzM++SNHUXpz9oFeHQYjBlbjtlvXiQzBfwKVfE1nphTBYgQ622Af77q5xYvuEGh6sgyp9miashqo/GnbzsyCWj1gWuPP9t3BbZ9CsCgrCcePJFuyQG9pEl/gYYzuonby4vrGpC4Hr9iCMnMlfEED20XREm0cZLnoxUbgxsDzhno3+YBH2zovAiJQ14MigZ8PtADRlv7TVy3aTS+Lm40TYkoUScyEBQ/8SfgEt5ywV8AA4JL5Tj4NPN1nTUfoezE6hLYAMUwQVcPIM1OJsejqZBElugtKua5o7eiuT00B3iuVsaAUmUEqOpQOICg1UG6jh6Iv9Ubn5wLdqAS+MUnwyogDo5lD7VClBWSVnyFMAIrHFT4h8hVJkYyOrwAAAFHmu3lvioPUCjLGppoLPJsH6xq96oogIuZbOiAA",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 9,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 401,
+   "bytes": 269,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "8QgA5Cof0L9TCisD2/fptypfoByAdZgDS9UXbbuUBBV6EKDLgeMSpDQ5KJI3T2AODwpDQJn0rLbYr28RX/ENPhtTE4Fn9ZMKNAANAABrAAAuAABqMXAazHCA2USTT2IAR55FUTy+uxclZv6euYbHLM/KE8MSYO2xUMvTr/db+FLpPHL9d8n95D5vblgEpG+XjQn+KFAKC+zlfNzP515aiN82aAwGU2wSOf1TVLBgxig+NkRGX1dBFF/BtB6Tyw11WsnXLSYqH8qrAAAtPLJU70JXhasn6dyqYeu4Rb8abYe5Y4RGnI1aFB1McfoYKaKrUuNYEFFeE4AArqXPVsdwLBM6qx8r1C3rm8Oh4gA=",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 10,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": false,
+   "pts": 437,
+   "bytes": 206,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000
+  },
+  "payloadBase64": "kQcA5AJvxN9CezrkWx/9+59zdTA5f9JsB/kMQXrH6BAkvKh4cu1eO/e4XE6+nyFwkTz8/KE/WD/ReT+dDiEAGwAANQAAJQAAfUARGDTsDC6UulQuuCs+uCLtD0z9Y9xPquAAGBTC1EzROTs+gvOlE5qa0qaklIf5L1qFvvqXTxzjOWQP5/GZUctd+1geD6/takGz4dR+wACRDQfdWoipJg/QsB1zzttW91swhtGW7nMcThXoqpaO2cFN+sAAp6B5NPKp5C3YeBNowIDWssA=",
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 20,
+   "ts": "now",
+   "same": true
+  },
+  "afterMs": 40
+ },
+ {
+  "header": {
+   "frame": 100,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    1,
+    1
+   ],
+   "format": "png",
+   "bytes": 69,
+   "cms": 12,
+   "ems": 3
+  },
+  "payload": "png1x1"
+ }
+]

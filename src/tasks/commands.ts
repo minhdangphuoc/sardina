@@ -6,11 +6,17 @@ import { buildArgs, deployArgs, runArgs } from './argv';
 import { chooseLauncher } from './launcher';
 import { mapBuildError, mapDeployError, type MappedError } from './errors';
 import { runNotificationAction } from './notify';
+import { buildLog } from './buildLog';
+import { formatStepFooter, formatStepHeader, mapBuildLogLine } from './buildLogCore';
+import { sessionPathMapCache } from './pseudoterminal';
 import { launchInAppTerminal } from './appTerminal';
 import { deployInstallsApp, deployMethodLabel } from './buildConfig';
 import { ensureBuildMatchesTargetArch } from './archGuard';
+import { buildTypeCleanArgv } from './buildTypeGuard';
 import { whitespacePathWarning } from './pathGuard';
 import { resolveSigningUser } from './signingGuard';
+import { buildState, stageForArgv } from '../build/buildStateCore';
+import { cleanProjectBuild, rebuild } from './cleanProject';
 
 async function ensureTarget(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
   const target = services.settings.get('target', folder.uri);
@@ -26,6 +32,9 @@ function ensureArchClean(services: Services, folder: vscode.WorkspaceFolder): Pr
   const target = services.settings.get('target', folder.uri);
   return target ? ensureBuildMatchesTargetArch(services, folder, target) : Promise.resolve(true);
 }
+
+/** sdk-deploy-rpm waits for the user to tap Install on the phone. */
+const CONFIRM_ON_DEVICE_RE = /Please confirm installation on device/i;
 
 async function activeProjectOrWarn(services: Services): Promise<ProjectDescriptor | undefined> {
   const project = await services.projects.resolveActive();
@@ -48,7 +57,7 @@ function findTask(tasks: vscode.Task[], command: string, project: ProjectDescrip
 }
 
 /** FR-5.10: build/deploy/run/package go through `tasks.executeTask` (so `dependsOn` chains run). */
-function makeExecuteTaskCommand(services: Services, command: 'build' | 'deploy' | 'run' | 'package') {
+function makeExecuteTaskCommand(services: Services, command: 'build' | 'deploy' | 'run' | 'package' | 'check') {
   return async (): Promise<void> => {
     const project = await activeProjectOrWarn(services);
     if (!project) {
@@ -57,7 +66,7 @@ function makeExecuteTaskCommand(services: Services, command: 'build' | 'deploy' 
     if (!(await ensureTarget(services, project.folder))) {
       return;
     }
-    if (command !== 'package' && !(await ensureArchClean(services, project.folder))) {
+    if (command !== 'package' && command !== 'check' && !(await ensureArchClean(services, project.folder))) {
       return;
     }
     const tasks = await vscode.tasks.fetchTasks({ type: SAILFISH_TASK_TYPE });
@@ -76,10 +85,11 @@ function makeExecuteTaskCommand(services: Services, command: 'build' | 'deploy' 
 }
 
 /** Fire-and-forget: a command's own completion must never block on the user dismissing a notification (NFR-1-adjacent). */
-function reportFailure(services: Services, stage: string, mapped: MappedError | undefined): void {
+function reportFailure(services: Services, stage: string, mapped: MappedError | undefined, outputTarget: 'main' | 'build' = 'main'): void {
   const message = mapped?.message ?? `Sailfish: ${stage} failed`;
   const actions = mapped?.actionLabel ? [mapped.actionLabel, 'Show output'] : ['Show output'];
-  void services.prompts.showErrorMessage(message, ...actions).then((chosen) => void runNotificationAction(services, chosen));
+  if (stage === 'build') actions.push('Clean & Rebuild');
+  void services.prompts.showErrorMessage(message, ...actions).then((chosen) => void runNotificationAction(services, chosen, outputTarget));
 }
 
 /** FR-5.10 exception: build -> deploy -> run via SfdkRunner directly, one invocation each, stopping on the first non-zero exit. */
@@ -133,10 +143,61 @@ export async function buildDeployThen(
 
   await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title, cancellable: true },
-    async (progress, token) => {
-      progress.report({ message: 'building…' });
-      const buildResult = await services.runner.run({
-        args: buildArgs(
+    async (progress, progressToken) => {
+      // One token for both the notification's Cancel button and the Build view's Stop button.
+      const cts = new vscode.CancellationTokenSource();
+      const cancelSub = progressToken.onCancellationRequested(() => cts.cancel());
+      const token = cts.token;
+      const runId = buildState.start('building', Date.now(), () => cts.cancel());
+      let reported = false;
+      const finish = (ok: boolean): void => {
+        if (reported) return;
+        reported = true;
+        buildState.end(runId, ok, Date.now(), token.isCancellationRequested);
+      };
+      try {
+        // Stream the whole build and deploy into the "Sailfish OS Build" channel, cleared first.
+        buildLog.begin(services.settings.get('build.revealLog', folderUri));
+        const engineLine = (line: string): void => buildLog.appendLine(line);
+        const wasCached = sessionPathMapCache.has(project.folder);
+        const engineMapping = await sessionPathMapCache.ensure(services, project.folder, engineLine);
+        const lineOut = (line: string): void => buildLog.appendLine(mapBuildLogLine(line, engineMapping, cwd));
+        const logStep = async (stage: string, argv: string[], run: () => ReturnType<typeof services.runner.run>) => {
+          buildLog.appendLine(formatStepHeader(argv, new Date()));
+          const started = Date.now();
+          try {
+            const result = await run();
+            buildLog.appendLine(formatStepFooter(stage, result.exitCode, Date.now() - started, token.isCancellationRequested));
+            return result;
+          } catch (err) {
+            buildLog.appendLine(`${stage} failed: ${err instanceof Error ? err.message : String(err)}`);
+            throw err;
+          }
+        };
+
+        // Objects compiled for the other build type would be reused as they are (buildTypeGuard.ts).
+        const cleanArgv = buildTypeCleanArgv(project, services.settings.get('build.type', folderUri));
+        if (cleanArgv) {
+          progress.report({ message: 'cleaning the previous build type…' });
+          const cleanResult = await logStep('clean', cleanArgv, () =>
+            services.runner.run({ args: cleanArgv, target, cwd, token, ensureEngine: wasCached || engineMapping === null, onEngineLine: engineLine, onLine: lineOut }),
+          );
+          if (cleanResult.exitCode !== 0) {
+            reportFailure(
+              services,
+              'build',
+              { message: 'Sailfish: could not clean the build output of the previous build type. Run "Clean Project Build" and try again.' },
+              'build',
+            );
+            return;
+          }
+          if (token.isCancellationRequested) {
+            return;
+          }
+        }
+
+        progress.report({ message: 'building…' });
+        const buildArgv = buildArgs(
           { command: 'build', extraArgs: services.settings.get('build.extraArgs', folderUri) },
           {
             runHarbourCheck: services.settings.get('build.runHarbourCheck', folderUri),
@@ -146,45 +207,61 @@ export async function buildDeployThen(
             signingUser: signing.user,
             signingPassphraseFile: services.settings.get('build.signingPassphraseFile', folderUri),
           },
-        ),
-        target,
-        // No `device`: building needs none (AC-1.5), and a device that is no longer registered would fail it.
-        cwd,
-        token,
-        ensureEngine: true,
-      });
-      if (buildResult.exitCode !== 0) {
-        reportFailure(services, 'build', mapBuildError(buildResult.stderr));
-        return;
-      }
-      if (token.isCancellationRequested) {
-        return;
-      }
-
-      progress.report({ message: 'deploying…' });
-      const deployResult = await services.runner.run({
-        args: deployArgs({ command: 'deploy' }, { method: services.settings.get('deploy.method', folderUri) }),
-        target,
-        device,
-        cwd,
-        token,
-      });
-      if (deployResult.exitCode !== 0) {
-        reportFailure(services, 'deploy', mapDeployError(deployResult.stderr));
-        return;
-      }
-      if (token.isCancellationRequested) {
-        return;
-      }
-      const method = services.settings.get('deploy.method', folderUri);
-      if (!deployInstallsApp(method)) {
-        void services.prompts.showInformationMessage(
-          `Sailfish: ${deployMethodLabel(method)} done — the RPM is in ~/RPMS on the device; install it there to run it.`,
         );
-        return;
-      }
+        const buildResult = await logStep('build', buildArgv, () =>
+          services.runner.run({
+            args: buildArgv,
+            target,
+            // No `device`: building needs none (AC-1.5), and a device that is no longer registered would fail it.
+            cwd,
+            token,
+            // A fresh, successful path probe has just started the engine.
+            ensureEngine: wasCached || engineMapping === null,
+            onEngineLine: engineLine,
+            onLine: lineOut,
+          }),
+        );
+        if (buildResult.exitCode !== 0) {
+          reportFailure(services, 'build', mapBuildError(buildResult.stderr), 'build');
+          return;
+        }
+        if (token.isCancellationRequested) {
+          return;
+        }
 
-      await then({ project, target, device, cwd, ...launchPlan(services, project) }, progress, token);
+        buildState.setStage(runId, stageForArgv(['deploy']));
+        progress.report({ message: 'deploying…' });
+        const deployArgv = deployArgs({ command: 'deploy' }, { method: services.settings.get('deploy.method', folderUri) });
+        const deployLine = (line: string): void => {
+          lineOut(line);
+          if (CONFIRM_ON_DEVICE_RE.test(line)) progress.report({ message: 'confirm the installation on the device screen…' });
+        };
+        const deployResult = await logStep('deploy', deployArgv, () =>
+          services.runner.run({ args: deployArgv, target, device, cwd, token, onLine: deployLine }),
+        );
+        if (deployResult.exitCode !== 0) {
+          reportFailure(services, 'deploy', mapDeployError(deployResult.stderr), 'build');
+          return;
+        }
+        if (token.isCancellationRequested) {
+          return;
+        }
+        // Launching (Run/Debug) is not part of the build: the Build view's result is final here.
+        finish(true);
+        const method = services.settings.get('deploy.method', folderUri);
+        if (!deployInstallsApp(method)) {
+          void services.prompts.showInformationMessage(
+            `Sailfish: ${deployMethodLabel(method)} done — the RPM is in ~/RPMS on the device; install it there to run it.`,
+          );
+          return;
+        }
+
+        await then({ project, target, device, cwd, ...launchPlan(services, project) }, progress, token);
+      } finally {
+        finish(false);
+        cancelSub.dispose();
+        cts.dispose();
+      }
     },
   );
 }
@@ -313,6 +390,7 @@ async function clean(services: Services): Promise<void> {
 /** Registers the TaskProvider (provider.ts) and the FR-5.10 commands. */
 export function activateTasks(ctx: vscode.ExtensionContext, services: Services): void {
   registerTaskProvider(ctx, services);
+  ctx.subscriptions.push(buildLog);
 
   ctx.subscriptions.push(
     vscode.commands.registerCommand('sailfish.build', makeExecuteTaskCommand(services, 'build')),
@@ -321,6 +399,12 @@ export function activateTasks(ctx: vscode.ExtensionContext, services: Services):
     vscode.commands.registerCommand('sailfish.buildDeployRun', () => buildDeployRun(services)),
     vscode.commands.registerCommand('sailfish.runInstalled', () => runInstalled(services)),
     vscode.commands.registerCommand('sailfish.package', makeExecuteTaskCommand(services, 'package')),
+    vscode.commands.registerCommand('sailfish.check', makeExecuteTaskCommand(services, 'check')),
     vscode.commands.registerCommand('sailfish.clean', () => clean(services)),
+    vscode.commands.registerCommand('sailfish.cleanProjectBuild', () => cleanProjectBuild(services)),
+    vscode.commands.registerCommand('sailfish.rebuild', () => rebuild(services)),
+    vscode.commands.registerCommand('sailfish.showBuildLog', () => buildLog.show()),
+    vscode.commands.registerCommand('sailfish.stopBuild', () => buildState.stopAll()),
+    buildState.onDidChange(() => void services.contextKeys.set('sailfish.building', buildState.running)),
   );
 }
