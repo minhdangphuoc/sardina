@@ -8,7 +8,8 @@ import type { AppCounters } from './appStats';
 
 // --- shared vocabulary ---
 
-export const ACTION_NAMES = ['restartApp', 'stopApp', 'runApp', 'screenshot', 'openMirror', 'showLogs'] as const;
+/** What the editor title bar buttons run (`sailfish.monitor.*`). */
+export const ACTION_NAMES = ['restartApp', 'stopApp', 'screenshot', 'openMirror', 'showLogs'] as const;
 export type ActionName = (typeof ACTION_NAMES)[number];
 
 export const RESUME_TARGETS = ['app', 'all'] as const;
@@ -33,16 +34,9 @@ export interface AppStatsView {
   uptimeSec?: number;
 }
 
-export interface ActionState {
-  enabled: boolean;
-  /** Why it is disabled; shown as the button's tooltip. */
-  reason?: string;
-}
-
 export interface BannerAction {
   label: string;
-  resume?: ResumeTarget;
-  action?: ActionName;
+  resume: ResumeTarget;
 }
 
 export type HostMessage =
@@ -61,12 +55,10 @@ export type HostMessage =
       stats: AppStatsView | null;
       counters: AppCounters;
     }
-  | { type: 'actions'; actions: Partial<Record<ActionName, ActionState>> }
-  | { type: 'notice'; text: string }
   | { type: 'banner'; text: string; actions: BannerAction[] }
   | { type: 'banner.clear' };
 
-export const HOST_MESSAGE_TYPES: readonly HostMessage['type'][] = ['init', 'overview', 'app', 'actions', 'notice', 'banner', 'banner.clear'];
+export const HOST_MESSAGE_TYPES: readonly HostMessage['type'][] = ['init', 'overview', 'app', 'banner', 'banner.clear'];
 
 /**
  * Shape check for what the page receives. The host is trusted, but a malformed message must not
@@ -84,10 +76,6 @@ export function asHostMessage(raw: unknown): HostMessage | undefined {
       return typeof m.line === 'string' && typeof m.state === 'string' && (CONNECTION_STATES as readonly string[]).includes(m.state) ? (raw as HostMessage) : undefined;
     case 'app':
       return typeof m.counters === 'object' && m.counters !== null ? (raw as HostMessage) : undefined;
-    case 'actions':
-      return typeof m.actions === 'object' && m.actions !== null ? (raw as HostMessage) : undefined;
-    case 'notice':
-      return typeof m.text === 'string' ? (raw as HostMessage) : undefined;
     case 'banner':
       return typeof m.text === 'string' && Array.isArray(m.actions) ? (raw as HostMessage) : undefined;
     default:
@@ -99,11 +87,10 @@ export function asHostMessage(raw: unknown): HostMessage | undefined {
 
 export type PageMessage =
   | { type: 'ready' }
-  | { type: 'action'; name: ActionName }
   | { type: 'ui.visible'; on: boolean }
   | { type: 'resume'; what: ResumeTarget };
 
-export const PAGE_MESSAGE_TYPES: readonly PageMessage['type'][] = ['ready', 'action', 'ui.visible', 'resume'];
+export const PAGE_MESSAGE_TYPES: readonly PageMessage['type'][] = ['ready', 'ui.visible', 'resume'];
 
 export type PageParse = { ok: true; message: PageMessage } | { ok: false; reason: 'unknown-type' | 'invalid' };
 
@@ -124,10 +111,6 @@ export function parsePageMessage(raw: unknown): PageParse {
       return ok({ type });
     case 'ui.visible':
       return typeof m.on === 'boolean' ? ok({ type, on: m.on }) : bad;
-    case 'action': {
-      const name = oneOf(m.name, ACTION_NAMES);
-      return name ? ok({ type, name }) : bad;
-    }
     case 'resume': {
       const what = oneOf(m.what, RESUME_TARGETS);
       return what ? ok({ type, what }) : bad;

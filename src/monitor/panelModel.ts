@@ -6,7 +6,13 @@
 import { phoneRefusal, type AgentProbe } from '../agent/agentCore';
 import type { DeviceSessionInfo } from '../core/deviceSessions';
 import type { DeviceOverview } from './deviceProbe';
-import type { ActionName, ActionState, AppStatsView, ConnectionState } from './protocol';
+import type { ActionName, AppStatsView, ConnectionState } from './protocol';
+
+export interface ActionState {
+  enabled: boolean;
+  /** Why it is not available; shown as a message when the command is run anyway. */
+  reason?: string;
+}
 
 export interface HeaderInput {
   /** Undefined while the probe runs. */
@@ -63,7 +69,6 @@ export function actionStates(i: ActionInput): Partial<Record<ActionName, ActionS
   return {
     restartApp: state(i.selected && i.binaryKnown, !i.binaryKnown ? 'no app known yet' : 'only for the selected device'),
     stopApp: state(i.binaryKnown, 'no app known yet'),
-    runApp: state(i.selected && i.binaryKnown, !i.binaryKnown ? 'no app known yet' : 'only for the selected device'),
     screenshot: state(agentOk && !shotRefusal, shotRefusal ?? agentReason()),
     openMirror: state(agentOk && !shotRefusal, shotRefusal ?? agentReason()),
     showLogs: { enabled: true },

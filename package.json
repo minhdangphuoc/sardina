@@ -347,6 +347,36 @@
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
+        "command": "sailfish.monitor.restartApp",
+        "title": "Restart App on Device Monitor Device",
+        "category": "Sailfish",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "command": "sailfish.monitor.stopApp",
+        "title": "Stop App on Device Monitor Device",
+        "category": "Sailfish",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "command": "sailfish.monitor.screenshot",
+        "title": "Take Screenshot of Device Monitor Device",
+        "category": "Sailfish",
+        "icon": "$(device-camera)"
+      },
+      {
+        "command": "sailfish.monitor.mirror",
+        "title": "Mirror Device Monitor Device",
+        "category": "Sailfish",
+        "icon": "$(device-mobile)"
+      },
+      {
+        "command": "sailfish.monitor.showLogs",
+        "title": "Show Logs of Device Monitor Device",
+        "category": "Sailfish",
+        "icon": "$(output)"
+      },
+      {
         "command": "sailfish.device.remove",
         "title": "Remove Device",
         "category": "Sailfish",
@@ -714,6 +744,40 @@
       ]
     },
     "menus": {
+      "commandPalette": [
+        { "command": "sailfish.monitor.restartApp", "when": "false" },
+        { "command": "sailfish.monitor.stopApp", "when": "false" },
+        { "command": "sailfish.monitor.screenshot", "when": "false" },
+        { "command": "sailfish.monitor.mirror", "when": "false" },
+        { "command": "sailfish.monitor.showLogs", "when": "false" }
+      ],
+      "editor/title": [
+        {
+          "command": "sailfish.monitor.restartApp",
+          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor' && sailfish.monitor.appRunning",
+          "group": "navigation@1"
+        },
+        {
+          "command": "sailfish.monitor.stopApp",
+          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor' && sailfish.monitor.appRunning",
+          "group": "navigation@2"
+        },
+        {
+          "command": "sailfish.monitor.screenshot",
+          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor'",
+          "group": "navigation@3"
+        },
+        {
+          "command": "sailfish.monitor.mirror",
+          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor'",
+          "group": "navigation@4"
+        },
+        {
+          "command": "sailfish.monitor.showLogs",
+          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor'",
+          "group": "navigation@5"
+        }
+      ],
       "view/title": [
         {
           "command": "sailfish.devices.refresh",

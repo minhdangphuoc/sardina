@@ -50,14 +50,14 @@ describe('monitorHtml', () => {
     assert.ok(!evil.includes('"; script-src *'));
   });
 
-  it('is a static skeleton with the controls the script needs and no log or sessions section', () => {
-    for (const id of ['dot', 'state', 'line', 'app-card', 'app-running', 'app-idle', 'app-name', 'app-meta', 'cpu-value', 'mem-value', 'app-counters', 'banner', 'notice']) {
+  it('is a static skeleton with only the connection line and the App card', () => {
+    for (const id of ['dot', 'state', 'line', 'app-card', 'app-running', 'app-idle', 'app-name', 'app-meta', 'cpu-value', 'mem-value', 'app-counters', 'banner']) {
       assert.ok(html.includes(`id="${id}"`), id);
     }
     for (const id of ['cpu', 'rss']) {
       for (const part of ['line', 'area', 'dot']) assert.ok(html.includes(`id="spark-${id}-${part}"`), `${id} ${part}`);
     }
-    for (const a of ['restartApp', 'stopApp', 'runApp', 'screenshot', 'openMirror', 'showLogs']) assert.ok(html.includes(`id="act-${a}"`), a);
+    assert.ok(!/<button|act-|data-action/.test(html), 'the actions live in the editor title bar, not in the page');
     assert.ok(!/log-grid|sessions-list|<section id="sec-/.test(html));
     assert.ok(!/<table|<svg[^>]*><rect/.test(html), 'line sparklines, no bar charts');
   });
@@ -66,8 +66,7 @@ describe('monitorHtml', () => {
     assert.ok(html.includes('<html lang="en">'));
     assert.ok(/<h1 class="sr-only">/.test(html));
     assert.ok(html.includes('id="banner" class="banner" role="status"'));
-    assert.ok(html.includes('id="notice" class="muted notice" role="status"'));
-    assert.strictEqual((html.match(/role="img" aria-labelledby/g) ?? []).length, 2);
+        assert.strictEqual((html.match(/role="img" aria-labelledby/g) ?? []).length, 2);
   });
 
   it('loads the stylesheet from the webview origin, with no other external resource', () => {
@@ -80,7 +79,7 @@ describe('PageMessageGate', () => {
   it('passes valid messages and counts malformed ones', () => {
     const g = new PageMessageGate();
     assert.deepStrictEqual(g.accept({ type: 'ready' }, 0), { message: { type: 'ready' } });
-    assert.deepStrictEqual(g.accept({ type: 'action', name: 'format' }, 1), {});
+    assert.deepStrictEqual(g.accept({ type: 'resume', what: 'nope' }, 1), {});
     assert.strictEqual(g.invalid, 1);
   });
   it('warns once after five unknown types within ten seconds, then starts over', () => {

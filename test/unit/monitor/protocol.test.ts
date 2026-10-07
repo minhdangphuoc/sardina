@@ -5,9 +5,6 @@ describe('validatePageMessage', () => {
   it('accepts every message with exact fields', () => {
     const ok: unknown[] = [
       { type: 'ready' },
-      { type: 'action', name: 'restartApp' },
-      { type: 'action', name: 'runApp' },
-      { type: 'action', name: 'showLogs' },
       { type: 'ui.visible', on: false },
       { type: 'resume', what: 'app' },
       { type: 'resume', what: 'all' },
@@ -17,16 +14,14 @@ describe('validatePageMessage', () => {
 
   it('drops unknown fields', () => {
     assert.deepStrictEqual(validatePageMessage({ type: 'ready', extra: 1, __proto__: { x: 1 } }), { type: 'ready' });
-    assert.deepStrictEqual(validatePageMessage({ type: 'action', name: 'stopApp', cmd: 'rm -rf /' }), { type: 'action', name: 'stopApp' });
+    assert.deepStrictEqual(validatePageMessage({ type: 'resume', what: 'app', cmd: 'rm -rf /' }), { type: 'resume', what: 'app' });
   });
 
   it('rejects wrong types and removed messages', () => {
     const bad: unknown[] = [
       { type: 'ui.visible', on: 1 },
       { type: 'ui.visible' },
-      { type: 'action', name: 'format' },
-      { type: 'action', name: 'refresh' },
-      { type: 'action' },
+      { type: 'action', name: 'stopApp' },
       { type: 'resume', what: 'everything' },
       { type: 'resume', what: 'logs' },
       { type: 'log.ack', upTo: 3 },
@@ -44,7 +39,7 @@ describe('validatePageMessage', () => {
     assert.deepStrictEqual(parsePageMessage({ type: 'nope' }), { ok: false, reason: 'unknown-type' });
     assert.deepStrictEqual(parsePageMessage({ type: 7 }), { ok: false, reason: 'unknown-type' });
     assert.deepStrictEqual(parsePageMessage({}), { ok: false, reason: 'unknown-type' });
-    assert.deepStrictEqual(parsePageMessage({ type: 'action', name: 'x' }), { ok: false, reason: 'invalid' });
+    assert.deepStrictEqual(parsePageMessage({ type: 'resume', what: 'x' }), { ok: false, reason: 'invalid' });
     assert.deepStrictEqual(parsePageMessage(null), { ok: false, reason: 'invalid' });
   });
 

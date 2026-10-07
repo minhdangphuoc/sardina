@@ -3,6 +3,7 @@ import type { Services } from '../core/services';
 import type { SfdkDeviceInfo } from '../core/types';
 import { deviceFromItem } from '../devices/listParsing';
 import { requireDevice } from '../agent/deviceAgent';
+import type { ActionName } from './protocol';
 import { MonitorPanel, type MonitorOpenOptions, type MonitorView } from './monitorPanel';
 
 export type { MonitorView } from './monitorPanel';
@@ -57,8 +58,20 @@ export function activateMonitor(ctx: vscode.ExtensionContext, services: Services
     open(device, parsed.info, parsed.opts);
   };
 
+  // The editor title bar buttons of the monitor tab; each acts on the device of the active tab.
+  const onActive = (action: ActionName) => async (): Promise<void> => {
+    const panel = [...panels.values()].find((p) => p.panel.active);
+    if (panel) await panel.runAction(action);
+  };
+
   ctx.subscriptions.push(
     vscode.commands.registerCommand('sailfish.monitor.open', openCommand),
+    // The editor title bar buttons of the monitor tab; each acts on the device of the active tab.
+    vscode.commands.registerCommand('sailfish.monitor.restartApp', onActive('restartApp')),
+    vscode.commands.registerCommand('sailfish.monitor.stopApp', onActive('stopApp')),
+    vscode.commands.registerCommand('sailfish.monitor.screenshot', onActive('screenshot')),
+    vscode.commands.registerCommand('sailfish.monitor.mirror', onActive('openMirror')),
+    vscode.commands.registerCommand('sailfish.monitor.showLogs', onActive('showLogs')),
     {
       dispose: () => {
         for (const p of [...panels.values()]) p.dispose();

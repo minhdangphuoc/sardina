@@ -357,9 +357,9 @@ export async function launchApp(
 
 /**
  * Launches the installed app again without building, deploying or the "not installed" prompt (the
- * Device Monitor's Restart app and Run installed app). Returns false when no project or no device is selected.
+ * Device Monitor's Restart app). Returns false when no project or no device is selected.
  */
-export async function relaunchInstalled(services: Services, title = 'Sailfish: Restart App'): Promise<boolean> {
+export async function relaunchInstalled(services: Services): Promise<boolean> {
   const project = await activeProjectOrWarn(services);
   if (!project) return false;
   const folderUri = project.folder.uri;
@@ -372,7 +372,7 @@ export async function relaunchInstalled(services: Services, title = 'Sailfish: R
     cwd: folderUri.fsPath,
     ...launchPlan(services, project),
   };
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title, cancellable: true }, (progress, token) =>
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Sailfish: Restart App', cancellable: true }, (progress, token) =>
     launchApp(services, app, progress, token),
   );
   return true;

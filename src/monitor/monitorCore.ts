@@ -31,10 +31,6 @@ function spark(id: string, cls: string, label: string): string {
   return `<svg id="spark-${id}" class="spark ${cls}" viewBox="0 0 120 28" preserveAspectRatio="none" role="img" aria-labelledby="spark-${id}-t"><title id="spark-${id}-t">${label}</title><polygon id="spark-${id}-area" class="area" points=""></polygon><polyline id="spark-${id}-line" points=""></polyline><line id="spark-${id}-dot" class="dot-end" x1="0" y1="0" x2="0" y2="0"></line></svg>`;
 }
 
-function actionButton(name: string, label: string, cls = ''): string {
-  return `<button type="button" id="act-${name}" data-action="${name}"${cls ? ` class="${cls}"` : ''}>${label}</button>`;
-}
-
 /** The page: static skeleton (the script fills it with `textContent` and DOM calls only). */
 export function monitorHtml(o: MonitorHtmlOptions): string {
   const n = escapeHtml(o.nonce);
@@ -66,17 +62,8 @@ export function monitorHtml(o: MonitorHtmlOptions): string {
     </div>
     <div id="app-idle" class="idle">
       <span id="idle-text" class="idle-text">No app launched from VS Code yet</span>
-      ${actionButton('runApp', 'Run installed app', 'primary')}
     </div>
   </section>
-  <div class="actions">
-    ${actionButton('restartApp', 'Restart app', 'primary')}
-    ${actionButton('stopApp', 'Stop app')}
-    ${actionButton('screenshot', 'Screenshot')}
-    ${actionButton('openMirror', 'Mirror')}
-    ${actionButton('showLogs', 'Show logs ↗', 'link')}
-  </div>
-  <p id="notice" class="muted notice" role="status"></p>
 </main>
 <script nonce="${n}" src="${escapeHtml(o.scriptUri)}"></script>
 </body>

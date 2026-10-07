@@ -272,7 +272,7 @@ flowchart LR
   end
   OUT["Output channel<br/>Sailfish Device Log"]
   PNL["monitorPanel.ts<br/>one tab per device"]
-  WV["Page in media/monitor<br/>narrow column: connection, App, Actions"]
+  WV["Page in media/monitor<br/>narrow column: connection, App"]
   AGL -->|"agent 1.10.0 or newer"| LS
   AGL -.->|"older agent: plain text lines"| LS
   AGS --> SS
@@ -282,8 +282,8 @@ flowchart LR
   LS -.->|"crash markers"| PNL
   SS --> PNL
   DP --> PNL
-  PNL -->|"init, overview, app, actions, banner, notice"| WV
-  WV -->|"ready, action, ui.visible, resume"| PNL
+  PNL -->|"init, overview, app, banner"| WV
+  WV -->|"ready, ui.visible, resume"| PNL
 ```
 
 - **Logs** need the agent: `logSource.ts` sends the `logs` request (JSON format
@@ -770,12 +770,13 @@ it fits beside the editor.
      a small line graph each, and `up m:ss · restarts N · crashes N`, live
      while it runs. With agent 1.10.0 it updates every second; without it,
      every 5 seconds through `sfdk`. When the app is not running the card says
-     so and offers **Run installed app**.
-   - **Actions:** **Restart app**, **Stop app**, **Screenshot**, **Mirror** and
-     **Show logs**, which streams the device log into the **Sailfish Device
-     Log** output channel (Part 10, step 4). The monitor has no log view and no
-     session list of its own; the status bar tooltip and the Devices view list
-     what runs on the device.
+     `<app> not running`.
+   - **Actions** are icon buttons in the tab's title bar, not in the page:
+     Restart app and Stop app (only while the app runs), Screenshot, Mirror and
+     Show logs, which streams the device log into the **Sailfish Device Log**
+     output channel (Part 10, step 4). They act on the monitor's device. The
+     monitor has no log view and no session list of its own; the status bar
+     tooltip and the Devices view list what runs on the device.
 3. **Settings.** `sailfish.monitor.pollIntervalSeconds` (5, the poll interval
    without a stats stream) and `sailfish.monitor.logLines` (500, the initial
    tail of Show Device Logs).

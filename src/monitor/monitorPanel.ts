@@ -8,8 +8,8 @@ import { clearOverviewCache, probeOverview, type DeviceOverview } from './device
 import { AppCounter, type AppCounters } from './appStats';
 import { coredumpEvent, type AppIdentity } from './logModel';
 import { ActionGuard, PageMessageGate, monitorHtml } from './monitorCore';
-import { actionStates, connectionState, headerLine, pickApp, statsView, type AppRef } from './panelModel';
-import type { ActionName, ActionState, AppStatsView, BannerAction, ConnectionState, HostMessage, PageMessage, ResumeTarget } from './protocol';
+import { actionStates, connectionState, headerLine, pickApp, statsView, type ActionState, type AppRef } from './panelModel';
+import type { ActionName, AppStatsView, BannerAction, ConnectionState, HostMessage, PageMessage, ResumeTarget } from './protocol';
 import { onAgentInstall, probe } from '../agent/deviceAgent';
 import type { AgentProbe } from '../agent/agentCore';
 import { onAppExit } from '../tasks/appTerminal';
@@ -17,6 +17,7 @@ import { relaunchInstalled } from '../tasks/commands';
 import { onDeviceLogEntries } from './deviceLog';
 
 export const VIEW_TYPE = 'sailfish.deviceMonitor';
+export const APP_RUNNING_KEY = 'sailfish.monitor.appRunning';
 
 export interface MonitorOpenOptions {
   preserveFocus?: boolean;
@@ -85,7 +86,10 @@ export class MonitorPanel {
     });
     this.subs.push(
       this.panel.webview.onDidReceiveMessage((raw: unknown) => void this.onRaw(raw)),
-      this.panel.onDidChangeViewState(() => this.setVisible(this.panel.visible)),
+      this.panel.onDidChangeViewState(() => {
+        this.setVisible(this.panel.visible);
+        this.updateContext();
+      }),
       this.panel.onDidDispose(() => this.dispose()),
       deviceSessions.onDidChange(() => this.onSessionsChanged()),
       onAgentInstall((e) => {
@@ -188,8 +192,15 @@ export class MonitorPanel {
     return actionStates({ selected: this.selectedDevice() === this.device, binaryKnown: this.app?.binary !== undefined, agent: this.agent });
   }
 
+  /** The editor title bar shows Restart and Stop only while the app runs; the key follows the active monitor tab. */
+  private updateContext(): void {
+    if (this.disposed || !this.panel.active) return;
+    const running = this.lastStats?.pid !== undefined && this.lastStats.pid > 0;
+    void vscode.commands.executeCommand('setContext', APP_RUNNING_KEY, running);
+  }
+
   private postActions(): void {
-    this.post({ type: 'actions', actions: this.actionsNow() });
+    this.updateContext();
   }
 
   private appIdentity(): AppIdentity | undefined {
@@ -206,11 +217,13 @@ export class MonitorPanel {
   }
 
   private postApp(): void {
+    this.updateContext();
     this.post(this.appMessage());
   }
 
+  /** Feedback for a title bar command: a plain message, since the page has no room for it. */
   private notice(text: string): void {
-    this.post({ type: 'notice', text });
+    void this.services.prompts.showInformationMessage(`Sailfish: ${text}`);
   }
 
   private setBanner(text: string, actions: BannerAction[]): void {
@@ -230,7 +243,7 @@ export class MonitorPanel {
     this.post({ type: 'init', device: this.device });
     this.postOverview();
     this.postApp();
-    this.postActions();
+    this.updateContext();
     if (this.banner) this.post({ type: 'banner', text: this.banner.text, actions: this.banner.actions });
   }
 
@@ -395,9 +408,6 @@ export class MonitorPanel {
       case 'ready':
         this.onReady();
         return;
-      case 'action':
-        await this.runAction(m.name);
-        return;
       case 'ui.visible':
         this.statsSrc?.setVisible(m.on);
         return;
@@ -424,7 +434,8 @@ export class MonitorPanel {
     for (const f of result.failed) this.notice(`Could not stop ${f.label}: ${f.reason}`);
   }
 
-  private async runAction(name: ActionName): Promise<void> {
+  /** Runs one of the title bar actions for this panel's device. */
+  async runAction(name: ActionName): Promise<void> {
     const state = this.actionsNow()[name];
     if (state && !state.enabled) {
       this.notice(state.reason ?? 'That action is not available now.');
@@ -448,9 +459,6 @@ export class MonitorPanel {
           return;
         case 'restartApp':
           await this.restartApp();
-          return;
-        case 'runApp':
-          await relaunchInstalled(this.services, 'Sailfish: Run Installed App');
           return;
       }
     } catch (err) {

@@ -156,7 +156,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     await withScenario('monitor-agent', async () => {
       stubMessages();
       await openMonitor();
-      await send({ type: 'action', name: 'showLogs' });
+      await vscode.commands.executeCommand('sailfish.monitor.showLogs');
       await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 10000);
       const argv = all('device_exec.sailfish-devagent.logs')[0].argv;
       assert.strictEqual(argv[argv.indexOf('--format') + 1], 'json', JSON.stringify(argv));
@@ -192,13 +192,15 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     });
   });
 
-  test('I-M5 page: one narrow column with the connection line, the app card and the five actions, and nothing else', async function () {
+  test('I-M5 page: one narrow column with the connection line and the app card; the actions are title bar buttons', async function () {
     this.timeout(30000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
       await viewWhen((v) => v.state === 'connected' && v.line.includes('agent 1.10.0'), 10000);
       const page = await html();
-      for (const a of ['restartApp', 'stopApp', 'screenshot', 'openMirror', 'showLogs']) assert.ok(page.includes(`id="act-${a}"`), a);
+      assert.ok(!/<button|act-/.test(page), 'no buttons in the page; the actions are in the editor title bar');
+      const menu = (vscode.extensions.getExtension('sailfish-tools-dev.sailfish-tools')?.packageJSON as { contributes?: { menus?: Record<string, { command: string }[]> } } | undefined)?.contributes?.menus?.['editor/title'];
+      assert.deepStrictEqual(menu?.map((m) => m.command), ['restartApp', 'stopApp', 'screenshot', 'mirror', 'showLogs'].map((c) => `sailfish.monitor.${c}`));
       assert.ok(!/log-grid|sessions-list|<section id="sec-/.test(page), 'no log viewer and no sessions list in the page');
       // The agent never serves a journal stream to the monitor itself.
       await new Promise((r) => setTimeout(r, 1000));
@@ -240,7 +242,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     await withScenario('monitor-logs-off', async () => {
       const messages = stubMessages();
       await openMonitor();
-      await send({ type: 'action', name: 'showLogs' });
+      await vscode.commands.executeCommand('sailfish.monitor.showLogs');
       await waitFor(() => messages.calls.some((m) => m.kind === 'error'), 10000);
       assert.ok(messages.calls.some((m) => /Allow system logs/.test(m.message)), JSON.stringify(messages.calls));
       assert.ok(!keys().includes('device_exec.sailfish-devagent.logs'), JSON.stringify(keys()));
@@ -258,7 +260,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       assert.strictEqual(view.actions.openMirror?.enabled, false, JSON.stringify(view.actions));
       assert.strictEqual(view.actions.showLogs?.enabled, true, JSON.stringify(view.actions));
       clearFakeLog();
-      await send({ type: 'action', name: 'stopApp' });
+      await vscode.commands.executeCommand('sailfish.monitor.stopApp');
       await waitFor(() => keys().includes('device_exec.pkill'), 8000);
     });
   });

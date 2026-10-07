@@ -47,34 +47,8 @@ main { display: flex; flex-direction: column; gap: 0.9rem; max-width: 26rem; mar
 .spark polyline, .spark .dot-end { stroke: currentColor; }
 .spark polygon { fill: currentColor; }
 #app-counters { font-variant-numeric: tabular-nums; }
-.idle { display: flex; flex-direction: column; align-items: center; gap: 0.6rem; padding: 0.9rem 0.25rem; text-align: center; min-width: 0; }
+.idle { padding: 0.1rem 0; color: var(--vscode-descriptionForeground); min-width: 0; }
 .idle-text { overflow-wrap: anywhere; }
-
-.actions { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.4rem; }
-button {
-  min-height: 1.9rem;
-  padding: 0 0.6rem;
-  font: inherit;
-  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
-  background: var(--vscode-button-secondaryBackground, transparent);
-  border: 1px solid var(--vscode-button-border, transparent);
-  border-radius: 2px;
-  cursor: pointer;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-button:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground)); }
-button.primary { color: var(--vscode-button-foreground); background: var(--vscode-button-background); }
-button.primary:hover { background: var(--vscode-button-hoverBackground); }
-button.link {
-  color: var(--vscode-textLink-foreground);
-  background: transparent;
-  border-color: var(--vscode-panel-border, var(--vscode-widget-border, var(--vscode-button-border, currentColor)));
-}
-button.link:hover { color: var(--vscode-textLink-activeForeground); background: var(--vscode-toolbar-hoverBackground); }
-button[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 
 .banner {
   display: flex;
@@ -88,4 +62,14 @@ button[aria-disabled="true"] { opacity: 0.5; cursor: not-allowed; }
 }
 .banner #banner-text { flex: 1 1 100%; white-space: normal; overflow-wrap: anywhere; }
 .banner button { margin-right: 0.4rem; }
-.notice { margin: 0; min-height: 1.2em; overflow-wrap: anywhere; }
+button {
+  min-height: 1.6rem;
+  padding: 0 0.6rem;
+  font: inherit;
+  color: var(--vscode-button-secondaryForeground, var(--vscode-foreground));
+  background: var(--vscode-button-secondaryBackground, transparent);
+  border: 1px solid var(--vscode-button-border, transparent);
+  border-radius: 2px;
+  cursor: pointer;
+}
+button:hover { background: var(--vscode-button-secondaryHoverBackground, var(--vscode-toolbar-hoverBackground)); }

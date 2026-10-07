@@ -33,8 +33,6 @@ describe('monitor panel model', () => {
       assert.strictEqual(actionStates({ selected: false, binaryKnown: true, agent: running() }).restartApp?.enabled, false);
       assert.strictEqual(actionStates({ selected: true, binaryKnown: false, agent: running() }).restartApp?.reason, 'no app known yet');
       assert.strictEqual(actionStates({ selected: true, binaryKnown: true, agent: running() }).restartApp?.enabled, true);
-      assert.strictEqual(actionStates({ selected: false, binaryKnown: true, agent: running() }).runApp?.enabled, false);
-      assert.strictEqual(actionStates({ selected: true, binaryKnown: true, agent: running() }).runApp?.enabled, true);
     });
     it('needs the agent for screenshot and mirror, and respects the phone switch', () => {
       const none = actionStates({ selected: true, binaryKnown: true, agent: { state: 'not-installed' } });

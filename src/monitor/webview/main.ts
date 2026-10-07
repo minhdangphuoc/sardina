@@ -1,11 +1,11 @@
 /**
- * Device Monitor page entry: message dispatch, the App card and the action buttons. Built into
+ * Device Monitor page entry: message dispatch, the connection line and the App card. Built into
  * `media/monitor/monitor.js`. The skeleton is static HTML from `monitorCore.ts`; this script fills
  * it with `textContent` and DOM calls only.
  */
 
 import { formatRss, formatUptime } from '../appStats';
-import { ACTION_NAMES, asHostMessage, type ActionName, type ActionState, type AppStatsView, type HostMessage, type PageMessage } from '../protocol';
+import { asHostMessage, type AppStatsView, type HostMessage, type PageMessage } from '../protocol';
 import { controlGlyphs } from '../displayText';
 import { History, sparkPoints } from './appModel';
 
@@ -50,13 +50,6 @@ let appDirty = false;
 let lastRedraw = 0;
 let redrawTimer: ReturnType<typeof setTimeout> | undefined;
 let appView: Extract<HostMessage, { type: 'app' }> | undefined;
-let appRunning = false;
-
-function setActionsHidden(): void {
-  // Restart and Stop only make sense for a running app; Run installed app only for a stopped, known one.
-  byId('act-restartApp').hidden = !appRunning;
-  byId('act-stopApp').hidden = !appRunning;
-}
 
 /** A line sparkline: polyline, faint area under it and a dot on the latest point; no axes. */
 function drawSpark(id: string, values: readonly number[], max?: number): void {
@@ -77,18 +70,16 @@ function drawApp(): void {
   appDirty = false;
   const v = appView;
   const s: AppStatsView | null = v?.stats ?? null;
-  appRunning = v?.app !== undefined && s?.pid !== undefined && s.pid > 0;
+  const appRunning = v?.app !== undefined && s?.pid !== undefined && s.pid > 0;
   byId('app-running').hidden = !appRunning;
   byId('app-idle').hidden = appRunning;
-  byId('act-runApp').hidden = v?.app === undefined;
-  setActionsHidden();
   if (!v?.app) {
     byId('idle-text').textContent = 'No app launched from VS Code yet';
     return;
   }
   const name = controlGlyphs(v.app.name);
   if (!appRunning) {
-    byId('idle-text').textContent = `${name} is not running`;
+    byId('idle-text').textContent = `${name} not running`;
     return;
   }
   const appName = byId('app-name');
@@ -109,25 +100,7 @@ function scheduleApp(): void {
   redrawTimer = setTimeout(() => requestAnimationFrame(drawApp), wait);
 }
 
-// --- actions and banner ---
-
-function applyActions(actions: Partial<Record<ActionName, ActionState>>): void {
-  for (const name of ACTION_NAMES) {
-    const btn = document.getElementById(`act-${name}`);
-    const st = actions[name];
-    if (!btn || !st) continue;
-    btn.setAttribute('aria-disabled', String(!st.enabled));
-    btn.title = st.enabled ? '' : st.reason ?? '';
-  }
-}
-
-for (const btn of Array.from(document.querySelectorAll<HTMLButtonElement>('[data-action]'))) {
-  btn.addEventListener('click', () => {
-    if (btn.getAttribute('aria-disabled') === 'true') return;
-    const name = ACTION_NAMES.find((a) => a === btn.dataset.action);
-    if (name) post({ type: 'action', name });
-  });
-}
+// --- banner ---
 
 function showBanner(m: Extract<HostMessage, { type: 'banner' }>): void {
   byId('banner').hidden = false;
@@ -139,8 +112,7 @@ function showBanner(m: Extract<HostMessage, { type: 'banner' }>): void {
     btn.type = 'button';
     btn.textContent = controlGlyphs(a.label);
     btn.addEventListener('click', () => {
-      if (a.resume) post({ type: 'resume', what: a.resume });
-      else if (a.action && ACTION_NAMES.includes(a.action)) post({ type: 'action', name: a.action });
+      post({ type: 'resume', what: a.resume });
     });
     box.appendChild(btn);
   }
@@ -163,12 +135,6 @@ function handle(m: HostMessage): void {
         rssHistory.push(m.stats.rssKb);
       }
       scheduleApp();
-      break;
-    case 'actions':
-      applyActions(m.actions);
-      break;
-    case 'notice':
-      byId('notice').textContent = controlGlyphs(m.text);
       break;
     case 'banner':
       showBanner(m);

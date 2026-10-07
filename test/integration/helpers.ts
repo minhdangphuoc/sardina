@@ -4,7 +4,8 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import * as sinon from 'sinon';
 import type { prompts as PromptsModule } from '../../src/ui/prompts';
-import type { ActionName, ActionState, AppStatsView, BannerAction, ConnectionState, HostMessage } from '../../src/monitor/protocol';
+import type { ActionName, AppStatsView, BannerAction, ConnectionState, HostMessage } from '../../src/monitor/protocol';
+import type { ActionState } from '../../src/monitor/panelModel';
 
 /**
  * Integration test helpers (validation §6.3). All UI-prompt stubbing goes

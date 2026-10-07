@@ -220,7 +220,6 @@ const monitorSeeds: Record<string, string[]> = {
   stream: ['{"ts":1733500000123,"pid":4321,"state":"S","cpu":12.4,"rssKb":48216,"started":1733499990000,"sys":{"cpu":31}}', '{"event":"exit","pid":4321,"ts":5}'],
   os: ['NAME="Sailfish OS"\nVERSION_ID=5.0.0.62\nPRETTY_NAME="Sailfish OS 5.0.0.62"\nSAILFISH_FLAVOUR=release\n'],
   page: [
-    '{"type":"action","name":"restartApp"}',
     '{"type":"resume","what":"all"}',
     '{"type":"ui.visible","on":true}',
   ],
