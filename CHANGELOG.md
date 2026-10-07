@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.8
+
+- A build that fails because rpmbuild cannot find a file listed in `%files` now says which one: `Packaging failed: the spec lists /usr/libexec/... in %files, but the build did not install it. Check the %files section and the INSTALLS in the .pro` (up to three paths, then `and N more`) instead of only showing the raw `File not found` lines.
+
 ## v0.1.7
 
 - Fixed: Restart (Ctrl+Shift+F5) in a session started by Debug on Device or Debug Installed App failed. The C/C++ extension cannot restart a session itself, so VS Code ends it and launches the same configuration again 300 ms later; sfdk's `gdbserver --once` had already exited when the first GDB disconnected, and the extension also treated the end as Stop and cleaned up, so the new GDB found nothing to connect to. The extension now tells Restart from Stop (VS Code sends `disconnect`/`terminate` with `restart: true`), kills what is left of the app, starts gdbserver again in the same "<app> (debug)" terminal and keeps the session registered; GDB retries its connection for up to 30 s (`set tcp auto-retry on`, `set tcp connect-timeout 30`) while gdbserver starts. Stop cleans up as before, and if VS Code does not relaunch within 20 s or gdbserver cannot be started again, everything is stopped. Restart does not build or deploy; use Debug again to run changed code. A gdbserver that no GDB ever connected to is now also killed on the device by its exact command line. Not yet verified on the emulator or a phone.

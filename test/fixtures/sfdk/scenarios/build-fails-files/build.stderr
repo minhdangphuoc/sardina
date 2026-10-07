@@ -1,0 +1,3 @@
+RPM build errors:
+    Directory not found: /home/deploy/installroot/usr/libexec/droid-hybris
+    File not found: /home/deploy/installroot/usr/libexec/droid-hybris/system/lib64/libsfoscamera2.so

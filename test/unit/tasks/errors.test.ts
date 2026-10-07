@@ -100,4 +100,30 @@ describe('errors.mapBuildError (M1.17)', () => {
   it('returns undefined for unrecognised stderr', () => {
     assert.strictEqual(mapBuildError('compile error at line 1'), undefined);
   });
+
+  it('names the missing file when rpmbuild fails on %files', () => {
+    const mapped = mapBuildError(
+      'RPM build errors:\n    Directory not found: /home/deploy/installroot/usr/libexec/droid-hybris\n    File not found: /home/deploy/installroot/usr/libexec/droid-hybris/system/lib64/libsfoscamera2.so',
+    );
+    assert.strictEqual(
+      mapped?.message,
+      'Packaging failed: the spec lists /usr/libexec/droid-hybris/system/lib64/libsfoscamera2.so in %files, but the build did not install it. Check the %files section and the INSTALLS in the .pro',
+    );
+  });
+
+  it('keeps a missing directory when no file below it is reported', () => {
+    const mapped = mapBuildError('error: Directory not found: /x/installroot/usr/share/app');
+    assert.match(mapped?.message ?? '', /lists \/usr\/share\/app in %files/);
+  });
+
+  it('maps the by-glob form and caps the list at three paths', () => {
+    const mapped = mapBuildError(
+      [1, 2, 3, 4, 5].map((n) => `error: File not found by glob: /b/installroot/usr/share/a/f${n}.png`).join('\n'),
+    );
+    assert.match(mapped?.message ?? '', /lists \/usr\/share\/a\/f1\.png, \/usr\/share\/a\/f2\.png, \/usr\/share\/a\/f3\.png and 2 more in %files/);
+  });
+
+  it('does not match a non-matching line', () => {
+    assert.strictEqual(mapBuildError('File not found in cache, retrying'), undefined);
+  });
 });
