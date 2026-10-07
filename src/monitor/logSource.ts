@@ -122,6 +122,8 @@ export interface LogEnd {
   reason: LogEndReason;
   /** User-facing text for `refused`/`error`/`ended`; empty for `stopped`. */
   text: string;
+  /** For `refused`: the agent's error string, e.g. `logs disabled on the phone` or `stopped from the phone`. */
+  agentError?: string;
 }
 
 export interface LogSourceOptions {
@@ -183,7 +185,7 @@ export class JournalLogSource {
       const probeResult = await this.opts.probe();
       const refusal = phoneRefusal(probeResult, 'logs');
       if (refusal) {
-        this.endEmitter.fire({ reason: 'refused', text: refusal });
+        this.endEmitter.fire({ reason: 'refused', text: refusal, agentError: 'logs disabled on the phone' });
         return false;
       }
       if (this.disposed) return false;
@@ -297,7 +299,7 @@ export class JournalLogSource {
               this.push(parsed.entry);
               break;
             case 'end':
-              end = { reason: 'refused', text: parsed.text };
+              end = { reason: 'refused', text: parsed.text, agentError: parsed.error };
               break;
             case 'seekFailed':
               retryWithoutCursor = true;

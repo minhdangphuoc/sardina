@@ -188,6 +188,7 @@ describe('JournalLogSource', () => {
     assert.equal(src.lastCursor, 's=abc;i=1;b=2;m=3;t=4;x=5');
     assert.equal(ends.length, 1);
     assert.equal(ends[0].reason, 'refused');
+    assert.equal(ends[0].agentError, 'stopped from the phone');
     assert.equal(sessions.activeFor('dev').length, 0);
   });
 

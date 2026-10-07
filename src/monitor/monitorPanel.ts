@@ -445,7 +445,8 @@ export class MonitorPanel {
   private onLogEnd(src: JournalLogSource, end: LogEnd): void {
     if (this.logSrc === src) this.logSrc = undefined;
     src.dispose();
-    const status: LogStatus = end.reason === 'refused' ? 'off' : 'stopped';
+    // Only the logs switch is "off"; a stop from the phone ("Stop all sessions now") is a stopped stream with Resume.
+    const status: LogStatus = end.reason === 'refused' && end.agentError !== 'stopped from the phone' ? 'off' : 'stopped';
     this.setLog(status, end.text);
   }
 
