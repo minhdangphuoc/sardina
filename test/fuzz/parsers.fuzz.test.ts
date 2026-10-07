@@ -3,6 +3,10 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { allParsers } from '../../src/sfdk/parsers/index';
 import type { ParseResult } from '../../src/core/types';
+import { findSourceRefs, foldMessage, LogBuffer, parseJournalJsonLine, parseQuery, parseShortPreciseLine } from '../../src/monitor/logModel';
+import { parseAppStatsOutput, parseProcStat, parseStatsStreamLine } from '../../src/monitor/appStats';
+import { validatePageMessage } from '../../src/monitor/protocol';
+import { classifyConnection, parseIpAddrOutput, parseOsRelease } from '../../src/monitor/overview';
 
 /**
  * Fuzz harness (validation §6.4). For every registered parser, loads every
@@ -195,3 +199,98 @@ function hashString(s: string): number {
   }
   return h;
 }
+
+/**
+ * Device Monitor parsers (PLAN-device-monitor §9.1). They are not sfdk parsers and have no
+ * fixtures files: each gets inline seed samples, mutated like the sfdk parsers, and must never
+ * throw or take 500 ms.
+ */
+const monitorSeeds: Record<string, string[]> = {
+  json: [
+    '{"__REALTIME_TIMESTAMP":"1733500000123456","MESSAGE":"qml: hi\\nat foo (file:///usr/share/a/x.qml:3:4)","PRIORITY":"4","_PID":"12","SYSLOG_IDENTIFIER":"a","__CURSOR":"s=1;i=2"}',
+    '{"__REALTIME_TIMESTAMP":"1","MESSAGE":[104,105,255],"COREDUMP_SIGNAL":"11"}',
+    '{"ok":false,"error":"stopped from the phone"}',
+  ],
+  text: ['Oct 05 13:42:01.123456 host harbour-demo[4321]: qml: hello', 'Oct  5 13:42:01 host kernel: usb 1-1: new device'],
+  query: ['hello -world tag:a pid:12 level:w', '/hel+o w/i', '/(a+)+$/'],
+  stat: [
+    '4321 (my (app)) S 1 2 3 4 5 6 7 8 9 10 120 30 0 0 20 0 9 0 1000 123456 789 18446744073709551615',
+    'pid 4321\n4321 (a) S 1 2 3 4 5 6 7 8 9 10 1 2 0 0 20 0 3 0 100 1 2 3\n--\nVmRSS:\t10 kB\nThreads:\t3\n--\n100.5 200.1\ncpu  1 2 3 4 5 6 7 8\n',
+    'pid 0\ncpu  1 2 3 4 5 6 7 8\n',
+  ],
+  stream: ['{"ts":1733500000123,"pid":4321,"state":"S","cpu":12.4,"rssKb":48216,"started":1733499990000,"sys":{"cpu":31}}', '{"event":"exit","pid":4321,"ts":5}'],
+  os: ['NAME="Sailfish OS"\nVERSION_ID=5.0.0.62\nPRETTY_NAME="Sailfish OS 5.0.0.62"\nSAILFISH_FLAVOUR=release\n'],
+  page: [
+    '{"type":"log.save","filteredOnly":true,"format":"log","filter":{"minLevel":"warning","tags":["a"],"mine":true,"query":"x","deriveLevels":false}}',
+    '{"type":"openSource","file":"/usr/share/a/x.qml","line":3,"col":4}',
+    '{"type":"log.ack","upTo":12}',
+    '{"type":"action","name":"restartApp"}',
+    '{"type":"session.stop","id":3}',
+  ],
+  net: ['192.168.2.1 51234 192.168.2.15 22\n5: rndis0    inet 192.168.2.15/24 brd 192.168.2.255 scope global rndis0\n7: wlan0    inet 10.0.2.15/24 scope global wlan0'],
+};
+
+const monitorTargets: { name: string; seeds: string[]; run: (input: string) => unknown }[] = [
+  { name: 'parseJournalJsonLine', seeds: monitorSeeds.json, run: (s) => parseJournalJsonLine(s, 0) },
+  { name: 'parseShortPreciseLine', seeds: monitorSeeds.text, run: (s) => parseShortPreciseLine(s, 0) },
+  {
+    name: 'parseQuery',
+    seeds: monitorSeeds.query,
+    run: (s) => {
+      const q = parseQuery(s);
+      return foldMessage(s) && findSourceRefs(s) && q;
+    },
+  },
+  {
+    name: 'LogBuffer',
+    seeds: monitorSeeds.json,
+    run: (s) => {
+      const b = new LogBuffer(3, 1000);
+      for (const line of s.split('\n')) b.push(parseJournalJsonLine(line, 0));
+      return b.since(0);
+    },
+  },
+  { name: 'parseProcStat', seeds: monitorSeeds.stat, run: (s) => parseProcStat(s) },
+  { name: 'parseAppStatsOutput', seeds: monitorSeeds.stat, run: (s) => parseAppStatsOutput(s, 0) },
+  { name: 'parseStatsStreamLine', seeds: monitorSeeds.stream, run: (s) => parseStatsStreamLine(s, 0) },
+  {
+    name: 'validatePageMessage',
+    seeds: monitorSeeds.page,
+    run: (s) => {
+      let raw: unknown;
+      try {
+        raw = JSON.parse(s);
+      } catch {
+        raw = s;
+      }
+      return validatePageMessage(raw);
+    },
+  },
+  { name: 'parseOsRelease', seeds: monitorSeeds.os, run: (s) => parseOsRelease(s) },
+  { name: 'classifyConnection', seeds: monitorSeeds.net, run: (s) => classifyConnection(s.split('\n')[0], s) && parseIpAddrOutput(s) },
+];
+
+describe('monitor parsers fuzz', () => {
+  for (const target of monitorTargets) {
+    it(`fuzzes ${target.name} (${FUZZ_ITER} iterations per seed, seed ${FUZZ_SEED})`, function () {
+      this.timeout(60000);
+      const rand = mulberry32(FUZZ_SEED ^ hashString(target.name));
+      for (const base of target.seeds) {
+        for (let i = 0; i < FUZZ_ITER; i++) {
+          const mutation = mutations[randInt(rand, mutations.length)];
+          const mutated = mutation.fn(base, rand);
+          const start = Date.now();
+          try {
+            target.run(mutated);
+          } catch (err) {
+            assert.fail(
+              `${target.name} threw on mutation "${mutation.name}" (seed=${FUZZ_SEED}, iter=${i}): ${err instanceof Error ? err.stack : String(err)}`,
+            );
+          }
+          const elapsed = Date.now() - start;
+          assert.ok(elapsed < 500, `${target.name} took ${elapsed}ms on mutation "${mutation.name}" (seed=${FUZZ_SEED}, iter=${i})`);
+        }
+      }
+    });
+  }
+});
