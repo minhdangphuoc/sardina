@@ -1,0 +1,14 @@
+# Sailfish platform SDK image used by `device-agent/build.sh --docker`.
+# One non-comment line: <repository>:<tag>@sha256:<digest>
+# The digest is the linux/amd64 manifest digest read from the Docker Hub API on 2026-10-07
+# (see PLAN-docker-engine.md section 2.4) and matched by the first real pull the same day.
+# Community image, pulled but never redistributed. Verified facts (2026-10-07, Docker 29.1.3):
+# - amd64 only, about 5.0 GB on disk; user mersdk (uid 100000), HOME=/home/mersdk; mb2 1.4.94
+#   on PATH; targets SailfishOS-5.1.0.11-{aarch64,armv7hl,i486}; sudo is passwordless
+#   (/etc/sudoers: ALL ALL=(ALL) NOPASSWD:ALL).
+# - A default container (no --privileged, no extra capabilities) builds all three targets.
+#   --privileged breaks sudo on hosts whose AppArmor has a unix-chkpwd profile (Ubuntu 24.04+).
+# - Builds must run under HOME: sb2 maps /tmp to the target's /tmp.
+# - Each build downloads the missing BuildRequires (libvpx-devel, wayland-devel) from Jolla's
+#   repositories, so network access is needed. rpmlint comes from mb2 (no rpmlint on PATH).
+docker.io/coderus/sailfishos-platform-sdk:5.1.0.11@sha256:31ba115546972af3630f4690acc204a4e09701358ae39be1883ca70e0eadda86
