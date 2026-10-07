@@ -22,6 +22,7 @@ import { activateWalkthrough } from './walkthrough/index';
 import { getShownMessages } from './ui/prompts';
 import { getLastTargetList, resetLastTargetListForTests } from './targets/targetListCache';
 import { checkExternalToolsOnce } from './core/externalTools';
+import { OFFLINE_GUARD } from './devices/offlineGuard';
 
 export function activate(ctx: vscode.ExtensionContext) {
   const activationStart = performance.now();
@@ -68,6 +69,8 @@ export function activate(ctx: vscode.ExtensionContext) {
       /** The mirror's mutable keepalive and forward timings (tests shorten them; no behaviour change). */
       mirrorTiming: MIRROR_TIMING,
       forwardTiming: FORWARD_TIMING,
+      /** The offline guard's TCP probe (tests point it at a fake answer for fixture devices). */
+      offlineGuard: OFFLINE_GUARD,
     },
   };
 }

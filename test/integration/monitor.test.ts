@@ -4,6 +4,7 @@ import { APP_STATS_SCRIPT } from '../../src/monitor/appStats';
 import type { PageMessage } from '../../src/monitor/protocol';
 import {
   clearFakeLog,
+  forceDeviceReachability,
   monitorView,
   readFakeLog,
   stubMessages,
@@ -120,24 +121,30 @@ suite('Device Monitor (I-M1..I-M10)', () => {
   test('I-M2 debug: opens the tab beside and keeps the editor focused; off means no tab', async function () {
     this.timeout(40000);
     if (!vscode.extensions.getExtension('ms-vscode.cpptools')) return this.skip();
-    await withScenario('monitor-agent', async () => {
-      stubMessages();
-      const before = vscode.window.activeTextEditor?.document.uri.toString();
-      await setSetting('debug.openDeviceMonitor', true);
-      void vscode.commands.executeCommand('sailfish.debugOnDevice');
-      await waitFor(() => monitorTabs().length === 1, 20000);
-      const tab = monitorTabs()[0];
-      const group = vscode.window.tabGroups.all.find((g) => g.tabs.includes(tab));
-      assert.ok(group && !group.isActive, 'the monitor opens beside the active editor group');
-      assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), before, 'the editor keeps focus');
+    // The fixture device's address does not answer; let Debug on Device's offline guard pass.
+    const restoreReachability = forceDeviceReachability(true);
+    try {
+      await withScenario('monitor-agent', async () => {
+        stubMessages();
+        const before = vscode.window.activeTextEditor?.document.uri.toString();
+        await setSetting('debug.openDeviceMonitor', true);
+        void vscode.commands.executeCommand('sailfish.debugOnDevice');
+        await waitFor(() => monitorTabs().length === 1, 20000);
+        const tab = monitorTabs()[0];
+        const group = vscode.window.tabGroups.all.find((g) => g.tabs.includes(tab));
+        assert.ok(group && !group.isActive, 'the monitor opens beside the active editor group');
+        assert.strictEqual(vscode.window.activeTextEditor?.document.uri.toString(), before, 'the editor keeps focus');
 
-      await vscode.commands.executeCommand('workbench.action.closeAllEditors');
-      await waitFor(() => monitorTabs().length === 0, 5000);
-      await setSetting('debug.openDeviceMonitor', false);
-      void vscode.commands.executeCommand('sailfish.debugOnDevice');
-      await new Promise((r) => setTimeout(r, 3000));
-      assert.strictEqual(monitorTabs().length, 0, 'no monitor tab with the setting off');
-    });
+        await vscode.commands.executeCommand('workbench.action.closeAllEditors');
+        await waitFor(() => monitorTabs().length === 0, 5000);
+        await setSetting('debug.openDeviceMonitor', false);
+        void vscode.commands.executeCommand('sailfish.debugOnDevice');
+        await new Promise((r) => setTimeout(r, 3000));
+        assert.strictEqual(monitorTabs().length, 0, 'no monitor tab with the setting off');
+      });
+    } finally {
+      restoreReachability();
+    }
   });
 
   test('I-M3 sessions: device logs and app monitor listed; stopping one ends only that one', async function () {

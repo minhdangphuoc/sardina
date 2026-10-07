@@ -341,3 +341,18 @@ export interface MonitorView {
 export async function monitorView(device: string): Promise<MonitorView> {
   return await vscode.commands.executeCommand<MonitorView>('sailfish._test.monitor', device, 'view');
 }
+
+/**
+ * Makes the offline guard's TCP probe (tools check, Debug on Device, root shells) answer `online`
+ * for every device, since fixture devices sit at addresses nothing listens on. Returns the undo.
+ * Example: `const restore = forceDeviceReachability(true); try { … } finally { restore(); }`
+ */
+export function forceDeviceReachability(online: boolean): () => void {
+  const guard = (extensionApi().__test as unknown as { offlineGuard?: { isReachable: (...args: unknown[]) => Promise<boolean> } }).offlineGuard;
+  if (!guard) throw new Error('__test.offlineGuard is missing');
+  const previous = guard.isReachable;
+  guard.isReachable = () => Promise.resolve(online);
+  return () => {
+    guard.isReachable = previous;
+  };
+}

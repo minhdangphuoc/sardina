@@ -5,6 +5,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import {
   clearFakeLog,
+  forceDeviceReachability,
   monitorView,
   readFakeLog,
   stubInputBox,
@@ -54,16 +55,20 @@ function assertInOrder(actual: string[], expected: string[]): void {
 
 suite('device agent (T4)', () => {
   let tmpDirs: string[] = [];
+  let restoreReachability: (() => void) | undefined;
 
   suiteSetup(async function () {
     this.timeout(15000);
     await waitForContext('sailfish.sdkAvailable', true, 10000);
+    // The fixture device's address does not answer; the root-shell offline guard must let it through.
+    restoreReachability = forceDeviceReachability(true);
     const folder = vscode.workspace.workspaceFolders?.[0];
     await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   suiteTeardown(async function () {
     this.timeout(15000);
+    restoreReachability?.();
     const folder = vscode.workspace.workspaceFolders?.[0];
     await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
   });

@@ -264,7 +264,7 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   const exitCode = await runAsRootOnDevice(services, device, {
     title: `Install the device agent on "${device}"`,
     prompt: 'Developer-mode password of the device (Settings → Developer tools).',
-    progressTitle: `Sailfish: installing the device agent on "${device}"…`,
+    progressTitle: `Sailfish: install the device agent on "${device}"`,
     script: INSTALL_SCRIPT,
     timeoutMs: ROOT_TIMEOUT_MS,
   });
@@ -302,7 +302,7 @@ function uninstallAgent(services: Services) {
     const exitCode = await runAsRootOnDevice(services, device, {
       title: `Uninstall the device agent from "${device}"`,
       prompt: 'Developer-mode password of the device (Settings → Developer tools).',
-      progressTitle: `Sailfish: uninstalling the device agent from "${device}"…`,
+      progressTitle: `Sailfish: remove the device agent from "${device}"`,
       script: UNINSTALL_SCRIPT,
       timeoutMs: ROOT_TIMEOUT_MS,
     });
