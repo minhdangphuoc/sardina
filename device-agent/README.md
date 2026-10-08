@@ -106,14 +106,16 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   change to "Screen is being controlled from VS Code"; failure therefore leaves the stream
   view-only. That security-significant transition also shows a banner. It is closed about 10 s after the
   stream ends. A viewing banner is shown only when no stream has run for 5 minutes. The start notice
-  ("Developer agent is running") is kept as one entry: a
-  restart leaves it alone, an upgrade updates it silently, and removing the package closes it.
+  ("Developer agent is running") is one entry while the daemon runs; it shows a banner once per
+  installation (`/var/lib/sailfish-devagent/notice-shown`), the daemon closes it (and any stream
+  entry) when it stops, and later starts post it again silently. Removing the package closes any
+  entry left by a daemon that did not stop cleanly.
 - On every request, valid stream keepalive and input activation it checks that Developer Mode is on
   (`jolla-developer-mode` installed, `/usr/bin/devel-su` present). A failed renewal ends the stream.
 - Accepts a fixed set of commands with validated arguments. Nothing is passed to a shell.
 - Removable: `rpm -e sailfish-devagent` (or **Uninstall Device Agent** in VS Code) leaves nothing
   behind. On erase (not on an upgrade, which keeps the settings) `%preun` stops and disables the
-  service, whose SIGTERM handler closes the stream entry and removes the socket directory and any
+  service, whose SIGTERM handler closes its notifications and removes the socket directory and any
   staged screenshot, then closes the agent's notifications as `defaultuser`; `%postun` removes
   `/var/lib/sailfish-devagent`, the RPM copy in `/tmp`, a socket directory or staged screenshots a
   crashed daemon left, the `multi-user.target.wants` link and the unit's failed state, and closes a

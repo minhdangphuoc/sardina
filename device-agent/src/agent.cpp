@@ -175,8 +175,13 @@ void Agent::stop()
     }
     m_indicator->disconnect(this);
     m_indicator->closeNow();
-    if (m_server.isListening()) {
+    const bool wasListening = m_server.isListening();
+    if (wasListening) {
         m_server.close();
+        // No entry of a stopped agent stays in the notification list (1.10.1): the start notice
+        // goes too, and the next start posts it again silently (Paths::noticeShownPath()).
+        removeNotifications();
+        m_notified = false;
     }
     QLocalServer::removeServer(Paths::socketPath());
     QDir dir(Paths::agentRuntimeDir());
@@ -250,12 +255,27 @@ void closeNotifications(QDBusConnection &bus, const QList<QPair<uint, QString>> 
 
 }
 
+namespace {
+
+void markNoticeShown()
+{
+    if (QFile::exists(Paths::noticeShownPath())) {
+        return;
+    }
+    QFile marker(Paths::noticeShownPath());
+    if (marker.open(QIODevice::WriteOnly)) {
+        marker.close();
+    }
+}
+
+}
+
 // Best effort: a visible notification on the phone while the agent runs ("Visible" in the
-// security model). There is only ever one such entry, and its banner shows only when it is new:
-// a start replaces the entry left by an earlier start silently (lipstick keeps notifications
-// across restarts of the daemon, of lipstick and of the phone), and closes extras left by agents
-// before 1.3.0, which added a new entry with a banner on every start. Uninstalling removes it
-// (removeNotifications(), run from the package's %preun).
+// security model). There is only ever one such entry. Its banner shows once per installation (the
+// first notice writes Paths::noticeShownPath()); the daemon closes the entry when it stops (1.10.1),
+// so later starts post it again silently. An entry left by a daemon that did not stop cleanly is
+// kept when it says the same, else replaced silently, and extras left by agents before 1.3.0 are
+// closed. Uninstalling removes any that remain (removeNotifications(), run from %preun).
 void Agent::notifyStarted(bool silent)
 {
     if (m_notified) {
@@ -283,6 +303,7 @@ void Agent::notifyStarted(bool silent)
         // The entry from an earlier start is still there and says the same: leave it alone, so a
         // restart shows nothing new.
         m_notified = true;
+        markNoticeShown(); // an entry from before 1.10.1 counts as shown
         fprintf(stderr, "sailfish-devagent: start notification kept (%u, closed %d older)\n", replaces,
                 previous.size());
         QDBusConnection::disconnectFromBus(connectionName);
@@ -293,8 +314,12 @@ void Agent::notifyStarted(bool silent)
     // lipstick fills missing x-nemo-preview hints from summary and body, so they are sent empty,
     // and with low urgency, which lipstick never previews (handleNotify and
     // NotificationPreviewPresenter::notificationShouldBeShown in the lipstick tree).
+    // The banner is shown once per installation; later starts (the daemon closes the notice when it
+    // stops) post the entry silently.
+    const bool bannerShownBefore = QFile::exists(Paths::noticeShownPath());
+    const bool banner = replaces == 0 && !silent && !bannerShownBefore;
     QVariantMap hints;
-    if (replaces == 0 && !silent) {
+    if (banner) {
         hints.insert(QStringLiteral("x-nemo-preview-summary"), summary);
         hints.insert(QStringLiteral("x-nemo-preview-body"), body);
     } else {
@@ -308,10 +333,13 @@ void Agent::notifyStarted(bool silent)
                                        << hints << int(-1));
     const QDBusMessage result = bus.call(notify, QDBus::Block, NOTIFY_TIMEOUT_MS);
     m_notified = result.type() == QDBusMessage::ReplyMessage;
+    if (m_notified) {
+        markNoticeShown();
+    }
     fprintf(stderr, "sailfish-devagent: start notification %s (%s, closed %d older)\n",
             m_notified ? "posted" : "not posted",
             replaces ? qPrintable(QStringLiteral("updated %1 silently").arg(replaces))
-                     : silent ? "new, silently" : "new, with banner",
+                     : banner ? "new, with banner" : "new, silently",
             previous.size());
     QDBusConnection::disconnectFromBus(connectionName);
 }

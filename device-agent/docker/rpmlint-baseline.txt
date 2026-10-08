@@ -9,6 +9,8 @@
 #   settings directory is root:privileged 0770 and settings.json defaultuser:privileged 0660 so
 #   that the SSH login cannot change the phone's settings (see the spec and PLAN-settings-page.md).
 # - dangerous-command-in-%postun rm: intended, removes the settings directory on uninstall.
+# - dangerous-command-in-%post rm (1.10.1): intended, removes only the agent's own
+#   `systemctl enable` link in /etc left by agents up to 1.10.0 (the package now ships the link).
 # - unstripped-binary / position-independent-executable-suggested / invalid-license /
 #   no-changelogname-tag: SDK defaults and the SPDX licence name; harmless.
 # - description-line-too-long: cosmetic; the line is listed verbatim, so it reappears as new if
@@ -17,6 +19,7 @@ E: description-line-too-long through libvpx) and streams the system journal, ove
 E: no-changelogname-tag
 E: non-readable /var/lib/sailfish-devagent/settings.json 660
 E: non-standard-dir-perm /var/lib/sailfish-devagent 770
+W: dangerous-command-in-%post rm
 W: dangerous-command-in-%postun rm
 W: invalid-license GPL-3.0-or-later
 W: non-standard-gid /var/lib/sailfish-devagent privileged

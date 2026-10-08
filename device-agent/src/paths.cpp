@@ -39,6 +39,11 @@ QString settingsPath()
     return QStringLiteral("/var/lib/sailfish-devagent/settings.json");
 }
 
+QString noticeShownPath()
+{
+    return QStringLiteral("/var/lib/sailfish-devagent/notice-shown");
+}
+
 bool lipstickWritesJpeg()
 {
     return false;

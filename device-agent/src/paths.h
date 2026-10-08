@@ -33,6 +33,11 @@ bool lipstickWritesJpeg();
 // and root can read or change the file; the SSH login cannot enter it.
 QString settingsPath();
 
+// /var/lib/sailfish-devagent/notice-shown (agent 1.10.1): present once the start notice was shown
+// with a banner. The daemon closes its notifications when it stops, so later starts (reboots,
+// upgrades) post the notice again silently. Removed with the folder on erase.
+QString noticeShownPath();
+
 // Developer Mode gate: jolla-developer-mode ships /usr/bin/devel-su.
 bool developerModeOn();
 
