@@ -697,9 +697,11 @@ emulator. This extension includes agent **1.10.2**.
    the extension's leftovers in the device user's home (`~/.cache/sailfish-tools`,
    staged screenshots, an RPM copy), and checks that nothing is left; one
    notification says what was removed and anything that is still there. A
-   running Settings app is closed so the Developer agent entry disappears; if
-   it still shows, **Restart Phone Session…** in that notification restarts
-   the phone's user session after a confirmation (running apps close). The SDK
+   running Settings app is closed so the Developer agent entry disappears. The
+   notification asks whether to restart the home screen: **Restart Home Screen**
+   asks again first (running apps close; no root, no password).
+   The same action is in the Devices view's right-click menu and the Command
+   Palette. The SDK
    tools (`rsync`, `sdk-deploy-rpm`, `gdb-gdbserver`) are not touched.
 
 If the agent is missing, **Take Device Screenshot** and **Show Device Logs**

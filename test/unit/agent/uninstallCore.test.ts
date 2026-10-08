@@ -9,8 +9,9 @@ import {
   AGENT_SESSION_KINDS,
   CLEANUP_ARGS,
   CLEANUP_SCRIPT,
-  RESTART_SESSION_CONFIRM,
-  RESTART_SESSION_SCRIPT,
+  RESTART_HOME_SCREEN_ARGV,
+  restartHomeScreenAsk,
+  restartHomeScreenConfirm,
   UNINSTALL_SCRIPT,
   parseCleanupReport,
   uninstallSummary,
@@ -54,9 +55,14 @@ describe('uninstallCore scripts', () => {
     assert.ok(CLEANUP_SCRIPT.trimEnd().endsWith('echo "sfdev-clean:done"'));
   });
 
-  it('the session restart is a separate fixed script behind a confirmation text', () => {
-    assert.strictEqual(RESTART_SESSION_SCRIPT, 'systemctl restart user@$(id -u defaultuser).service');
-    assert.strictEqual(RESTART_SESSION_CONFIRM, "Restart the phone's user session? Running apps will close.");
+  it('the home screen restart is a fixed user-level argv behind a confirmation text', () => {
+    assert.deepStrictEqual(RESTART_HOME_SCREEN_ARGV, ['systemctl', '--user', 'restart', 'lipstick']);
+    assert.strictEqual(restartHomeScreenConfirm('Jolla'), 'Restart the home screen on "Jolla"? Running apps will close.');
+  });
+
+  it('the post-install and post-removal questions name the device and the consequence', () => {
+    assert.match(restartHomeScreenAsk('D', false), /"D" to finish\? Until then the Developer agent entry may not appear/);
+    assert.match(restartHomeScreenAsk('D', true), /finish removing the agent\? Until then its Settings entry/);
   });
 
   it('stops only the sessions that use the agent', () => {

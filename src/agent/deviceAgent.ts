@@ -6,6 +6,7 @@ import type { Services } from '../core/services';
 import type { SfdkResult } from '../sfdk/runner';
 import { deviceFrom } from '../devices/commands';
 import { runAsRootOnDevice } from '../devices/devicePackages';
+import { ensureDeviceOnline } from '../devices/offlineGuard';
 import { sfdkDeviceName } from '../devices/listParsing';
 import {
   AGENT_ARCHES,
@@ -39,8 +40,9 @@ import {
   AGENT_SESSION_KINDS,
   CLEANUP_ARGS,
   CLEANUP_SCRIPT,
-  RESTART_SESSION_CONFIRM,
-  RESTART_SESSION_SCRIPT,
+  RESTART_HOME_SCREEN_ARGV,
+  restartHomeScreenAsk,
+  restartHomeScreenConfirm,
   UNINSTALL_SCRIPT,
   parseCleanupReport,
   uninstallSummary,
@@ -58,9 +60,8 @@ export const UPDATE_AGENT = 'Update Device Agent';
 /** Devices already told about an update in this session. */
 const updateOffered = new Set<string>();
 const REVEAL = 'Reveal in folder';
-/** Offered after an install or removal, never run without a confirmation (restartPhoneSession). */
-const RESTART_SESSION = 'Restart Phone Session…';
-const RESTART_SESSION_ACCEPT = 'Restart Session';
+/** Offered after an install or removal, never run without a confirmation (restartHomeScreen). */
+const RESTART_HOME_SCREEN = 'Restart Home Screen';
 const LAST_FOLDER_KEY = 'sailfish.agent.lastScreenshotFolder';
 const REQUEST_TIMEOUT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 120_000;
@@ -304,8 +305,8 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   const state = await probe(services, device);
   installEvents.fire({ device, phase: 'done', probe: state });
   if (state.state === 'running') {
-    void services.prompts.showInformationMessage(describeProbe(device, state), RESTART_SESSION).then((choice) => {
-      if (choice === RESTART_SESSION) void restartPhoneSession(services, device);
+    void services.prompts.showInformationMessage(`${describeProbe(device, state)} ${restartHomeScreenAsk(device, false)}`, RESTART_HOME_SCREEN).then((choice) => {
+      if (choice === RESTART_HOME_SCREEN) void restartHomeScreen(services, device);
     });
     return state.developerMode;
   }
@@ -352,40 +353,42 @@ async function cleanUpAfterUninstall(services: Services, device: string): Promis
   for (const p of report.unchecked) services.output.log('warn', `uninstall: could not check ${p} on "${device}"`);
   if (!report.complete) services.output.log('warn', `uninstall: the check on "${device}" did not finish (exit ${result.exitCode})`);
   const summary = uninstallSummary(device, report);
+  const message = `${summary.message} ${restartHomeScreenAsk(device, true)}`;
   const shown =
     summary.level === 'information'
-      ? services.prompts.showInformationMessage(summary.message, RESTART_SESSION)
-      : services.prompts.showWarningMessage(summary.message, RESTART_SESSION);
+      ? services.prompts.showInformationMessage(message, RESTART_HOME_SCREEN)
+      : services.prompts.showWarningMessage(message, RESTART_HOME_SCREEN);
   void shown.then((choice) => {
-    if (choice === RESTART_SESSION) void restartPhoneSession(services, device);
+    if (choice === RESTART_HOME_SCREEN) void restartHomeScreen(services, device);
   });
 }
 
 /**
- * Only on the person's explicit, confirmed request: restarts the phone's user session (lipstick and
- * every app), for when Settings still shows a stale Developer agent entry after the package step
- * closed the Settings app. Needs the developer-mode password.
+ * Only on the person's confirmed request (also from the Devices view): restarts lipstick as the
+ * normal SSH user, e.g. when Settings still shows a stale Developer agent entry. Not an agent power.
  */
-async function restartPhoneSession(services: Services, device: string): Promise<void> {
+async function restartHomeScreen(services: Services, device: string): Promise<void> {
   const confirm = await services.prompts.showWarningMessage(
-    `Sailfish: ${RESTART_SESSION_CONFIRM}`,
-    {
-      modal: true,
-      detail: `Only needed when Settings on "${device}" still shows an old Developer agent entry after you closed and reopened it. The home screen restarts and every running app on the phone closes; unsaved work in them is lost.`,
-    },
-    RESTART_SESSION_ACCEPT,
+    `Sailfish: ${restartHomeScreenConfirm(device)}`,
+    { modal: true },
+    RESTART_HOME_SCREEN,
   );
-  if (confirm !== RESTART_SESSION_ACCEPT) return;
-  const exitCode = await runAsRootOnDevice(services, device, {
-    title: `Restart the user session on "${device}"`,
-    prompt: 'Developer-mode password of the device (Settings → Developer tools).',
-    progressTitle: `Sailfish: restart the user session on "${device}"`,
-    script: RESTART_SESSION_SCRIPT,
-    timeoutMs: REQUEST_TIMEOUT_MS * 2,
+  if (confirm !== RESTART_HOME_SCREEN) return;
+  const result = await services.runner.run({
+    args: ['device', 'exec', '--', ...RESTART_HOME_SCREEN_ARGV],
+    device,
+    timeoutMs: REQUEST_TIMEOUT_MS,
   });
-  if (exitCode === undefined) return;
-  if (exitCode === 0) void services.prompts.showInformationMessage(`Sailfish: the user session on "${device}" was restarted.`);
-  else void services.prompts.showErrorMessage(`Sailfish: restarting the user session on "${device}" failed (exit ${exitCode}).`);
+  if (result.exitCode === 0) void services.prompts.showInformationMessage(`Sailfish: the home screen on "${device}" was restarted.`);
+  else void services.prompts.showErrorMessage(`Sailfish: restarting the home screen on "${device}" failed (exit ${result.exitCode}).`);
+}
+
+function restartHomeScreenCommand(services: Services) {
+  return async (item?: unknown): Promise<void> => {
+    const device = requireDevice(services, item);
+    if (!device || !(await ensureDeviceOnline(services, device))) return;
+    await restartHomeScreen(services, device);
+  };
 }
 
 function uninstallAgent(services: Services) {
@@ -529,6 +532,7 @@ export function activateDeviceAgent(ctx: vscode.ExtensionContext, services: Serv
     vscode.commands.registerCommand('sailfish.agent.status', agentStatus(ctx, services)),
     vscode.commands.registerCommand('sailfish.agent.screenshot', takeScreenshot(ctx, services)),
     vscode.commands.registerCommand('sailfish.agent.logs', showLogs(ctx, services)),
+    vscode.commands.registerCommand('sailfish.device.restartHomeScreen', restartHomeScreenCommand(services)),
   );
   activateDeviceLog(ctx, services, clientArgs);
   activateMirror(ctx, services);

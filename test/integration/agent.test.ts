@@ -283,11 +283,11 @@ suite('device agent (T4)', () => {
       assert.strictEqual(last.kind, 'information', JSON.stringify(messages.calls));
       assert.ok(last.message.includes('removed from'), last.message);
       assert.ok(last.message.includes('Also removed 2 leftover items and 1 notification. Nothing of the agent is left.'), last.message);
-      assert.deepStrictEqual(last.items, ['Restart Phone Session…']);
+      assert.deepStrictEqual(last.items, ['Restart Home Screen']);
     });
   });
 
-  test('uninstall: a leftover the user cannot remove is named in a warning; the session restart is never run unasked', async () => {
+  test('uninstall: a leftover the user cannot remove is named in a warning; the home screen restart is never run unasked', async () => {
     await withScenario('agent-uninstall-left', async () => {
       const messages = stubMessages();
       stubInputBox('secret');
@@ -296,6 +296,23 @@ suite('device agent (T4)', () => {
       assert.strictEqual(last.kind, 'warning', JSON.stringify(messages.calls));
       assert.ok(last.message.includes('Still on the device: /var/lib/sailfish-devagent'), last.message);
       assert.strictEqual(readFakeLog().invocations.filter((i) => i.key === 'device_exec.devel-su').length, 1, JSON.stringify(keys()));
+    });
+  });
+
+  test('Restart Home Screen: confirmed, runs systemctl --user restart lipstick as the SSH user, no root', async () => {
+    await withScenario('default', async () => {
+      {
+        const messages = stubMessages();
+        messages.chosenAction = 'Restart Home Screen';
+        await vscode.commands.executeCommand('sailfish.device.restartHomeScreen');
+        const restart = readFakeLog().invocations.find((i) => i.key === 'device_exec.systemctl');
+        assert.ok(restart, JSON.stringify(keys()));
+        assert.deepStrictEqual(restart.argv.slice(-4), ['systemctl', '--user', 'restart', 'lipstick'], JSON.stringify(restart.argv));
+        assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));
+        const last = messages.calls[messages.calls.length - 1];
+        assert.strictEqual(last.kind, 'information', JSON.stringify(messages.calls));
+        assert.ok(last.message.includes('home screen'), last.message);
+      }
     });
   });
 

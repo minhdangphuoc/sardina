@@ -340,6 +340,12 @@
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
+        "command": "sailfish.device.restartHomeScreen",
+        "title": "Restart Home Screen",
+        "category": "Sailfish",
+        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+      },
+      {
         "command": "sailfish.monitor.open",
         "title": "Open Device Monitor",
         "category": "Sailfish",
@@ -987,6 +993,16 @@
         {
           "command": "sailfish.agent.uninstall",
           "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.device.restartHomeScreen",
+          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "group": "2_agent"
+        },
+        {
+          "command": "sailfish.device.restartHomeScreen",
+          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {

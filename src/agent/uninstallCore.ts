@@ -18,15 +18,19 @@ export const AGENT_DBUS_NAME = 'io.github.minhdangphuoc.SailfishDevAgent';
 /** The Settings app's process name; closed after an install or removal so it reloads its entries. */
 export const SETTINGS_APP = 'jolla-settings';
 
-/**
- * Root script behind the explicit, confirmed "Restart Phone Session" action (never run on its own):
- * restarts the device user's systemd manager, which restarts lipstick and closes every running app.
- * The SSH login is outside that manager and survives. Fixed text.
- */
-export const RESTART_SESSION_SCRIPT = `systemctl restart user@$(id -u ${DEVICE_USER}).service`;
+/** The user's own lipstick unit: restarting it needs neither root nor a password. Fixed argv. */
+export const RESTART_HOME_SCREEN_ARGV = ['systemctl', '--user', 'restart', 'lipstick'];
 
-/** The confirmation the person must accept before RESTART_SESSION_SCRIPT runs. */
-export const RESTART_SESSION_CONFIRM = "Restart the phone's user session? Running apps will close.";
+/** The non-modal question after an install, upgrade or removal; ignoring it changes nothing. */
+export function restartHomeScreenAsk(device: string, removed: boolean): string {
+  return removed
+    ? `Restart the home screen on "${device}" to finish removing the agent? Until then its Settings entry and notifications may still be shown.`
+    : `Restart the home screen on "${device}" to finish? Until then the Developer agent entry may not appear in Settings and old notifications may stay.`;
+}
+
+export function restartHomeScreenConfirm(device: string): string {
+  return `Restart the home screen on "${device}"? Running apps will close.`;
+}
 
 /** The link `systemctl enable` made for agents up to 1.10.0; 1.10.1 ships its wants link in the package instead. */
 const LEGACY_WANTS_LINK = `/etc/systemd/system/multi-user.target.wants/${AGENT_PACKAGE}.service`;
