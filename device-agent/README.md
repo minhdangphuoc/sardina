@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.6-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.7-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -140,7 +140,8 @@ frames and reports an idle screen (optional header fields only); 1.8.1 corrects 
 an explicit `"lease":0` mean no lease for text mirror streams and ends log and stats streams when
 Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts the `key` input; 1.10.4 adds
 `touchIndicatorPath` to the phone-settings message and the `contact` record (below); 1.10.5 adds the
-mirror request field `idle` and a faster return to the full pace after an idle screen. All additions are
+mirror request field `idle` and a faster return to the full pace after an idle screen; 1.10.7 allows VP8 up
+to 60 fps under the phone's `maxFps` setting, double-buffers the capture and adds per-frame stage times. All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -149,7 +150,7 @@ capability-gated; older extensions continue to use the older view-only requests.
 | `{"cmd":"screenshot"}` | `{"ok":true,"path":"/run/user/100000/sailfish-devagent/shot-<ts>.png"}` |
 | `{"cmd":"logs","lines":100}` | Raw `journalctl` lines (`short-precise`), streamed until the client disconnects. Optional (1.10.0): `"format":"json"` streams `journalctl -o json` (one object per line, `__CURSOR` included) with a fixed `--output-fields` list when the installed `journalctl` accepts it (probed once at daemon start); `"after":"<cursor>"` resumes after that cursor (`--after-cursor`, else the last `lines`) and is ignored unless it matches `^[A-Za-z0-9;=:._-]{1,512}$`. Any other `format` is text. A phone-side stop ends the stream with `{"ok":false,"error":…}`. Reserved for later: `"filter":{"priority":0..7,"identifiers":[…],"pids":[…]}`. |
 | `{"cmd":"stats","exe":"/usr/bin/harbour-demo","interval":1000}` | 1.10.0. Streamed: first `{"ok":true,"stream":"stats","interval":1000}`, then per interval `{"ts":…,"pid":4321,"state":"S","cpu":12.4,"rssKb":48216,"threads":9,"started":…,"sys":{"cpu":31.0,"load1":0.82,"memAvailableKb":812000}}` (`pid` 0 and no process fields when the app is not running; `cpu` is percent of one core and absent on the first sample of a pid), and `{"event":"start"|"exit","pid":…,"ts":…}` at pid transitions. The process is the lowest pid whose first command line argument equals `exe` (fallback: `comm` equals the base name cut to 15 characters). `exe` must match `^/[A-Za-z0-9._+/-]{1,255}$` without `..` (else `{"ok":false,"error":"invalid exe"}`); `interval` is clamped to 250..10000 ms (default 1000). Gated by Developer Mode only (reads `/proc`, no phone setting, no indicator); counted as `monitorStreams` in the Settings service status. |
-| `{"cmd":"mirror","fps":4,"width":360,"quality":60}` | Streamed events (below). Optional fields: `"encoding":"binary"|"vp8"`, `"lease":<seconds>`, `"adapt":true`, `"bitrate":<kbit/s>`, `"input":true`. JPEG fps is 1..10; VP8 fps is 1..30. `width` is 0 (native) or 90..2160 and `quality` is 1..100. Values are clamped and the status echoes what is in effect. |
+| `{"cmd":"mirror","fps":4,"width":360,"quality":60}` | Streamed events (below). Optional fields: `"encoding":"binary"|"vp8"`, `"lease":<seconds>`, `"adapt":true`, `"bitrate":<kbit/s>`, `"input":true`. JPEG fps is 1..10; VP8 fps is 1..30, since 1.10.7 1..60 capped by the phone's `maxFps` setting (30 or 60, default 30). `width` is 0 (native) or 90..2160 and `quality` is 1..100. Values are clamped and the status echoes what is in effect. |
 | anything else | `{"ok":false,"error":"unknown command"}` |
 
 ### Mirror stream
@@ -209,6 +210,24 @@ pending) and sets the pace back to the full rate (`Pacer::wake`) instead of clim
 2 s. Expected wake-up cost: one convert + encode, about 30 ms on the Jolla Phone, plus the link;
 without `wake` a pace left at 7.5 fps needed about 18 s to return to 30 fps (host simulation in
 `tools/pacer-test.cpp`; not measured on a device).
+60 fps and the capture pipeline (1.10.7): the phone's `maxFps` setting (Settings page, **Frame rate
+limit**, 30 or 60, default 30; `SetString("maxFps","30"|"60")` from a privileged caller, kept in the
+settings file, reported in `GetStatusJson`, `ping` and the `settings` record) caps the VP8 request's
+fps (the extension asks for 60; the status says what is in effect). Above 30 the slot steps are 60, 45,
+30, 20, 15, 10 and 7.5 fps and the ack window is 8 frames (about 133 ms, as 4 frames at 30). Changing
+`maxFps` during a stream restarts it like `idleMode`, with `restarting: frame rate limit changed on the
+phone`, and `SetString` refuses `maxFps` while that restart runs. The recorder has two shm buffers; the
+next frame is requested into the other one as soon as a frame arrives (before convert and encode),
+so the compositor renders and reads back while the agent works. The request lead before a slot is
+the display frame (16.7 ms) plus the median readback, at least half and at most a whole slot (before:
+always half a slot, which added half a slot to every frame whose readback took longer than that).
+lipstick still serves one request at a time per recorder and reads the whole screen back with
+`glReadPixels` in its render thread, so the readback bounds the rate: about 30 fps needs a readback
+under about 30 ms (host simulation in `tools/pacer-test.cpp`). Captured frames' VP8 headers carry
+stage times in ms, each only when measured: `hms` (the request was held for the pace or the link
+after the previous frame arrived), `wms` (request to the compositor's render, from lipstick's frame
+time), `rbms` (render to arrival: readback and delivery), `cnms` (convert), `enms` (encode) and
+`sdms` (the socket write of the previous frame). Re-encodes of the last picture carry none.
 Encoder settings: fixed real-time speed -6, single token partition, static threshold 100, half the
 cores for libvpx (at most 3) and for the conversion (at most 4), rate-control buffer 200/300/500 ms.
 
