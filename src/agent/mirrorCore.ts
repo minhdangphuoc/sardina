@@ -226,8 +226,6 @@ export interface AdaptFields {
   skips?: number;
   /** Agent 1.5.0+: how the frame was captured; absent when not reported. */
   capture?: 'native' | 'screenshot';
-  /** Why the screenshot path is used (plain text, at most MAX_CAPTURE_REASON chars); only with `capture: 'screenshot'`. */
-  captureReason?: string;
   /** Agent 1.6.0, VP8 frames of an adaptive stream: the target bitrate the frame was encoded at, kbit/s. */
   kbps?: number;
 }
@@ -248,8 +246,6 @@ export interface VideoFields {
 }
 
 export type MirrorFormat = 'jpeg' | 'png' | 'vp8';
-
-export const MAX_CAPTURE_REASON = 120;
 
 /** The header of a binary image record: the fields of a text frame, with `bytes` instead of `data`. */
 export interface MirrorRecordHeader extends AdaptFields, VideoFields {
@@ -308,11 +304,7 @@ function adaptFields(o: Record<string, unknown>, h: AdaptFields): void {
     h.skips = skips;
   }
   if (o.capture === 'native' || o.capture === 'screenshot') {
-    h.capture = o.capture;
-    if (o.capture === 'screenshot' && typeof o.captureReason === 'string') {
-      const reason = o.captureReason.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, MAX_CAPTURE_REASON);
-      if (reason) h.captureReason = reason;
-    }
+    h.capture = o.capture; // agents before 1.10.5 may still say screenshot: input stays off for it
   }
 }
 
@@ -547,7 +539,6 @@ export interface MirrorStatus {
   fallbackReason?: string;
   /** The capture path the agent reported on the last frame; undefined when not reported. */
   capture?: 'native' | 'screenshot';
-  captureReason?: string;
   reason?: string;
   fps?: number;
   latencyMs?: number;
@@ -634,7 +625,6 @@ export function logText(s: MirrorStatus): string {
     }
     if (s.dropped !== undefined && s.dropped > 0) parts.push(`${s.dropped} dropped`);
     if (s.capture === 'native') parts.push('capture native');
-    else if (s.capture === 'screenshot') parts.push(`capture screenshot${s.captureReason ? ` (${s.captureReason})` : ''}`);
     if (s.controlOffReason) parts.push(`control off (${s.controlOffReason})`);
     return parts.join(', ');
   }
@@ -700,7 +690,6 @@ function stripWarning(s: MirrorStatus): { text: string; action?: StripAction } |
   const causes = [reducedCauses(s.video), reducedCauses(s.image)];
   if (causes.includes('cpu')) return { text: 'Reduced for phone' };
   if (causes.includes('link')) return { text: 'Reduced for link' };
-  if (s.capture === 'screenshot') return { text: 'Screenshot capture' };
   if (s.dropped !== undefined && s.dropped > 0) return { text: `${s.dropped} dropped` };
   if (s.softError) return { text: 'Phone error' };
   return undefined;
@@ -772,7 +761,6 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   rows.push({ label: 'Latency', value: s.latencyMs === undefined ? '—' : `${Math.round(s.latencyMs)} ms` });
   if (s.frameMs !== undefined) rows.push({ label: 'Phone time', value: `${Math.round(s.frameMs)} ms per frame` });
   if (s.capture === 'native') rows.push({ label: 'Capture', value: 'native recorder' });
-  else if (s.capture === 'screenshot') rows.push({ label: 'Capture', value: `screenshot${s.captureReason ? ` (${s.captureReason})` : ''}` });
   if (s.dropped !== undefined) rows.push({ label: 'Dropped', value: String(s.dropped) });
   const control = controlState(s, inputActive);
   rows.push({ label: 'Control', value: control === 'off' ? `off (${s.controlOffReason})` : control === 'active' ? 'on' : 'view only' });

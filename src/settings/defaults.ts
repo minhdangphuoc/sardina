@@ -26,6 +26,7 @@ export interface SailfishSettings {
   'monitor.pollIntervalSeconds': number;
   'monitor.logLines': number;
   'qtqml.silenceQmlls': boolean;
+  'mirror.idleStreaming': boolean;
   logLevel: 'info' | 'debug';
   'experimental.enableWindows': boolean;
   'experimental.msys2Shell': string;
@@ -54,6 +55,7 @@ export const DEFAULTS: SailfishSettings = {
   'monitor.pollIntervalSeconds': 5,
   'monitor.logLines': 500,
   'qtqml.silenceQmlls': true,
+  'mirror.idleStreaming': true,
   logLevel: 'info',
   'experimental.enableWindows': false,
   'experimental.msys2Shell': 'C:\\msys64\\msys2_shell.cmd',

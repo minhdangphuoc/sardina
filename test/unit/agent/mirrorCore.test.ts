@@ -257,7 +257,7 @@ describe('mirrorCore status strip', () => {
   });
   it('shows at most one warning, by priority', () => {
     const all: MirrorStatus = {
-      state: 'live', transport: 'sfdk', fallbackReason: 'agent 1.1.0 — update for the fast mirror', capture: 'screenshot', dropped: 3, softError: 'oops',
+      state: 'live', transport: 'sfdk', fallbackReason: 'agent 1.1.0 — update for the fast mirror', capture: 'native', dropped: 3, softError: 'oops',
       video: { width: 1, height: 1, reduced: true, reducedFor: ['cpu', 'link'] },
     };
     const warning = (s: MirrorStatus): string | undefined => stripParts(s).warning;
@@ -267,8 +267,6 @@ describe('mirrorCore status strip', () => {
     all.video = { width: 1, height: 1, reduced: true, reducedFor: ['link'] };
     assert.strictEqual(warning(all), 'Reduced for link');
     all.video = undefined;
-    assert.strictEqual(warning(all), 'Screenshot capture');
-    all.capture = 'native';
     assert.strictEqual(warning(all), '3 dropped');
     all.dropped = 0;
     assert.strictEqual(warning(all), 'Phone error');
@@ -297,9 +295,9 @@ describe('mirrorCore detailRows', () => {
       },
     );
   });
-  it('names the image, the reductions, the sfdk fallback, the capture reason, idle and control off', () => {
+  it('names the image, the reductions, the sfdk fallback, the capture path, idle and control off', () => {
     const r = rows({
-      state: 'live', transport: 'sfdk', fallbackReason: 'auth', codec: 'jpeg', idle: true, dropped: 2, capture: 'screenshot', captureReason: 'recorder unavailable: busy',
+      state: 'live', transport: 'sfdk', fallbackReason: 'auth', codec: 'jpeg', idle: true, dropped: 2, capture: 'native',
       controlOffReason: 'disabled on the phone', softError: 'frame failed',
       image: { width: 270, height: 594, quality: 45, reduced: true, reducedFor: ['link', 'cpu'] },
     });
@@ -307,7 +305,7 @@ describe('mirrorCore detailRows', () => {
     assert.strictEqual(r.Image, 'JPEG · 270×594 · q45 (reduced for the link and the phone CPU)');
     assert.strictEqual(r['Frame rate'], 'idle (no screen changes)');
     assert.strictEqual(r.Latency, '—');
-    assert.strictEqual(r.Capture, 'screenshot (recorder unavailable: busy)');
+    assert.strictEqual(r.Capture, 'native recorder');
     assert.strictEqual(r.Dropped, '2');
     assert.strictEqual(r.Control, 'off (disabled on the phone)');
     assert.strictEqual(r['Touch indicator'], 'off');
@@ -981,28 +979,24 @@ describe('bundled agent version', () => {
 
 describe('capture path fields', () => {
   const base = { frame: 1, ts: 1, screen: [100, 200], size: [50, 100], format: 'jpeg', bytes: 10 };
-  it('parses capture and its reason in records and lines', () => {
-    const r = parseMirrorHeader({ ...base, capture: 'screenshot', captureReason: 'recorder unavailable: x\n' }, 'record');
+  it('parses capture in records and lines and drops a reason', () => {
+    const r = parseMirrorHeader({ ...base, capture: 'screenshot', captureReason: 'x' }, 'record');
     assert.ok(r && r.kind === 'frame');
-    assert.strictEqual((r as { capture?: string }).capture, 'screenshot');
-    assert.strictEqual((r as { captureReason?: string }).captureReason, 'recorder unavailable: x');
-    const l = parseMirrorHeader({ ...base, bytes: undefined, data: 'AAAA', capture: 'native', captureReason: 'ignored' }, 'line');
+    assert.strictEqual((r as { capture?: string }).capture, 'screenshot'); // agents before 1.10.5
+    assert.strictEqual('captureReason' in r, false);
+    const l = parseMirrorHeader({ ...base, bytes: undefined, data: 'AAAA', capture: 'native' }, 'line');
     assert.ok(l && l.kind === 'frame');
     assert.strictEqual((l as { capture?: string }).capture, 'native');
-    assert.strictEqual((l as { captureReason?: string }).captureReason, undefined);
   });
-  it('truncates the reason and ignores unknown values', () => {
-    const r = parseMirrorHeader({ ...base, capture: 'screenshot', captureReason: 'a'.repeat(500) }, 'record') as { captureReason?: string };
-    assert.strictEqual(r.captureReason?.length, 120);
-    const u = parseMirrorHeader({ ...base, capture: 'other', captureReason: 'x' }, 'record') as { capture?: string; captureReason?: string };
+  it('ignores unknown capture values', () => {
+    const u = parseMirrorHeader({ ...base, capture: 'other' }, 'record') as { capture?: string };
     assert.strictEqual(u.capture, undefined);
-    assert.strictEqual(u.captureReason, undefined);
     const n = parseMirrorHeader({ ...base, capture: 5 }, 'record') as { capture?: string };
     assert.strictEqual(n.capture, undefined);
   });
   it('shows the capture path in the strip only when reported', () => {
     assert.ok(logText({ state: 'live', capture: 'native' }).endsWith(', capture native'));
-    assert.ok(logText({ state: 'live', capture: 'screenshot', captureReason: 'recorder unavailable: busy' }).endsWith(', capture screenshot (recorder unavailable: busy)'));
+    assert.ok(!logText({ state: 'live', capture: 'screenshot' }).includes('screenshot'));
     assert.ok(!logText({ state: 'live' }).includes('capture'));
   });
 });

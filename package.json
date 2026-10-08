@@ -576,6 +576,12 @@
           "scope": "resource",
           "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this Sailfish project folder. Sailfish OS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
         },
+        "sailfish.mirror.idleStreaming": {
+          "type": "boolean",
+          "default": true,
+          "scope": "window",
+          "markdownDescription": "Keep sending sharpened frames and `idle` messages while the phone screen does not change. Turn off to send nothing until the screen changes (agent 1.10.5 and later; applies when the mirror connects)."
+        },
         "sailfish.logLevel": {
           "type": "string",
           "enum": [

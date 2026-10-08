@@ -703,6 +703,21 @@ suite('screen mirror over the SSH forward (F6)', () => {
     });
   });
 
+  test('I29 idle streaming off: the request carries idle:pause', async function () {
+    this.timeout(30000);
+    const config = vscode.workspace.getConfiguration('sailfish');
+    await config.update('mirror.idleStreaming', false, vscode.ConfigurationTarget.Global);
+    try {
+      await withScenario('agent-forward-touch-mirror', async () => {
+        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await waitLive();
+        assert.ok((requests()[0].line ?? '').includes('"idle":"pause"'), requests()[0].line);
+      });
+    } finally {
+      await config.update('mirror.idleStreaming', undefined, vscode.ConfigurationTarget.Global);
+    }
+  });
+
   test('I22 control off on the phone: the strip says so, no active:true is ever sent, Device Agent Status names it', async function () {
     this.timeout(30000);
     await withScenario('agent-settings-control-off', async () => {

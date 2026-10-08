@@ -151,7 +151,6 @@ export class MirrorSession {
   private transportKind: 'ssh' | 'sfdk' | undefined;
   private fallbackReason: string | undefined;
   private capture: 'native' | 'screenshot' | undefined;
-  private captureReason: string | undefined;
   /** The phone has turned control off (status or `settings` message); undefined otherwise. */
   private controlOffReason: string | undefined;
   private leaseActive = false;
@@ -615,6 +614,7 @@ export class MirrorSession {
       if (unavailable === undefined) {
         forward.setVideo(await this.wantVideo(token));
         forward.setInput(agentSupportsInput(this.opts.probe));
+        forward.setIdlePause(!this.services.settings.get('mirror.idleStreaming'));
         forward.setPhoneState(agentSupportsPhoneState(this.opts.probe.version), os.hostname());
         if (token.isCancellationRequested || gen !== this.gen) return { cancelled: true };
         const end = await this.runOne(forward, gen, token);
@@ -828,10 +828,9 @@ export class MirrorSession {
       this.inputCaptureSafe = inputCaptureSafe;
       this.syncInput(); // screenshot fallback revokes the device lease and page control immediately
     }
-    if (f.capture !== this.capture || f.captureReason !== this.captureReason) {
+    if (f.capture !== this.capture) {
       this.capture = f.capture;
-      this.captureReason = f.captureReason;
-      if (f.capture) this.log(`capture path: ${f.capture}${f.captureReason ? ` (${f.captureReason})` : ''}`);
+      if (f.capture) this.log(`capture path: ${f.capture}`);
     }
     if (f.cms !== undefined || f.ems !== undefined) this.frameMs = (f.cms ?? 0) + (f.ems ?? 0);
     const offset = this.clock.offsetMs;
@@ -985,7 +984,6 @@ export class MirrorSession {
       transport: this.transportKind,
       fallbackReason: this.fallbackReason,
       capture: live ? this.capture : undefined,
-      captureReason: live ? this.captureReason : undefined,
       reason: this.reason,
       controlOffReason: live ? this.controlOffReason : undefined,
       touchIndicatorPath: live ? this.effectiveTouchIndicatorPath() : 'off',

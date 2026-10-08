@@ -199,7 +199,7 @@ export function ackLine(frame: number): string {
  * `vp8` in `mirrorEncodings`.
  */
 export function mirrorRequestLine(
-  o: MirrorOptions & { lease: number; adapt?: boolean; bitrate?: number; input?: boolean; phoneState?: boolean; client?: string },
+  o: MirrorOptions & { lease: number; adapt?: boolean; bitrate?: number; input?: boolean; phoneState?: boolean; client?: string; idle?: 'pause' },
   encoding: 'binary' | 'vp8',
 ): string {
   return (
@@ -213,6 +213,7 @@ export function mirrorRequestLine(
       lease: o.lease,
       ...(o.adapt ? { adapt: true } : {}),
       ...(o.input ? { input: true } : {}),
+      ...(o.idle === 'pause' ? { idle: 'pause' } : {}),
       ...(o.phoneState ? { phoneState: true } : {}),
       ...(clientName(o.client ?? '') ? { client: clientName(o.client ?? '') } : {}),
     }) + '\n'
