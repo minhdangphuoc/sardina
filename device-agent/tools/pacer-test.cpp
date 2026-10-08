@@ -9,9 +9,11 @@
 
 #include "pacer.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <functional>
+#include <utility>
 #include <vector>
 
 namespace {
@@ -237,6 +239,32 @@ int main()
         report("inflated cost", r, o, 30000, 60000);
         check(r.stepAt(30000) == 0, "inflated cost", "back at 30 fps through the probe");
         check(r.shareAtMost(0, 30000, 60000) == 1.0, "inflated cost", "stays there");
+    }
+    // 9. A change after a still screen (phone fast again, pace left at 7.5 fps by earlier load): wake()
+    //    is back at 30 fps at once; without it the pace climbs one step per HOLD_MS.
+    {
+        auto slowStart = []() {
+            Pacer p;
+            p.encoderOpened(0);
+            long long t = 0;
+            while (p.step() < 4) {
+                t += static_cast<long long>(std::max(p.intervalMs(), 150.0));
+                p.addCost(150.0, t);
+            }
+            return std::make_pair(p, t + 5000); // 5 s without frames
+        };
+        std::pair<Pacer, long long> a = slowStart();
+        const long long wakeAt = a.second;
+        check(a.first.wake(wakeAt) && a.first.step() == 0, "wake", "30 fps slot at the first changed frame");
+        check(!a.first.wake(wakeAt), "wake", "no change when already at 30 fps");
+        std::pair<Pacer, long long> b = slowStart();
+        long long t = b.second;
+        while (b.first.step() > 0) {
+            t += static_cast<long long>(std::max(b.first.intervalMs(), 30.0));
+            b.first.addCost(30.0, t);
+        }
+        std::printf("     wake: back at 30 fps after 0 ms with wake(), %lld ms without\n", t - wakeAt);
+        check(t - wakeAt >= 4 * Pacer::HOLD_MS, "wake", "without wake() the climb takes one hold per step");
     }
     std::printf("%s\n", failures == 0 ? "all passed" : "FAILED");
     return failures == 0 ? 0 : 1;

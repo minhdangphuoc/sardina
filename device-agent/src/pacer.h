@@ -48,6 +48,13 @@ public:
         clear();
     }
 
+    // The screen changed after a pause: back to the full pace at once. The slower step and the costs
+    // were from before the pause. Returns true when the slot changed.
+    bool wake(long long now)
+    {
+        return m_step > 0 && change(0, now);
+    }
+
     // The convert + encode time of a delta frame finished at `now` (ms on a steady clock). Returns
     // true when the slot changed.
     bool addCost(double ms, long long now)
