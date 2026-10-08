@@ -659,7 +659,7 @@ clear message (gpg matches names as substrings, so `Jane Doe` also matches
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.10.0**.
+emulator. This extension includes agent **1.10.1**.
 
 1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
    on.
@@ -692,7 +692,15 @@ emulator. This extension includes agent **1.10.0**.
    it at once. Only taps and one-finger swipes exist: no keys, text or power
    button.
 7. **Remove the agent.** **Sailfish: Uninstall Device Agent** (one password
-   prompt) removes the package, its service and its socket.
+   prompt) first stops the mirror, device logs and app monitor of that device,
+   then removes the package, its service, socket, settings and notifications,
+   the extension's leftovers in the device user's home (`~/.cache/sailfish-tools`,
+   staged screenshots, an RPM copy), and checks that nothing is left; one
+   notification says what was removed and anything that is still there. A
+   running Settings app is closed so the Developer agent entry disappears; if
+   it still shows, **Restart Phone Session…** in that notification restarts
+   the phone's user session after a confirmation (running apps close). The SDK
+   tools (`rsync`, `sdk-deploy-rpm`, `gdb-gdbserver`) are not touched.
 
 If the agent is missing, **Take Device Screenshot** and **Show Device Logs**
 offer to install it.

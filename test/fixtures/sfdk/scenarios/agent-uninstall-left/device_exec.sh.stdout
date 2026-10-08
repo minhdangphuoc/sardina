@@ -1,0 +1,3 @@
+sfdev-clean:left:/var/lib/sailfish-devagent
+sfdev-clean:unchecked:notifications
+sfdev-clean:done

@@ -1,11 +1,16 @@
 import * as assert from 'assert';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import {
   AGENT_BINARY,
   AGENT_PACKAGE,
-  AGENT_REMOTE_RPM,
+  AGENT_RPM_NAME,
+  LEGACY_REMOTE_RPM,
+  REMOVE_COPY_SCRIPT,
   COPY_SCRIPT,
   INSTALL_SCRIPT,
-  UNINSTALL_SCRIPT,
   archFromOutput,
   archFromRpmQuery,
   classifyPing,
@@ -304,24 +309,40 @@ describe('agentCore scripts and messages', () => {
   it('constants', () => {
     assert.strictEqual(AGENT_PACKAGE, 'sailfish-devagent');
     assert.strictEqual(AGENT_BINARY, 'sailfish-devagent');
-    assert.strictEqual(AGENT_REMOTE_RPM, '/tmp/sailfish-devagent.rpm');
+    assert.strictEqual(AGENT_RPM_NAME, 'sailfish-devagent.rpm');
+    assert.strictEqual(LEGACY_REMOTE_RPM, '/tmp/sailfish-devagent.rpm');
   });
-  it('COPY_SCRIPT takes positional arguments only', () => {
+  it('COPY_SCRIPT takes positional arguments only and writes only into ~/.cache/sailfish-tools', () => {
     assert.ok(COPY_SCRIPT.includes('base64 -d'));
     assert.ok(COPY_SCRIPT.includes('"$f"'));
-    assert.ok(COPY_SCRIPT.includes('"$n"') || COPY_SCRIPT.includes('$n'));
+    assert.ok(COPY_SCRIPT.includes('$n'));
+    assert.ok(COPY_SCRIPT.includes('d=$HOME/.cache/sailfish-tools; f=$d/$1;'));
+    assert.ok(COPY_SCRIPT.includes('chmod 700 "$d"'));
     assert.ok(!/\$\(\s*(?!wc -c)/.test(COPY_SCRIPT), 'only the fixed wc -c substitution');
     assert.ok(!COPY_SCRIPT.includes('`'));
+    assert.ok(!COPY_SCRIPT.includes('/tmp'));
   });
-  it('INSTALL_SCRIPT uses the fixed RPM path and always removes it', () => {
-    assert.ok(INSTALL_SCRIPT.includes('rpm -U'));
-    assert.ok(INSTALL_SCRIPT.includes(AGENT_REMOTE_RPM));
-    assert.ok(INSTALL_SCRIPT.includes(`rm -f ${AGENT_REMOTE_RPM}`));
-    assert.ok(!INSTALL_SCRIPT.includes('$('));
+  it('COPY_SCRIPT and REMOVE_COPY_SCRIPT under sh: private folder, refuse a path, remove the copy and the empty folder', () => {
+    const home = fs.mkdtempSync(path.join(os.tmpdir(), 'sfdev-copy-'));
+    try {
+      const env = { ...process.env, HOME: home };
+      execFileSync('sh', ['-c', COPY_SCRIPT, 'sh', AGENT_RPM_NAME, '3'], { env, input: Buffer.from('abc').toString('base64') });
+      const dir = path.join(home, '.cache', 'sailfish-tools');
+      assert.strictEqual(fs.readFileSync(path.join(dir, AGENT_RPM_NAME), 'utf8'), 'abc');
+      assert.strictEqual(fs.statSync(dir).mode & 0o777, 0o700);
+      assert.throws(() => execFileSync('sh', ['-c', COPY_SCRIPT, 'sh', '../x', '3'], { env, input: 'YWJj', stdio: 'pipe' }));
+      assert.ok(!fs.existsSync(path.join(home, '.cache', 'x')));
+      execFileSync('sh', ['-c', REMOVE_COPY_SCRIPT, 'sh', AGENT_RPM_NAME], { env });
+      assert.ok(!fs.existsSync(dir), 'the empty private folder goes too');
+    } finally {
+      fs.rmSync(home, { recursive: true, force: true });
+    }
+  });
+  it('INSTALL_SCRIPT installs from the private folder of defaultuser and always removes the copy', () => {
+    assert.ok(INSTALL_SCRIPT.startsWith('f=$(getent passwd defaultuser | cut -d: -f6)/.cache/sailfish-tools/sailfish-devagent.rpm;'));
+    assert.ok(INSTALL_SCRIPT.includes('rpm -U --replacepkgs --oldpackage "$f" || r=$?; rm -f "$f";'));
+    assert.ok(!INSTALL_SCRIPT.includes('/tmp'));
     assert.ok(!INSTALL_SCRIPT.includes('`'));
-  });
-  it('UNINSTALL_SCRIPT removes only the agent package', () => {
-    assert.strictEqual(UNINSTALL_SCRIPT, 'rpm -e sailfish-devagent');
   });
   it('installConsentDetail names the device and package', () => {
     const t = installConsentDetail('My Phone');

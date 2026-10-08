@@ -6,8 +6,17 @@
 
 export const AGENT_PACKAGE = 'sailfish-devagent';
 export const AGENT_BINARY = 'sailfish-devagent';
-/** Where the RPM lands on the device before `rpm -U`; a fixed path, never user input. */
-export const AGENT_REMOTE_RPM = '/tmp/sailfish-devagent.rpm';
+/** The device user the agent runs as (its unit's `User=`) and the SSH login. */
+export const DEVICE_USER = 'defaultuser';
+/**
+ * The extension's own folder on the device, relative to the device user's home. Everything the
+ * extension writes there (outside the agent's package) goes into it, mode 0700.
+ */
+export const DEVICE_TOOLS_DIR = '.cache/sailfish-tools';
+/** The RPM's file name in DEVICE_TOOLS_DIR before `rpm -U`; a fixed name, never user input. */
+export const AGENT_RPM_NAME = 'sailfish-devagent.rpm';
+/** Where extensions before 0.1.9 copied the RPM; only ever removed now. */
+export const LEGACY_REMOTE_RPM = '/tmp/sailfish-devagent.rpm';
 
 export type AgentArch = 'aarch64' | 'armv7hl' | 'i486';
 export const AGENT_ARCHES: readonly AgentArch[] = ['aarch64', 'armv7hl', 'i486'];
@@ -200,14 +209,26 @@ export function screenshotFileName(device: string, date: Date): string {
 }
 
 /**
- * Copies stdin (base64) to `$1` and checks its size against `$2`; both arrive as positional argv
- * elements, so nothing is interpolated into the script. BusyBox sh only.
+ * Copies stdin (base64) to `$1` (a plain file name) in the extension's private folder
+ * `~/.cache/sailfish-tools` (0700, so no other user can swap the file before root installs it) and
+ * checks its size against `$2`; both arrive as positional argv elements, so nothing is
+ * interpolated into the script. BusyBox sh only.
  */
-export const COPY_SCRIPT = 'f=$1; n=$2; base64 -d > "$f" && [ "$(wc -c < "$f")" -eq "$n" ]';
+export const COPY_SCRIPT =
+  `case $1 in */*|'') exit 2 ;; esac; d=$HOME/${DEVICE_TOOLS_DIR}; f=$d/$1; n=$2; ` +
+  'mkdir -p "$d" && chmod 700 "$d" && base64 -d > "$f" && [ "$(wc -c < "$f")" -eq "$n" ]';
 
-/** Root (devel-su) scripts; the RPM path and package name are constants. */
-export const INSTALL_SCRIPT = `r=0; rpm -U --replacepkgs --oldpackage ${AGENT_REMOTE_RPM} || r=$?; rm -f ${AGENT_REMOTE_RPM}; exit $r`;
-export const UNINSTALL_SCRIPT = `rpm -e ${AGENT_PACKAGE}`;
+/** Removes the copy `$1` (a plain file name) and the private folder when it is then empty: an install that never reached rpm. */
+export const REMOVE_COPY_SCRIPT = `case $1 in */*|'') exit 2 ;; esac; d=$HOME/${DEVICE_TOOLS_DIR}; rm -f "$d/$1"; rmdir "$d" 2>/dev/null; exit 0`;
+
+/**
+ * Root (devel-su) script; the device user, folder and file name are constants. The copy is
+ * removed whatever rpm says, and the private folder too when that leaves it empty.
+ */
+export const INSTALL_SCRIPT =
+  `f=$(getent passwd ${DEVICE_USER} | cut -d: -f6)/${DEVICE_TOOLS_DIR}/${AGENT_RPM_NAME}; r=0; ` +
+  `rpm -U --replacepkgs --oldpackage "$f" || r=$?; rm -f "$f"; rmdir "\${f%/*}" 2>/dev/null; exit $r`;
+// The uninstall scripts live in uninstallCore.ts.
 
 /** What the consent dialog says the agent can do (the security model's "install is the consent step"). */
 export function installConsentDetail(device: string): string {

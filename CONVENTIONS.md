@@ -145,7 +145,7 @@ auto-restored in a root `teardown`.
 | `engine exec -- <cmd>` | `engine_exec.<cmd>` (fallback `engine_exec`) |
 | `emulator show <name>` | `emulator_show` |
 | `device exec [name] -- sailfish-devagent --request stats --exe <path> --interval <ms>` | `device_exec.sailfish-devagent.stats` (status line then one JSON line per tick; `.stream` + `.hang` make it live; Device Monitor scenarios `monitor-*`) |
-| `device exec [name] -- sh -c <script> sh <exe>` | `device_exec.sh` (scenario-local only: never put it in `default/`, the agent install test also runs `sh -c`) |
+| `device exec [name] -- sh -c <script> sh <args…>` | `device_exec.sh` (scenario-local only: never put it in `default/`, the agent install test also runs `sh -c`; `agent-uninstall*` hold the uninstall cleanup report) |
 | `device exec [name] -- cat /etc/os-release` | `device_exec.cat` |
 | `device exec [name] -- printenv SSH_CONNECTION` | `device_exec.printenv` |
 | `device exec [name] -- ip -o -4 addr` | `device_exec.ip` |

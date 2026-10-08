@@ -11,10 +11,10 @@ import {
   AGENT_ARCHES,
   AGENT_BINARY,
   AGENT_PACKAGE,
-  AGENT_REMOTE_RPM,
+  AGENT_RPM_NAME,
   COPY_SCRIPT,
   INSTALL_SCRIPT,
-  UNINSTALL_SCRIPT,
+  REMOVE_COPY_SCRIPT,
   archFromOutput,
   archFromRpmQuery,
   classifyPing,
@@ -35,6 +35,17 @@ import {
 import { agentUpdateNotice, agentUpdateAvailable, bundledAgentVersion } from './mirrorCore';
 import { activateMirror } from './mirror';
 import { activateDeviceLog, deviceLog } from '../monitor/deviceLog';
+import {
+  AGENT_SESSION_KINDS,
+  CLEANUP_ARGS,
+  CLEANUP_SCRIPT,
+  RESTART_SESSION_CONFIRM,
+  RESTART_SESSION_SCRIPT,
+  UNINSTALL_SCRIPT,
+  parseCleanupReport,
+  uninstallSummary,
+} from './uninstallCore';
+import { deviceSessions, listLabels } from '../core/deviceSessions';
 
 /**
  * The on-device developer agent (device-agent/): install, uninstall, status, screenshots and
@@ -47,6 +58,9 @@ export const UPDATE_AGENT = 'Update Device Agent';
 /** Devices already told about an update in this session. */
 const updateOffered = new Set<string>();
 const REVEAL = 'Reveal in folder';
+/** Offered after an install or removal, never run without a confirmation (restartPhoneSession). */
+const RESTART_SESSION = 'Restart Phone Session…';
+const RESTART_SESSION_ACCEPT = 'Restart Session';
 const LAST_FOLDER_KEY = 'sailfish.agent.lastScreenshotFolder';
 const REQUEST_TIMEOUT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 120_000;
@@ -206,11 +220,11 @@ export async function detectArch(
   return { arch };
 }
 
-/** Copies the RPM as base64 over the `device exec` stdin (no scp, no second channel) and checks its size on the device. */
+/** Copies the RPM as base64 over the `device exec` stdin (no scp, no second channel) into `~/.cache/sailfish-tools` and checks its size on the device. */
 async function copyRpm(services: Services, device: string, rpmPath: string, token: vscode.CancellationToken): Promise<boolean> {
   const bytes = await fs.readFile(rpmPath);
   const result = await services.runner.run({
-    args: ['device', 'exec', '--', 'sh', '-c', COPY_SCRIPT, 'sh', AGENT_REMOTE_RPM, String(bytes.length)],
+    args: ['device', 'exec', '--', 'sh', '-c', COPY_SCRIPT, 'sh', AGENT_RPM_NAME, String(bytes.length)],
     device,
     stdin: bytes.toString('base64'),
     timeoutMs: COPY_TIMEOUT_MS,
@@ -275,7 +289,11 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
     timeoutMs: ROOT_TIMEOUT_MS,
   });
   if (exitCode !== 0) installEvents.fire({ device, phase: 'done' });
-  if (exitCode === undefined) return false;
+  if (exitCode === undefined) {
+    // The root step never ran (password prompt cancelled, device offline): the copy is the user's, remove it with its folder.
+    await services.runner.run({ args: ['device', 'exec', '--', 'sh', '-c', REMOVE_COPY_SCRIPT, 'sh', AGENT_RPM_NAME], device, timeoutMs: REQUEST_TIMEOUT_MS });
+    return false;
+  }
   if (exitCode !== 0) {
     void services.prompts.showErrorMessage(
       `Sailfish: installing the device agent on "${device}" failed (exit ${exitCode}). Check the password, and the Sailfish OS output channel for rpm's message.`,
@@ -286,7 +304,9 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   const state = await probe(services, device);
   installEvents.fire({ device, phase: 'done', probe: state });
   if (state.state === 'running') {
-    void services.prompts.showInformationMessage(describeProbe(device, state));
+    void services.prompts.showInformationMessage(describeProbe(device, state), RESTART_SESSION).then((choice) => {
+      if (choice === RESTART_SESSION) void restartPhoneSession(services, device);
+    });
     return state.developerMode;
   }
   void services.prompts.showErrorMessage(`${describeProbe(device, state)} The package was installed, but the service did not answer.`);
@@ -301,10 +321,79 @@ function installAgent(ctx: vscode.ExtensionContext, services: Services) {
   };
 }
 
+/** Stops the device's sessions that use the agent (mirror, logs, app monitor); debug and app sessions keep running. */
+async function stopAgentSessions(services: Services, device: string): Promise<void> {
+  const ids = deviceSessions
+    .activeFor(device)
+    .filter((s) => AGENT_SESSION_KINDS.includes(s.kind))
+    .map((s) => s.id);
+  if (ids.length === 0) return;
+  const results = await Promise.all(ids.map((id) => deviceSessions.stopOne(device, id)));
+  const stopped = results.flatMap((r) => r.stopped);
+  const failed = results.flatMap((r) => r.failed);
+  if (stopped.length > 0) services.output.log('info', `uninstall: stopped on "${device}": ${listLabels(stopped)}`);
+  for (const f of failed) services.output.log('warn', `uninstall: could not stop ${f.label} on "${device}": ${f.reason}`);
+}
+
+/**
+ * After `rpm -e`: removes what the device user may remove and checks that nothing else is left
+ * (CLEANUP_SCRIPT, fixed text, paths as positional arguments), then one notification sums it up.
+ */
+async function cleanUpAfterUninstall(services: Services, device: string): Promise<void> {
+  const result = await services.runner.run({
+    args: ['device', 'exec', '--', 'sh', '-c', CLEANUP_SCRIPT, 'sh', ...CLEANUP_ARGS],
+    device,
+    timeoutMs: REQUEST_TIMEOUT_MS,
+  });
+  const report = parseCleanupReport(result.stdout);
+  for (const p of report.removed) services.output.log('info', `uninstall: removed ${p} on "${device}"`);
+  for (const id of report.closed) services.output.log('info', `uninstall: closed notification ${id} on "${device}"`);
+  for (const p of report.left) services.output.log('warn', `uninstall: still on "${device}": ${p}`);
+  for (const p of report.unchecked) services.output.log('warn', `uninstall: could not check ${p} on "${device}"`);
+  if (!report.complete) services.output.log('warn', `uninstall: the check on "${device}" did not finish (exit ${result.exitCode})`);
+  const summary = uninstallSummary(device, report);
+  const shown =
+    summary.level === 'information'
+      ? services.prompts.showInformationMessage(summary.message, RESTART_SESSION)
+      : services.prompts.showWarningMessage(summary.message, RESTART_SESSION);
+  void shown.then((choice) => {
+    if (choice === RESTART_SESSION) void restartPhoneSession(services, device);
+  });
+}
+
+/**
+ * Only on the person's explicit, confirmed request: restarts the phone's user session (lipstick and
+ * every app), for when Settings still shows a stale Developer agent entry after the package step
+ * closed the Settings app. Needs the developer-mode password.
+ */
+async function restartPhoneSession(services: Services, device: string): Promise<void> {
+  const confirm = await services.prompts.showWarningMessage(
+    `Sailfish: ${RESTART_SESSION_CONFIRM}`,
+    {
+      modal: true,
+      detail: `Only needed when Settings on "${device}" still shows an old Developer agent entry after you closed and reopened it. The home screen restarts and every running app on the phone closes; unsaved work in them is lost.`,
+    },
+    RESTART_SESSION_ACCEPT,
+  );
+  if (confirm !== RESTART_SESSION_ACCEPT) return;
+  const exitCode = await runAsRootOnDevice(services, device, {
+    title: `Restart the user session on "${device}"`,
+    prompt: 'Developer-mode password of the device (Settings → Developer tools).',
+    progressTitle: `Sailfish: restart the user session on "${device}"`,
+    script: RESTART_SESSION_SCRIPT,
+    timeoutMs: REQUEST_TIMEOUT_MS * 2,
+  });
+  if (exitCode === undefined) return;
+  if (exitCode === 0) void services.prompts.showInformationMessage(`Sailfish: the user session on "${device}" was restarted.`);
+  else void services.prompts.showErrorMessage(`Sailfish: restarting the user session on "${device}" failed (exit ${exitCode}).`);
+}
+
 function uninstallAgent(services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
+    // Streams end before the package goes; a running one would otherwise see its socket vanish.
+    await stopAgentSessions(services, device);
     const exitCode = await runAsRootOnDevice(services, device, {
       title: `Uninstall the device agent from "${device}"`,
       prompt: 'Developer-mode password of the device (Settings → Developer tools).',
@@ -314,7 +403,7 @@ function uninstallAgent(services: Services) {
     });
     if (exitCode === undefined) return;
     if (exitCode === 0) {
-      void services.prompts.showInformationMessage(`Sailfish: the device agent was removed from "${device}".`);
+      await cleanUpAfterUninstall(services, device);
     } else {
       void services.prompts.showErrorMessage(
         `Sailfish: removing the device agent from "${device}" failed (exit ${exitCode}). Check the password, and the Sailfish OS output channel for rpm's message.`,

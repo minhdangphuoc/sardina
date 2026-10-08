@@ -169,7 +169,8 @@ suite('device agent (T4)', () => {
         'device_exec.sailfish-devagent.ping',
       ]);
       const copy = find('device_exec.sh');
-      assert.ok(copy?.argv.includes('/tmp/sailfish-devagent.rpm'), JSON.stringify(copy?.argv));
+      assert.deepStrictEqual(copy?.argv.slice(-3, -1), ['sh', 'sailfish-devagent.rpm'], JSON.stringify(copy?.argv));
+      assert.ok(copy?.argv.some((a) => a.includes('$HOME/.cache/sailfish-tools')), JSON.stringify(copy?.argv));
       const root = find('device_exec.devel-su');
       assert.ok(root, 'no devel-su invocation');
       assert.strictEqual(root.argv.filter((a) => a === '-t').length, 2, JSON.stringify(root.argv));
@@ -265,14 +266,61 @@ suite('device agent (T4)', () => {
     });
   });
 
-  test('uninstall: devel-su rpm -e, then a "removed" message', async () => {
-    const messages = stubMessages();
-    stubInputBox('secret');
-    clearFakeLog();
-    await vscode.commands.executeCommand('sailfish.agent.uninstall');
-    const root = find('device_exec.devel-su');
-    assert.ok(root, JSON.stringify(keys()));
-    assert.ok(root.argv.some((a) => a.includes('rpm -e sailfish-devagent')), JSON.stringify(root.argv));
-    assert.ok(messages.calls.some((m) => m.kind === 'information' && m.message.includes('removed')), JSON.stringify(messages.calls));
+  test('uninstall: devel-su rpm -e, then the user-level cleanup with fixed args, then one "removed" message', async () => {
+    await withScenario('agent-uninstall', async () => {
+      const messages = stubMessages();
+      stubInputBox('secret');
+      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      assertInOrder(keys(), ['device_exec.devel-su', 'device_exec.sh']);
+      const root = find('device_exec.devel-su');
+      assert.ok(root, JSON.stringify(keys()));
+      assert.ok(root.argv.some((a) => a.includes('rpm -e sailfish-devagent')), JSON.stringify(root.argv));
+      const clean = find('device_exec.sh');
+      assert.ok(clean, JSON.stringify(keys()));
+      assert.deepStrictEqual(clean.argv.slice(-3), ['sh', '/tmp/sailfish-devagent.rpm', '/run/user'], JSON.stringify(clean.argv));
+      assert.ok(clean.argv.some((a) => a.includes('sfdev-clean:done')), 'the fixed cleanup script');
+      const last = messages.calls[messages.calls.length - 1];
+      assert.strictEqual(last.kind, 'information', JSON.stringify(messages.calls));
+      assert.ok(last.message.includes('removed from'), last.message);
+      assert.ok(last.message.includes('Also removed 2 leftover items and 1 notification. Nothing of the agent is left.'), last.message);
+      assert.deepStrictEqual(last.items, ['Restart Phone Session…']);
+    });
+  });
+
+  test('uninstall: a leftover the user cannot remove is named in a warning; the session restart is never run unasked', async () => {
+    await withScenario('agent-uninstall-left', async () => {
+      const messages = stubMessages();
+      stubInputBox('secret');
+      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      const last = messages.calls[messages.calls.length - 1];
+      assert.strictEqual(last.kind, 'warning', JSON.stringify(messages.calls));
+      assert.ok(last.message.includes('Still on the device: /var/lib/sailfish-devagent'), last.message);
+      assert.strictEqual(readFakeLog().invocations.filter((i) => i.key === 'device_exec.devel-su').length, 1, JSON.stringify(keys()));
+    });
+  });
+
+  test('uninstall: password prompt cancelled runs nothing on the device', async () => {
+    await withScenario('agent-uninstall', async () => {
+      stubMessages();
+      stubInputBox(undefined);
+      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));
+      assert.ok(!keys().includes('device_exec.sh'), JSON.stringify(keys()));
+    });
+  });
+
+  test('install: password prompt cancelled removes the copied RPM (and its empty folder) as the user', async function () {
+    this.timeout(30000);
+    await withScenario('agent-missing', async () => {
+      const messages = stubMessages();
+      messages.chosenAction = 'Install Device Agent';
+      stubInputBox(undefined);
+      await vscode.commands.executeCommand('sailfish.agent.install');
+      assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));
+      const sh = readFakeLog().invocations.filter((i) => i.key === 'device_exec.sh');
+      assert.strictEqual(sh.length, 2, JSON.stringify(keys()));
+      assert.deepStrictEqual(sh[1].argv.slice(-2), ['sh', 'sailfish-devagent.rpm'], JSON.stringify(sh[1].argv));
+      assert.ok(sh[1].argv.some((a) => a.includes('rm -f "$d/$1"')), JSON.stringify(sh[1].argv));
+    });
   });
 });
