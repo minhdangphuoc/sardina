@@ -394,12 +394,22 @@ void TouchOverlay::onSurfaceConfigure(void *data, alien_surface *surface, uint32
     if (size == overlay->m_surfaceSize) {
         return;
     }
+    const qreal alpha = overlay->m_alpha;
+    const bool pressed = overlay->m_pressed;
+    const bool fading = overlay->m_fade.isActive();
     overlay->hideSurface();
     overlay->destroyBuffers();
     overlay->m_surfaceSize = size;
     if (!overlay->createBuffers()) {
         overlay->fail(overlay->m_error);
-    } else if (overlay->m_enabled && overlay->m_alpha > 0.0) {
+        return;
+    }
+    overlay->m_alpha = alpha;
+    overlay->m_pressed = pressed;
+    if (fading) {
+        overlay->m_fade.start();
+    }
+    if (overlay->m_enabled && alpha > 0.0) {
         overlay->render();
     }
 }
