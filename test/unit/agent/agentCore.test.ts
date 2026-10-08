@@ -141,6 +141,12 @@ describe('agentCore.classifyPing', () => {
     assert.ok(p.state === 'running');
     assert.deepStrictEqual(p.mirrorInput, ['tap', 'swipe']);
   });
+  it('passes a strictly validated keypad capability through', () => {
+    const stdout = '{"ok":true,"version":"1.11.0","developerMode":true,"mirrorInput":["tap","swipe","key"],"keypad":{"model":"Commodore Callback","keys":["1","OK","CALL"]}}';
+    const p = classifyPing({ exitCode: 0, stdout, stderr: '' });
+    assert.ok(p.state === 'running');
+    assert.deepStrictEqual(p.keypad, { model: 'Commodore Callback', keys: ['1', 'OK', 'CALL'] });
+  });
   it('a 1.1.0 ping has no socket or mirrorEncodings keys at all', () => {
     const p = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.1.0","developerMode":true}', stderr: '' });
     assert.deepStrictEqual(p, { state: 'running', version: '1.1.0', developerMode: true });

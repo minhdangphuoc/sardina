@@ -4,6 +4,8 @@
  * fixed scripts the install/uninstall commands run on the device.
  */
 
+import { parseKeypadInfo, type KeypadInfo } from './keypadLayoutCore';
+
 export const AGENT_PACKAGE = 'sailfish-devagent';
 export const AGENT_BINARY = 'sailfish-devagent';
 /** The device user the agent runs as (its unit's `User=`) and the SSH login. */
@@ -64,6 +66,8 @@ export interface AgentReply {
   mirrorEncodings?: string[];
   /** Agent 1.7.0+: mirror gestures the daemon can inject. Absent means view-only. */
   mirrorInput?: string[];
+  /** Whitelisted physical keypad keys exposed by this phone. */
+  keypad?: KeypadInfo;
   /** Agent 1.9.0+: the phone's own settings (Settings → System → Developer agent). Absent on older agents. */
   settings?: PhoneSettings;
   /** Agent 1.9.0+: true when the agent installed its Settings page. */
@@ -126,6 +130,8 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
       if (Array.isArray(parsed.mirrorInput) && parsed.mirrorInput.every((e) => typeof e === 'string')) {
         reply.mirrorInput = parsed.mirrorInput;
       }
+      const keypad = parseKeypadInfo(parsed.keypad);
+      if (keypad !== undefined) reply.keypad = keypad;
       const settings = parsePhoneSettings(parsed.settings);
       if (settings !== undefined) reply.settings = settings;
       if (typeof parsed.settingsPage === 'boolean') reply.settingsPage = parsed.settingsPage;
@@ -140,7 +146,7 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
 }
 
 export type AgentProbe =
-  | { state: 'running'; version: string; developerMode: boolean; socket?: string; mirrorEncodings?: string[]; mirrorInput?: string[]; settings?: PhoneSettings; settingsPage?: boolean; logFormats?: string[]; stats?: boolean }
+  | { state: 'running'; version: string; developerMode: boolean; socket?: string; mirrorEncodings?: string[]; mirrorInput?: string[]; keypad?: KeypadInfo; settings?: PhoneSettings; settingsPage?: boolean; logFormats?: string[]; stats?: boolean }
   | { state: 'not-running' }
   | { state: 'not-installed' }
   | { state: 'unreachable'; detail: string };
@@ -153,6 +159,7 @@ export function classifyPing(result: { exitCode: number; stdout: string; stderr:
     if (reply.socket !== undefined) running.socket = reply.socket;
     if (reply.mirrorEncodings !== undefined) running.mirrorEncodings = reply.mirrorEncodings;
     if (reply.mirrorInput !== undefined) running.mirrorInput = reply.mirrorInput;
+    if (reply.keypad !== undefined) running.keypad = reply.keypad;
     if (reply.settings !== undefined) running.settings = reply.settings;
     if (reply.settingsPage !== undefined) running.settingsPage = reply.settingsPage;
     if (reply.logFormats !== undefined) running.logFormats = reply.logFormats;
