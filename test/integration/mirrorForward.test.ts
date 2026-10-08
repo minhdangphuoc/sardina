@@ -199,6 +199,10 @@ async function sendTestInput(message: Record<string, unknown>): Promise<void> {
   await vscode.commands.executeCommand('sailfish._test.mirrorInput', DEVICE, message);
 }
 
+async function setTestFocus(focused: boolean): Promise<void> {
+  await vscode.commands.executeCommand('sailfish._test.mirrorFocus', DEVICE, focused);
+}
+
 async function waitLive(): Promise<void> {
   await waitFor(() => requests().length >= 1, 8000);
 }
@@ -590,6 +594,8 @@ suite('screen mirror over the SSH forward (F6)', () => {
     this.timeout(30000);
     await withScenario('agent-forward-input', async () => {
       await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await waitLive();
+      await setTestFocus(true);
       await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
       assert.ok((requests()[0].line ?? '').includes('"input":true'), requests()[0].line);
       await hidePanel();
@@ -604,6 +610,8 @@ suite('screen mirror over the SSH forward (F6)', () => {
     this.timeout(30000);
     await withScenario('agent-forward-input-live', async () => {
       await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await waitLive();
+      await setTestFocus(true);
       await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
       await sendTestInput({ type: 'input', action: 'down', frame: 1, screen: [720, 1600], x: 0.25, y: 0.2 });
       await sendTestInput({ type: 'input', action: 'move', frame: 1, screen: [720, 1600], x: 0.75, y: 0.8 });

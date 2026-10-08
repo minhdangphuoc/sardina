@@ -328,6 +328,13 @@ export class MirrorSession {
     if (process.env.TEST_MODE === 'full') this.onMessage(message);
   }
 
+  /** Full integration-suite seam: focus is otherwise owned by Electron and cannot be made deterministic. */
+  focusForTest(focused: boolean): void {
+    if (process.env.TEST_MODE !== 'full' || this.state === 'disposed') return;
+    this.webviewFocused = focused;
+    this.syncInput();
+  }
+
   /** S11 hook for the transport's live phone-settings event. */
   onPhoneSettings(settings: { input?: boolean; inputLease?: number }): void {
     if (settings.input === undefined) return;
@@ -1056,6 +1063,9 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
     ctx.subscriptions.push(
       vscode.commands.registerCommand('sailfish._test.mirrorInput', (device: unknown, message: unknown) => {
         if (typeof device === 'string') sessions.get(device)?.inputForTest(message);
+      }),
+      vscode.commands.registerCommand('sailfish._test.mirrorFocus', (device: unknown, focused: unknown) => {
+        if (typeof device === 'string' && typeof focused === 'boolean') sessions.get(device)?.focusForTest(focused);
       }),
     );
   }
