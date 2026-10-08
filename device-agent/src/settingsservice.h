@@ -59,6 +59,7 @@ private:
     bool m_started;
     gid_t m_privilegedGid;
     bool m_haveGroup;
+    bool m_loggedRestartRefusal; // the refusal while the mirror restarts is journalled once
     QTimer m_retry;
     QTimer m_watch;
 };

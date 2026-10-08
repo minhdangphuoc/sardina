@@ -25,6 +25,7 @@ public:
     bool control() const { return m_control; }
     bool logs() const { return m_logs; }
     bool touchIndicator() const { return m_touchIndicator; }
+    bool idleMode() const { return m_idleMode; }
     bool muteNotifications() const { return m_muteNotifications; }
     IndicatorLevel indicator() const { return m_indicator; }
 
@@ -41,7 +42,7 @@ public:
     bool setBool(const QString &key, bool value, QString *error);
     bool setString(const QString &key, const QString &value, QString *error);
 
-    // The six keys, for ping, GetStatus and the stream message.
+    // The seven keys, for ping, GetStatus and the stream message.
     QVariantMap toMap() const;
 
     static QString indicatorName(IndicatorLevel level);
@@ -57,6 +58,7 @@ private:
     bool m_logs;
     bool m_touchIndicator;
     bool m_muteNotifications;
+    bool m_idleMode;
     IndicatorLevel m_indicator;
 };
 

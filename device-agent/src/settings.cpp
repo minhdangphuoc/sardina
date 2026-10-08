@@ -22,6 +22,7 @@ const char *const KEY_CONTROL = "control";
 const char *const KEY_LOGS = "logs";
 const char *const KEY_TOUCH = "touchIndicator";
 const char *const KEY_MUTE = "muteNotifications";
+const char *const KEY_IDLE_MODE = "idleMode";
 const char *const KEY_INDICATOR = "indicator";
 
 bool indicatorFromName(const QString &name, IndicatorLevel *level)
@@ -53,6 +54,7 @@ Settings::Settings(QObject *parent)
     , m_logs(true)
     , m_touchIndicator(false)
     , m_muteNotifications(false)
+    , m_idleMode(true)
     , m_indicator(IndicatorLevel::Normal)
 {
 }
@@ -105,7 +107,8 @@ bool Settings::load()
     };
     const BoolKey bools[] = { { KEY_SCREEN_VIEW, &m_screenView }, { KEY_CONTROL, &m_control },
                               { KEY_LOGS, &m_logs },              { KEY_TOUCH, &m_touchIndicator },
-                              { KEY_MUTE, &m_muteNotifications } };
+                              { KEY_MUTE, &m_muteNotifications },
+                              { KEY_IDLE_MODE, &m_idleMode } };
     for (const BoolKey &b : bools) {
         const QJsonValue v = o.value(QLatin1String(b.key));
         if (v.isUndefined()) {
@@ -130,9 +133,9 @@ bool Settings::load()
     }
     fprintf(stderr,
             "sailfish-devagent: settings: screenView %d, control %d, logs %d, indicator %s, "
-            "muteNotifications %d, touchIndicator %d\n",
+            "muteNotifications %d, touchIndicator %d, idleMode %d\n",
             m_screenView, m_control, m_logs, qPrintable(indicatorName(m_indicator)), m_muteNotifications,
-            m_touchIndicator);
+            m_touchIndicator, m_idleMode);
     return clean;
 }
 
@@ -149,6 +152,8 @@ bool Settings::setBool(const QString &key, bool value, QString *error)
         target = &m_touchIndicator;
     } else if (key == QLatin1String(KEY_MUTE)) {
         target = &m_muteNotifications;
+    } else if (key == QLatin1String(KEY_IDLE_MODE)) {
+        target = &m_idleMode;
     }
     if (!target) {
         if (error) {
@@ -206,6 +211,7 @@ QVariantMap Settings::toMap() const
     m.insert(QLatin1String(KEY_INDICATOR), indicatorName(m_indicator));
     m.insert(QLatin1String(KEY_MUTE), m_muteNotifications);
     m.insert(QLatin1String(KEY_TOUCH), m_touchIndicator);
+    m.insert(QLatin1String(KEY_IDLE_MODE), m_idleMode);
     return m;
 }
 

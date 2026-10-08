@@ -39,6 +39,10 @@ public:
     // sessions now" (returns how many were running).
     QVariantMap statusMap() const;
     int stopSessions();
+    // True from the moment an idle mode change ended the running mirror until VS Code has
+    // reconnected (or MIRROR_RESTART_MS passed): the Settings page waits and SetBool refuses
+    // idleMode and screenView meanwhile.
+    bool mirrorRestarting() const { return m_mirrorRestarting; }
 
 private slots:
     void tryListen();
@@ -59,10 +63,13 @@ private:
     void notifyStarted(bool silent = false);
     void closeStartNotice();
     void closeStaleStreamEntries();
+    void setMirrorRestarting(bool on);
 
     QLocalServer m_server;
     QTimer m_retry;
     QTimer m_developerModeCheck; // runs while a log or stats stream does
+    QTimer m_restartTimer;       // single shot: gives up waiting for the mirror to come back
+    bool m_mirrorRestarting;
     bool m_notified;
     Settings *m_settings;         // a child of this, created first: the others read it
     StreamIndicator *m_indicator; // a child of this, so it outlives the sockets in m_server

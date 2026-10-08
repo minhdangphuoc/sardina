@@ -42,7 +42,7 @@ public:
     MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding = MirrorEncoding::Text,
                  int window = 2, int leaseSeconds = 0, StreamIndicator *indicator = nullptr, bool adapt = false,
                  int bitrateKbps = 0, bool inputRequested = false, const Settings *settings = nullptr,
-                 bool phoneState = false, bool pauseIdle = false);
+                 bool phoneState = false);
     ~MirrorStream();
 
     // Writes the fatal reply {"ok":false,"error":...} in the stream's encoding, flushes,
@@ -54,6 +54,8 @@ public:
     // input hooks below and, when the request opted in with "phoneState":true, a "settings"
     // message tells the client (PLAN-settings-page.md section 7.3).
     void applySetting(const QString &key);
+    // The phone's idle mode switch (agent 1.10.6); on when there are no settings.
+    bool idleModeOn() const;
 
     // For the Settings page's status (read only).
     bool active() const { return !m_cleaned; }
@@ -205,7 +207,6 @@ private:
     double m_gridAt;      // m_streamClock ms of the last frame's slot, -1 before the first frame
     QTimer m_idle;        // single shot: the screen has not changed for a while
     int m_refreshes;      // re-encodes of the last picture since it last changed
-    bool m_pauseIdle;     // agent 1.10.5, "idle":"pause": a still screen sends one "same" and then nothing
     bool m_idleReported;  // that "same" has gone out since the last frame
     qint64 m_lastFrameAt; // m_streamClock ms of the last encoded frame, -1 before the first
     DisplayState *m_display; // blank display: nothing is sent while the screen is still

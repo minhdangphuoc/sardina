@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.5-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.6-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -197,8 +197,12 @@ samples start over after each change and the first second after the encoder open
 frame came for 300 ms, the last picture is encoded again up to twice (`"refresh":true`, a normal
 delta frame: the encoder sharpens what is shown), and then `{"frame":N,"ts":T,"same":true}` goes
 out once a second while the screen stays still. Neither asks the compositor for a repaint.
-With `"idle":"pause"` (1.10.5; the extension's `sailfish.mirror.idleStreaming` off) a still screen gets
-no refresh frames and only one `same` message, then nothing until it changes. A blank display
+With the phone's `idleMode` setting off (1.10.6; Settings page, default on) a still screen is not idle: the last
+picture is encoded again once per pace slot as an ordinary frame (no `refresh`), `same` is never sent. The setting
+is read when a stream starts and is also reported as `idleMode` in the `settings` record of a `phoneState` stream;
+changing it during a stream ends the stream with `restarting: idle mode changed on the phone` (the extension
+connects again once). While that restart runs `GetStatusJson` has `mirrorRestarting: true` for at most 10 s and
+`SetBool` refuses `idleMode` and `screenView`. A blank display
 (MCE `display_status_ind` on the system bus) sends nothing whatever the request says. The first
 change after at least 1 s without a frame is captured and encoded at once (its request is already
 pending) and sets the pace back to the full rate (`Pacer::wake`) instead of climbing one step per

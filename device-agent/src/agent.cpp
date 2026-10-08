@@ -54,6 +54,10 @@ const int MIRROR_MAX_LEASE = 300;
 
 const int NOTIFY_TIMEOUT_MS = 1500;
 const int DEVELOPER_MODE_CHECK_MS = 3000;
+// An idle mode change ends the mirror with this reason (the extension matches it and connects
+// again once); the Settings page waits for the new stream for at most this long.
+const char *const MIRROR_RESTART_REASON = "restarting: idle mode changed on the phone";
+const int MIRROR_RESTART_MS = 10000;
 const char *const DEVELOPER_MODE_OFF = "developer mode is off";
 
 QDBusMessage notificationsCall(const QString &method)
@@ -107,6 +111,7 @@ QJsonObject errorReply(const QString &message)
 Agent::Agent(QObject *parent)
     : QObject(parent)
     , m_notified(false)
+    , m_mirrorRestarting(false)
     , m_settings(new Settings(this))
     , m_indicator(new StreamIndicator(m_settings, this))
     , m_service(nullptr)
@@ -119,6 +124,9 @@ Agent::Agent(QObject *parent)
     m_retry.setInterval(RETRY_MS);
     m_retry.setSingleShot(true);
     connect(&m_retry, &QTimer::timeout, this, &Agent::tryListen);
+    m_restartTimer.setSingleShot(true);
+    m_restartTimer.setInterval(MIRROR_RESTART_MS);
+    connect(&m_restartTimer, &QTimer::timeout, this, [this]() { setMirrorRestarting(false); });
     m_developerModeCheck.setInterval(DEVELOPER_MODE_CHECK_MS);
     connect(&m_developerModeCheck, &QTimer::timeout, this, &Agent::checkDeveloperMode);
     connect(&m_server, &QLocalServer::newConnection, this, &Agent::onNewConnection);
@@ -395,9 +403,32 @@ void Agent::closeStaleStreamEntries()
     QDBusConnection::disconnectFromBus(connectionName);
 }
 
+void Agent::setMirrorRestarting(bool on)
+{
+    if (m_mirrorRestarting == on) {
+        return;
+    }
+    m_mirrorRestarting = on;
+    if (on) {
+        m_restartTimer.start();
+    } else {
+        m_restartTimer.stop();
+    }
+    if (m_service) {
+        m_service->notifyChanged(QStringLiteral("mirrorRestarting"));
+    }
+}
+
 void Agent::onSettingChanged(const QString &key)
 {
-    if (m_mirror) {
+    // A running mirror cannot change its idle behaviour: it ends with a reason VS Code answers by
+    // connecting once more, and the new stream starts with the new value.
+    if (key == QLatin1String("idleMode") && m_mirror && m_mirror->active()) {
+        fprintf(stderr, "sailfish-devagent: settings: idleMode changed, restarting the mirror\n");
+        m_mirrorRestarting = true;
+        m_restartTimer.start();
+        m_mirror->finish(QString::fromLatin1(MIRROR_RESTART_REASON));
+    } else if (m_mirror) {
         m_mirror->applySetting(key); // screenView off ends it; control/touchIndicator go to its hooks
     }
     if (key == QLatin1String("logs") && !m_settings->logs()) {
@@ -468,6 +499,7 @@ QVariantMap Agent::statusMap() const
     m.insert(QStringLiteral("developerMode"), Paths::developerModeOn());
     const bool mirrorActive = m_mirror && m_mirror->active();
     m.insert(QStringLiteral("mirrorActive"), mirrorActive);
+    m.insert(QStringLiteral("mirrorRestarting"), m_mirrorRestarting);
     m.insert(QStringLiteral("mirrorSince"), mirrorActive ? m_mirror->startedAt() : qint64(0));
     m.insert(QStringLiteral("mirrorControl"), mirrorActive && m_mirror->inputActive());
     m.insert(QStringLiteral("mirrorEncoding"), mirrorActive ? m_mirror->encodingName() : QString());
@@ -689,11 +721,11 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
         const bool input = request.value(QStringLiteral("input")).toBool(false);
         // The "settings" message (agent 1.9.0) is opt-in, so older clients get the 1.8.1 stream.
         const bool phoneState = request.value(QStringLiteral("phoneState")).toBool(false);
-        const bool pauseIdle = request.value(QStringLiteral("idle")).toString() == QLatin1String("pause");
         m_mirrorClient = client;
+        setMirrorRestarting(false);
         m_mirror = new MirrorStream(socket, fps, width, quality, encoding,
                                     video ? MIRROR_VIDEO_WINDOW : MIRROR_DEFAULT_WINDOW, lease, m_indicator, adapt,
-                                    bitrate, input, m_settings, phoneState, pauseIdle);
+                                    bitrate, input, m_settings, phoneState);
         connect(m_mirror.data(), &MirrorStream::stateChanged, this, &Agent::onSessionChanged);
         onSessionChanged();
         return;

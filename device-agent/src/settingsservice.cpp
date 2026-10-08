@@ -1,5 +1,6 @@
 #include "settingsservice.h"
 #include "agent.h"
+#include "idleplan.h"
 #include "paths.h"
 #include "settings.h"
 
@@ -38,6 +39,7 @@ SettingsService::SettingsService(Settings *settings, Agent *agent, QObject *pare
     , m_started(false)
     , m_privilegedGid(0)
     , m_haveGroup(false)
+    , m_loggedRestartRefusal(false)
 {
     // Resolved once: if the group does not exist, every change is refused.
     if (const struct group *gr = getgrnam("privileged")) {
@@ -177,6 +179,15 @@ bool SettingsService::SetBool(const QString &key, bool value)
         sendErrorReply(QDBusError::InvalidArgs, QStringLiteral("unknown boolean setting"));
         return false;
     }
+    if (restartBlocksSetting(m_agent->mirrorRestarting(), key.toUtf8().constData())) {
+        if (!m_loggedRestartRefusal) {
+            m_loggedRestartRefusal = true;
+            fprintf(stderr, "sailfish-devagent: settings: refused %s while the mirror restarts\n", qPrintable(key));
+        }
+        sendErrorReply(QDBusError::Failed, QStringLiteral("mirroring is restarting"));
+        return false;
+    }
+    m_loggedRestartRefusal = false;
     fprintf(stderr, "sailfish-devagent: settings: %s = %s (from pid %u)\n", qPrintable(key), value ? "true" : "false",
             pid);
     if (!m_settings->setBool(key, value, &error)) {

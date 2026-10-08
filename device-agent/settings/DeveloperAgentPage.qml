@@ -13,6 +13,7 @@ Page {
     property var st: ({})
     readonly property bool available: agent.status === DBusInterface.Available
     readonly property bool mirrorActive: available && st.mirrorActive === true
+    readonly property bool restarting: available && st.mirrorRestarting === true
     readonly property int logStreams: available && st.logStreams !== undefined ? st.logStreams : 0
 
     function levelIndex(level) {
@@ -167,7 +168,7 @@ Page {
             TextSwitch {
                 id: screenViewSwitch
                 automaticCheck: false
-                enabled: page.available
+                enabled: page.available && !page.restarting
                 checked: page.st.screenView === true
                 text: "Allow screen view"
                 description: "Live mirror and screenshots in VS Code. Turning this off ends a running mirror at once."
@@ -192,6 +193,30 @@ Page {
                 text: "Allow system logs"
                 description: "Streaming the system journal to VS Code. Turning this off ends a running log stream."
                 onClicked: page.setBool("logs", !checked)
+            }
+
+            SectionHeader {
+                text: "Mirror"
+            }
+
+            Label {
+                visible: page.restarting
+                x: Theme.horizontalPageMargin
+                width: parent.width - 2 * x
+                wrapMode: Text.Wrap
+                font.pixelSize: Theme.fontSizeExtraSmall
+                color: Theme.highlightColor
+                text: "Restarting mirroring…"
+            }
+
+            TextSwitch {
+                id: idleModeSwitch
+                automaticCheck: false
+                enabled: page.available && !page.restarting
+                checked: page.st.idleMode !== false
+                text: "Idle mode"
+                description: "Stop sending frames while the screen does not change. Changing this restarts a running mirror."
+                onClicked: page.setBool("idleMode", !checked)
             }
 
             SectionHeader {

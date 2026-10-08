@@ -1,5 +1,6 @@
 #include "mirror.h"
 #include "displaystate.h"
+#include "idleplan.h"
 #include "indicator.h"
 #include "mirrorinput.h"
 #include "paths.h"
@@ -98,7 +99,7 @@ bool jsonClampedInteger(const QJsonValue &v, int min, int max, int *value)
 
 MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding,
                            int window, int leaseSeconds, StreamIndicator *indicator, bool adapt, int bitrateKbps,
-                           bool inputRequested, const Settings *settings, bool phoneState, bool pauseIdle)
+                           bool inputRequested, const Settings *settings, bool phoneState)
     : QObject(socket)
     , m_socket(socket)
     , m_fps(fps)
@@ -152,7 +153,6 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
     , m_pacer(fps)
     , m_gridAt(-1)
     , m_refreshes(IDLE_REFRESHES)
-    , m_pauseIdle(pauseIdle)
     , m_idleReported(false)
     , m_lastFrameAt(-1)
     , m_display(nullptr)
@@ -333,7 +333,8 @@ void MirrorStream::sendPhoneSettings(const QByteArray &fields)
     const bool control = m_settings ? m_settings->control() : true;
     const bool touch = m_settings ? m_settings->touchIndicator() : false;
     writeMessage(QByteArray("{\"settings\":{\"control\":") + (control ? "true" : "false") + ",\"touchIndicator\":"
-                 + (touch ? "true" : "false") + ",\"touchIndicatorPath\":\"" + touchIndicatorPath() + "\"}" + fields
+                 + (touch ? "true" : "false") + ",\"touchIndicatorPath\":\"" + touchIndicatorPath()
+                 + "\",\"idleMode\":" + (idleModeOn() ? "true" : "false") + "}" + fields
                  + "}");
 }
 
@@ -367,6 +368,11 @@ void MirrorStream::applySetting(const QString &key)
         applyTouchIndicatorSetting(m_settings->touchIndicator());
         sendPhoneSettings(inputFields());
     }
+}
+
+bool MirrorStream::idleModeOn() const
+{
+    return !m_settings || m_settings->idleMode();
 }
 
 QByteArray MirrorStream::applyControlSetting(bool allowed)
@@ -1209,7 +1215,7 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
     m_idleReported = false;
     m_lastFrameAt = now;
     sendVideoFrame(data, isKey, pts, screen, out, frameMs, convertMs);
-    m_idle.start(IDLE_AFTER_MS);
+    m_idle.start(idleModeOn() ? IDLE_AFTER_MS : paceInterval());
     pumpVideo();
 }
 
@@ -1295,7 +1301,7 @@ void MirrorStream::wakeFromIdle(qint64 now)
 void MirrorStream::onDisplayChanged()
 {
     if (!m_display->off()) {
-        m_idle.start(IDLE_AFTER_MS);
+        m_idle.start(idleModeOn() ? IDLE_AFTER_MS : paceInterval());
     }
 }
 
@@ -1309,24 +1315,19 @@ void MirrorStream::sendSame()
 
 // The screen has not changed since the last encoded frame (the frame request is still pending):
 // sharpen the last picture by encoding it again, then tell the client once a second that the
-// screen is idle. With "idle":"pause" only one such message goes out, and nothing at all while the
-// display is blank. Nothing here asks the compositor for a repaint.
+// screen is idle. With the phone's idle mode off no such message goes out: the last picture is
+// encoded again at the pace instead. Nothing at all while the display is blank. Nothing here asks
+// the compositor for a repaint.
 void MirrorStream::onIdle()
 {
     if (m_cleaned || !m_video || !m_video->isOpen() || !m_recorder || !m_recorder->pending()
         || m_repaintAsked || m_socket->state() != QLocalSocket::ConnectedState || m_display->off()) {
         return;
     }
-    if (m_pauseIdle) {
-        if (!m_idleReported) {
-            m_idleReported = true;
-            sendSame();
-        }
-        return;
-    }
-    if (m_refreshes < IDLE_REFRESHES) {
+    const bool idleMode = idleModeOn();
+    if (idleAction(idleMode, m_refreshes, IDLE_REFRESHES) == IdleAction::Reencode) {
         if (linkBusy()) {
-            m_idle.start(IDLE_AFTER_MS); // the link is still sending: sharpen a little later
+            m_idle.start(idleDelayMs(idleMode, m_refreshes, IDLE_REFRESHES, IDLE_AFTER_MS, IDLE_HEARTBEAT_MS, paceInterval()));
             return;
         }
         QElapsedTimer clock;
@@ -1338,16 +1339,19 @@ void MirrorStream::onIdle()
         }
         QByteArray data;
         QString error;
-        ++m_refreshes;
+        if (idleMode) {
+            ++m_refreshes;
+        }
         if (m_video->encodeAgain(pts, m_lastPts < 0 ? 1000 / m_fps : pts - m_lastPts, &data, &error) && !data.isEmpty()) {
             m_lastPts = pts;
             ++m_frame;
             m_captureTs = QDateTime::currentMSecsSinceEpoch();
-            sendVideoFrame(data, false, pts, m_lastScreen, m_lastSize, clock.elapsed(), 0, true);
-        } else {
+            // Idle mode off: an ordinary frame, so the client never sees a still screen.
+            sendVideoFrame(data, false, pts, m_lastScreen, m_lastSize, clock.elapsed(), 0, idleMode);
+        } else if (idleMode) {
             m_refreshes = IDLE_REFRESHES; // nothing to sharpen: heartbeats only
         }
-        m_idle.start(m_refreshes < IDLE_REFRESHES ? IDLE_AFTER_MS : IDLE_HEARTBEAT_MS);
+        m_idle.start(idleDelayMs(idleMode, m_refreshes, IDLE_REFRESHES, IDLE_AFTER_MS, IDLE_HEARTBEAT_MS, paceInterval()));
         return;
     }
     sendSame();
