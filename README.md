@@ -659,7 +659,7 @@ clear message (gpg matches names as substrings, so `Jane Doe` also matches
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.10.4**.
+emulator. This extension includes agent **1.10.5**.
 
 1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
    on.
@@ -683,8 +683,7 @@ emulator. This extension includes agent **1.10.4**.
    button on the device, opens the screen in a tab beside the editor.
    **Check:** the tab shows the current screen and follows what you do on the
    phone. If it says **Disconnected**, press **Reconnect**.
-6. **Control the phone** (agent 1.7.0 or newer). When the strip does not show
-   `Screenshot capture`, click the picture to tap and drag to swipe. A
+6. **Control the phone** (agent 1.7.0 or newer). Click the picture to tap and drag to swipe. A
    `Control` pill appears at the right of the strip while control is active
    (nothing while the mirror is view only; `Control off on phone` when the
    phone turned it off). Control works only
@@ -730,15 +729,16 @@ itself; if this VS Code build cannot decode VP8, it uses JPEG images instead.
 The video aims for up to 30 frames per second at 720 pixels wide and
 2000 kbit/s. If the forward cannot be set up, the mirror uses the slower
 connection through the SDK. The phone captures the screen with Lipstick's own
-recorder, so no "Screenshot captured." notices appear. If the recorder is not
-available, the agent takes a screenshot per frame instead: viewing still works,
-but slower, with a notice per frame, and control stays off (Lipstick does not
-report how it rotated the saved image, so taps could land in the wrong place).
+recorder, so no "Screenshot captured." notices appear. The mirror never takes
+screenshots: if the recorder cannot be used (agent 1.10.5), the stream ends
+with `native screen capture unavailable: <reason>`, the strip says
+**Disconnected** with **Reconnect**, and the **Sailfish OS** output has the reason.
 Hiding the tab pauses the stream after a moment; closing it stops the stream.
 
 **The status strip** below the picture is one line, for example `● Live · 30
 fps`: a coloured dot (green live, grey waiting, red disconnected), the state,
-the frame rate (`idle` while the screen is still), at most one warning, and on
+the frame rate (`idle` while the screen is still; with `sailfish.mirror.idleStreaming`
+off, agent 1.10.5 sends nothing at all while it is still), at most one warning, and on
 the right an action button, the control pill and an ⓘ button. Everything else
 is behind ⓘ.
 
@@ -748,7 +748,6 @@ is behind ⓘ.
 | `Slow path` | The mirror uses the SDK connection instead of the fast SSH forward. The details give the reason, e.g. `ssh forward unavailable — auth`. With an outdated agent an **Update agent** button appears. |
 | `Reduced for phone` | The phone could not encode fast enough, so only the size went down. |
 | `Reduced for link` | A slow link made the mirror lower bitrate and size. Both reductions go back by themselves, which takes about half a minute; the level changes only while the picture changes. |
-| `Screenshot capture` | The agent takes a screenshot per frame instead of using the recorder. Control needs the native recorder. |
 | `N dropped` | Frames skipped because VS Code was still drawing the previous one. |
 | `Control` / `Control off on phone` | Control is active; or the phone's Settings page turned it off. |
 | `Paused`, `Connecting…`, `Disconnected: <reason>` | The tab is hidden, starting, or ended (press **Reconnect**). |
@@ -908,7 +907,7 @@ with test fixtures, but not yet confirmed on a real phone:
 | Mirror says `Disconnected: … (lease expired)` | The phone got no renewal for 60 seconds (VS Code busy, computer asleep, network down). | Press **Reconnect**. |
 | Mirror says `Disconnected` after the phone or network changed | The connection broke, e.g. the phone slept or left the Wi-Fi. | Wake the phone, then press **Reconnect**. |
 | Mirror shows no `Control` pill | The agent is older than 1.7.0, the tab or window does not have focus, or the agent could not open the touchscreen. | Update the agent, click into the mirror tab, and check the **Sailfish OS** output for an input error. Viewing still works. |
-| Strip says `Screenshot capture` and control stays off | Lipstick's recorder is not available, so the agent takes screenshots. | Viewing still works. The **Sailfish OS** output has the reason; control returns by itself when capture is `native` again. |
+| Strip says `Disconnected: native screen capture unavailable: …` | Lipstick's screen recorder cannot be used on this phone. | The **Sailfish OS** output has the reason. Press **Reconnect** once the phone is unlocked and awake; update the agent if it is older than 1.10.5. |
 | Strip says `Reduced for link` | The link is too slow for full quality. | Move closer to the access point, use USB or a 5 GHz network, or ignore it; it recovers by itself. |
 | Strip says `Reduced for phone` | The phone could not encode the full-size picture in time. | Close busy apps on the phone, or ignore it; it recovers by itself. |
 

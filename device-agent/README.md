@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.4-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.5-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -139,7 +139,8 @@ frames and reports an idle screen (optional header fields only); 1.8.1 corrects 
 (for the Device Monitor); 1.10.1 changes only the package's uninstall cleanup, not the protocol; 1.10.2 makes
 an explicit `"lease":0` mean no lease for text mirror streams and ends log and stats streams when
 Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts the `key` input; 1.10.4 adds
-`touchIndicatorPath` to the phone-settings message and the `contact` record (below). All additions are
+`touchIndicatorPath` to the phone-settings message and the `contact` record (below); 1.10.5 adds the
+mirror request field `idle` and a faster return to the full pace after an idle screen. All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -196,16 +197,24 @@ samples start over after each change and the first second after the encoder open
 frame came for 300 ms, the last picture is encoded again up to twice (`"refresh":true`, a normal
 delta frame: the encoder sharpens what is shown), and then `{"frame":N,"ts":T,"same":true}` goes
 out once a second while the screen stays still. Neither asks the compositor for a repaint.
+With `"idle":"pause"` (1.10.5; the extension's `sailfish.mirror.idleStreaming` off) a still screen gets
+no refresh frames and only one `same` message, then nothing until it changes. A blank display
+(MCE `display_status_ind` on the system bus) sends nothing whatever the request says. The first
+change after at least 1 s without a frame is captured and encoded at once (its request is already
+pending) and sets the pace back to the full rate (`Pacer::wake`) instead of climbing one step per
+2 s. Expected wake-up cost: one convert + encode, about 30 ms on the Jolla Phone, plus the link;
+without `wake` a pace left at 7.5 fps needed about 18 s to return to 30 fps (host simulation in
+`tools/pacer-test.cpp`; not measured on a device).
 Encoder settings: fixed real-time speed -6, single token partition, static threshold 100, half the
 cores for libvpx (at most 3) and for the conversion (at most 4), rate-control buffer 200/300/500 ms.
 
 Capture path (1.5.0): every image frame, binary header or text line, carries `"capture":"native"`
-(the compositor recorder) or `"capture":"screenshot"` (the lipstick `saveScreenshot` fallback). A
-screenshot frame also carries `"captureReason":"<reason>"`, plain text of at most 120 characters,
-for example `"recorder unavailable: wayland connect failed"`; native frames omit it. The mirror's
-journal line on start and on every switch states the path and reason (`mirror: capture path native`
-or `mirror: capture path screenshot (<reason>)`). `same` and `error` records are unchanged. Older
-extensions ignore the unknown fields; the rest of the protocol is byte for byte as in 1.4.0.
+(the compositor recorder). Since 1.10.5 the mirror never takes screenshots: when the recorder cannot
+be opened, the stream ends with the fatal reply `native screen capture unavailable: <reason>` (for
+example `no answer from the compositor: ...`) and the same text goes to the journal; a recorder that
+breaks mid-stream is reopened up to 3 times within 5 s (`src/retrybudget.h`) before the stream ends
+that way. Before 1.10.5 a frame could carry `"capture":"screenshot"` and `"captureReason"`. `same`
+and `error` records are unchanged. The `screenshot` request still uses `saveScreenshot`.
 
 Upstream, the client sends JSON lines (at most 256 bytes; unknown or malformed lines are ignored):
 
