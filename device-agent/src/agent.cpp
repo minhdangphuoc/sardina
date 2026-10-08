@@ -6,6 +6,7 @@
 #include "statsmath.h"
 #include "indicator.h"
 #include "mirror.h"
+#include "mirrorinput.h"
 #include "settings.h"
 #include "settingsservice.h"
 
@@ -588,8 +589,17 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
         o.insert(QStringLiteral("developerMode"), Paths::developerModeOn());
         o.insert(QStringLiteral("socket"), Paths::socketPath());
         o.insert(QStringLiteral("mirrorEncodings"), QJsonArray{ QStringLiteral("text"), QStringLiteral("binary"), QStringLiteral("vp8") });
-        o.insert(QStringLiteral("mirrorInput"), QJsonArray{ QStringLiteral("tap"), QStringLiteral("swipe"), QStringLiteral("down"),
-                                                                  QStringLiteral("move"), QStringLiteral("up") });
+        QJsonArray mirrorInput{ QStringLiteral("tap"), QStringLiteral("swipe"), QStringLiteral("down"), QStringLiteral("move"),
+                                QStringLiteral("up") };
+        // `key` and `keypad` only when a keypad device and a model name exist: the extension shows
+        // the keypad by model, and key presses still pass the mirror's input lease and whitelist.
+        const MirrorKeypadInfo keypad = MirrorInput::keypadInfo();
+        if (!keypad.model.isEmpty() && !keypad.keys.isEmpty()) {
+            mirrorInput.append(QStringLiteral("key"));
+            o.insert(QStringLiteral("keypad"), QJsonObject{ { QStringLiteral("model"), keypad.model },
+                                                            { QStringLiteral("keys"), QJsonArray::fromStringList(keypad.keys) } });
+        }
+        o.insert(QStringLiteral("mirrorInput"), mirrorInput);
         o.insert(QStringLiteral("settingsPage"), true);
         o.insert(QStringLiteral("logFormats"), QJsonArray{ QStringLiteral("text"), QStringLiteral("json") });
         o.insert(QStringLiteral("stats"), true);
