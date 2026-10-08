@@ -14,6 +14,9 @@
  * Like agent 1.6.0, it answers a request without "encoding":"vp8" with JPEG/PNG only: a "vp8" status
  * becomes "binary" (no bitrate, window 2) and VP8 records are skipped; a VP8 request skips image
  * records of other formats. Upstream "keyframe" and "set" lines are logged as events.
+ * An entry {"onInput": {...}, "record": {...}} is a header-only record sent once per connection, to a
+ * phoneState request, when an upstream input message first matches every field of `onInput` (agent 1.10.4
+ * answers input activation with a settings message and an accepted contact with a `contact` record).
  */
 
 const fs = require('fs');
@@ -151,6 +154,8 @@ function serve(scenario, logPath, local, onFirstConnect) {
     if (onFirstConnect && onFirstConnect(socket)) return;
     let buf = '';
     let started = false;
+    let phoneState = false;
+    const answered = new Set();
     socket.on('data', (chunk) => {
       buf += chunk.toString('utf8');
       let nl;
@@ -160,6 +165,7 @@ function serve(scenario, logPath, local, onFirstConnect) {
         if (!started) {
           started = true;
           core.logEvent(logPath, { bin: 'ssh', event: 'request', key: 'ssh_forward.request', line });
+          phoneState = /"phoneState"\s*:\s*true/.test(line);
           void replay(socket, frames, line);
           continue;
         }
@@ -180,6 +186,12 @@ function serve(scenario, logPath, local, onFirstConnect) {
           socket.write(encodeRecord({ pong: msg.keepalive, ts: Date.now() }));
         } else if (msg && msg.input && typeof msg.input.type === 'string') {
           core.logEvent(logPath, { bin: 'ssh', event: 'input', key: 'ssh_forward.input', input: msg.input });
+          for (const f of frames) {
+            if (!phoneState || !f.onInput || answered.has(f)) continue;
+            if (!Object.entries(f.onInput).every(([k, v]) => msg.input[k] === v)) continue;
+            answered.add(f);
+            socket.write(encodeRecord(f.record));
+          }
         }
       }
     });

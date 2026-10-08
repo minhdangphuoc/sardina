@@ -669,6 +669,40 @@ suite('screen mirror over the SSH forward (F6)', () => {
     });
   });
 
+  test('I28 touch indicator fallback: agent 1.10.4 reports the mirror path, a contact record draws the marker, details say in mirror', async function () {
+    this.timeout(30000);
+    const posted: unknown[] = [];
+    const createPanel = vscode.window.createWebviewPanel.bind(vscode.window);
+    sandbox.stub(vscode.window, 'createWebviewPanel').callsFake((...args: Parameters<typeof vscode.window.createWebviewPanel>) => {
+      const panel = createPanel(...args);
+      const post = panel.webview.postMessage.bind(panel.webview);
+      sandbox.stub(panel.webview, 'postMessage').callsFake((message: unknown) => {
+        posted.push(message);
+        return post(message);
+      });
+      return panel;
+    });
+    type Posted = { type?: string; path?: string; x?: number; y?: number; down?: boolean; screen?: number[]; details?: Array<{ label: string; value: string }> };
+    const of = (type: string): Posted[] => (posted as Posted[]).filter((m) => m?.type === type);
+    const touchRow = (): string | undefined => of('state').at(-1)?.details?.find((r) => r.label === 'Touch indicator')?.value;
+    await withScenario('agent-forward-touch-mirror', async () => {
+      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await waitLive();
+      assert.ok((requests()[0].line ?? '').includes('"phoneState":true'), requests()[0].line);
+      assert.ok(!of('contact').length, 'no marker before control is active');
+      await setTestFocus(true);
+      await waitFor(() => of('touchIndicator').some((m) => m.path === 'mirror'), 8000);
+      await waitFor(() => touchRow() === 'in mirror', 3000);
+      await sendTestInput({ type: 'input', action: 'down', frame: 1, screen: [720, 1600], x: 0.25, y: 0.2 });
+      await waitFor(() => of('contact').length > 0, 3000);
+      assert.deepStrictEqual(of('contact')[0], { type: 'contact', x: 180, y: 320, down: true, screen: [720, 1600] });
+      await sendTestInput({ type: 'input', action: 'up', frame: 1, screen: [720, 1600] });
+      await setTestFocus(false);
+      await waitFor(() => of('touchIndicator').at(-1)?.path === 'off', 3000);
+      await waitFor(() => touchRow() === 'off', 3000);
+    });
+  });
+
   test('I22 control off on the phone: the strip says so, no active:true is ever sent, Device Agent Status names it', async function () {
     this.timeout(30000);
     await withScenario('agent-settings-control-off', async () => {
