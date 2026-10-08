@@ -210,6 +210,7 @@ export class MirrorSession {
   private touchIndicatorPathReported = false;
   private touchIndicatorPosted: TouchIndicatorPath | undefined;
   private keypadLayout: KeypadLayout | undefined;
+  private keypadConfigured = false;
   /** An agent install is running (see agentInstalling). */
   private agentUpdating = false;
   /** The stream ended during that install and waits for it. */
@@ -347,10 +348,12 @@ export class MirrorSession {
 
   async refreshKeypad(): Promise<void> {
     const info = this.keypadInfo();
-    const layout = info ? await this.opts.keypadLayouts.resolve(info) : undefined;
+    const resolved = info ? await this.opts.keypadLayouts.resolve(info) : { configured: false };
     if (this.state === 'disposed') return;
-    this.keypadLayout = layout;
+    this.keypadConfigured = resolved.configured;
+    this.keypadLayout = resolved.layout;
     this.postKeypad();
+    this.postState();
     this.opts.keypadContextChanged();
   }
 
@@ -477,6 +480,9 @@ export class MirrorSession {
     } else if (type === 'updateAgent') {
       // Offered by the strip only over the sfdk path with an outdated agent; the install flow asks for consent itself.
       if (this.state === 'live' && this.transportKind === 'sfdk' && isStaleAgentReason(this.fallbackReason)) void this.opts.updateAgent?.()?.catch(() => undefined);
+    } else if (type === 'editKeypadLayout') {
+      const info = this.keypadInfo();
+      if (info) void this.opts.keypadLayouts.edit(info).then((changed) => changed ? this.refreshKeypad() : undefined);
     } else if (type === 'copyDetails') {
       // The host builds the text from its own state: the page sends nothing to copy.
       if (this.state === 'live' && this.copyRate.allow(Date.now())) {
@@ -998,6 +1004,7 @@ export class MirrorSession {
       codec: live ? this.codec : undefined,
       kbps: live && this.codec !== undefined ? this.byteRate.kbps(now) : undefined,
       video: live && this.video ? { ...this.video, reduced: this.videoReduced(this.video), reducedFor: this.adaptLimits } : undefined,
+      keypadLayoutMissing: live && this.keypadInfo() !== undefined && !this.keypadConfigured,
     };
   }
 
@@ -1145,8 +1152,10 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
   const sessions = new Map<string, MirrorSession>();
   const keypadLayouts = new KeypadLayouts(ctx, services);
   const keypadContextChanged = (): void => {
-    const shown = [...sessions.values()].some((session) => session.panel.active && session.keypadInfo() !== undefined);
-    void vscode.commands.executeCommand('setContext', 'sailfish.mirrorKeypad', shown);
+    const active = [...sessions.values()].find((session) => session.panel.active && session.keypadInfo() !== undefined);
+    const info = active?.keypadInfo();
+    void vscode.commands.executeCommand('setContext', 'sailfish.mirrorKeypad', info !== undefined);
+    void vscode.commands.executeCommand('setContext', 'sailfish.mirrorKeypadLayout', info !== undefined && keypadLayouts.configured(info.model));
   };
   const activeKeypadSession = (): MirrorSession | undefined =>
     [...sessions.values()].find((session) => session.panel.active && session.keypadInfo() !== undefined);
@@ -1167,24 +1176,18 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
     );
   }
   ctx.subscriptions.push(
+    keypadLayouts,
+    keypadLayouts.onDidChange((model) => { void refreshModel(model); }),
     vscode.commands.registerCommand('sailfish.agent.mirror', openMirror(ctx, services, sessions, keypadLayouts, keypadContextChanged)),
-    vscode.commands.registerCommand('sailfish.agent.importKeypadLayout', async () => {
+    vscode.commands.registerCommand('sailfish.agent.editKeypadLayout', async () => {
       const session = activeKeypadSession();
       const info = session?.keypadInfo();
-      if (!info) {
-        await services.prompts.showInformationMessage('Sailfish: open a keypad phone mirror first');
-        return;
-      }
-      if (await keypadLayouts.importLayout(info)) await refreshModel(info.model);
+      if (info && await keypadLayouts.edit(info)) await refreshModel(info.model);
     }),
     vscode.commands.registerCommand('sailfish.agent.resetKeypadLayout', async () => {
       const session = activeKeypadSession();
       const info = session?.keypadInfo();
-      if (!info) {
-        await services.prompts.showInformationMessage('Sailfish: open a keypad phone mirror first');
-        return;
-      }
-      if (await keypadLayouts.reset(info)) await refreshModel(info.model);
+      if (info && await keypadLayouts.reset(info)) await refreshModel(info.model);
     }),
     // Any install over a running agent (the update offer, Install Device Agent) restarts it.
     onAgentInstall((e) => {

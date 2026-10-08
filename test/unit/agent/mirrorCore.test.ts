@@ -224,6 +224,12 @@ describe('mirrorCore status strip', () => {
     assert.strictEqual(stripParts({ state: 'live', image: { width: 270, height: 594, reduced: true, reducedFor: ['link'] } }).warning, 'Reduced for link');
     assert.strictEqual(stripParts({ ...live, video: { ...live.video!, reduced: false, reducedFor: ['cpu'] } }).warning, undefined);
   });
+  it('offers a layout when a keypad is detected without one', () => {
+    assert.deepStrictEqual(stripParts({ ...live, keypadLayoutMissing: true }), {
+      dot: 'live', label: 'Live', fps: '30 fps', warning: 'Keypad detected', action: 'keypad',
+    });
+    assert.strictEqual(statusText({ ...live, keypadLayoutMissing: true }), 'Live · 30 fps · Keypad detected · Create layout');
+  });
   it('old agent: Slow path with the update action; other sfdk reasons have no action', () => {
     const old: MirrorStatus = { state: 'live', transport: 'sfdk', fallbackReason: 'agent 1.1.0 — update for the fast mirror', fps: 4 };
     assert.deepStrictEqual(stripParts(old), { dot: 'live', label: 'Live', fps: '4 fps', warning: 'Slow path', action: 'update' });
@@ -310,6 +316,7 @@ describe('mirrorCore detailRows', () => {
     assert.strictEqual(r.Control, 'off (disabled on the phone)');
     assert.strictEqual(r['Touch indicator'], 'off');
     assert.strictEqual(r['Phone error'], 'frame failed');
+    assert.strictEqual(rows({ state: 'live', keypadLayoutMissing: true }).Keypad, 'detected · Create layout');
     assert.strictEqual(rows({ state: 'live', video: { width: 540, height: 1200, targetKbps: 800, reduced: true, reducedFor: ['cpu'] } }).Video, 'VP8 · 540×1200 · 800 kbit/s (reduced for the phone CPU)');
   });
   it('carries every value the log text can show', () => {
@@ -717,7 +724,7 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
     send(message: object): void;
     window(name: string, event: PageEvent): void;
   } {
-    const elements = Object.fromEntries(['screen', 'video', 'stage', 'touch', 'keypad', 'strip', 'dot', 'label', 'fps', 'fpsSep', 'warning', 'warningText', 'warnSep', 'reconnect', 'update', 'control', 'info', 'details', 'detailsGrid', 'detailsClose', 'copyDetails'].map((id) => [id, new FakeElement()])) as Record<string, FakeElement>;
+    const elements = Object.fromEntries(['screen', 'video', 'stage', 'touch', 'keypad', 'strip', 'dot', 'label', 'fps', 'fpsSep', 'warning', 'warningText', 'warnSep', 'reconnect', 'keypadLayout', 'update', 'control', 'info', 'details', 'detailsGrid', 'detailsClose', 'copyDetails'].map((id) => [id, new FakeElement()])) as Record<string, FakeElement>;
     elements.video.classes.add('hidden');
     elements.details.hidden = true;
     const messages: Record<string, unknown>[] = [];
@@ -872,6 +879,17 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
       assert.strictEqual(p.elements.reconnect.hidden, true);
       p.elements.update.dispatch('click');
       assert.ok(p.messages.some((m) => m.type === 'updateAgent'));
+    });
+    it('shows the keypad layout action and sends the edit request', () => {
+      const p = page();
+      p.send({ type: 'state', state: 'live', text: 'Live · Keypad detected', strip: { dot: 'live', label: 'Live', warning: 'Keypad detected', action: 'keypad' }, details: [{ label: 'Keypad', value: 'detected · Create layout' }], control: 'none' });
+      assert.strictEqual(p.elements.keypadLayout.hidden, false);
+      assert.strictEqual(p.elements.update.hidden, true);
+      assert.strictEqual(p.elements.reconnect.hidden, true);
+      p.elements.keypadLayout.dispatch('click');
+      assert.ok(p.messages.some((m) => m.type === 'editKeypadLayout'));
+      p.send(live);
+      assert.strictEqual(p.elements.keypadLayout.hidden, true);
     });
     it('shows the control pill: active from the control message, off from the state message', () => {
       const p = page();

@@ -333,8 +333,8 @@
         "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
       },
       {
-        "command": "sailfish.agent.importKeypadLayout",
-        "title": "Import Keypad Layout…",
+        "command": "sailfish.agent.editKeypadLayout",
+        "title": "Edit Keypad Layout",
         "category": "Sailfish"
       },
       {
@@ -767,6 +767,8 @@
     },
     "menus": {
       "commandPalette": [
+        { "command": "sailfish.agent.editKeypadLayout", "when": "sailfish.mirrorKeypad" },
+        { "command": "sailfish.agent.resetKeypadLayout", "when": "sailfish.mirrorKeypadLayout" },
         { "command": "sailfish.monitor.restartApp", "when": "false" },
         { "command": "sailfish.monitor.stopApp", "when": "false" },
         { "command": "sailfish.monitor.screenshot", "when": "false" },
@@ -775,13 +777,13 @@
       ],
       "editor/title": [
         {
-          "command": "sailfish.agent.importKeypadLayout",
+          "command": "sailfish.agent.editKeypadLayout",
           "when": "activeWebviewPanelId == 'sailfish.mirror' && sailfish.mirrorKeypad",
           "group": "keypad@1"
         },
         {
           "command": "sailfish.agent.resetKeypadLayout",
-          "when": "activeWebviewPanelId == 'sailfish.mirror' && sailfish.mirrorKeypad",
+          "when": "activeWebviewPanelId == 'sailfish.mirror' && sailfish.mirrorKeypadLayout",
           "group": "keypad@2"
         },
         {

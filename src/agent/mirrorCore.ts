@@ -564,6 +564,8 @@ export interface MirrorStatus {
   paceFps?: number;
   /** A frame the phone could not produce (its error text); shown in the details. */
   softError?: string;
+  /** The agent reported a keypad, but this workspace has no user-selected layout for its model. */
+  keypadLayoutMissing?: boolean;
 }
 
 /** No screen change for this long, with the agent saying the screen is unchanged: the strip says idle. */
@@ -638,7 +640,7 @@ export function logText(s: MirrorStatus): string {
 
 /** The strip's colour: live green, waiting grey, down red. */
 export type StripDot = 'live' | 'wait' | 'down';
-export type StripAction = 'update' | 'reconnect';
+export type StripAction = 'update' | 'reconnect' | 'keypad';
 
 export interface StripParts {
   dot: StripDot;
@@ -684,8 +686,9 @@ function reducedCauses(r: { reduced?: boolean; reducedFor?: readonly ('link' | '
   return 'link';
 }
 
-/** The single strip warning, by priority: slow path, phone CPU, link, screenshot capture, dropped frames, a phone error. */
+/** The single strip warning, by priority: a missing keypad layout, slow path, phone CPU, link, capture, drops, phone error. */
 function stripWarning(s: MirrorStatus): { text: string; action?: StripAction } | undefined {
+  if (s.keypadLayoutMissing) return { text: 'Keypad detected', action: 'keypad' };
   if (s.transport === 'sfdk') return isStaleAgentReason(s.fallbackReason) ? { text: 'Slow path', action: 'update' } : { text: 'Slow path' };
   const causes = [reducedCauses(s.video), reducedCauses(s.image)];
   if (causes.includes('cpu')) return { text: 'Reduced for phone' };
@@ -762,6 +765,7 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   if (s.frameMs !== undefined) rows.push({ label: 'Phone time', value: `${Math.round(s.frameMs)} ms per frame` });
   if (s.capture === 'native') rows.push({ label: 'Capture', value: 'native recorder' });
   if (s.dropped !== undefined) rows.push({ label: 'Dropped', value: String(s.dropped) });
+  if (s.keypadLayoutMissing) rows.push({ label: 'Keypad', value: 'detected · Create layout' });
   const control = controlState(s, inputActive);
   rows.push({ label: 'Control', value: control === 'off' ? `off (${s.controlOffReason})` : control === 'active' ? 'on' : 'view only' });
   rows.push({
@@ -778,6 +782,7 @@ export function statusText(s: MirrorStatus, inputActive = false): string {
   const parts = [p.label];
   if (p.fps) parts.push(p.fps);
   if (p.warning) parts.push(p.warning);
+  if (p.action === 'keypad') parts.push('Create layout');
   const c = controlState(s, inputActive);
   if (c !== 'none') parts.push(CONTROL_PILL_TEXT[c]);
   return parts.join(' · ');
@@ -1067,6 +1072,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   <span id="warnSep" class="sep" hidden>·</span>
   <span id="warning" hidden><svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><path d="M8 2 L14.5 13.5 H1.5 Z"></path><path d="M8 6.5 V9.5"></path><path d="M8 11.5 V11.6"></path></svg><span id="warningText"></span></span>
   <span class="grow"></span>
+  <button id="keypadLayout" class="act" type="button" hidden>Create layout</button>
   <button id="update" class="act" type="button" hidden>Update agent</button>
   <button id="reconnect" class="act" type="button" hidden>Reconnect</button>
   <span id="control" hidden></span>
@@ -1095,6 +1101,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   var warnText = document.getElementById('warningText');
   var warnSep = document.getElementById('warnSep');
   var button = document.getElementById('reconnect');
+  var keypadLayoutButton = document.getElementById('keypadLayout');
   var updateButton = document.getElementById('update');
   var controlEl = document.getElementById('control');
   var infoButton = document.getElementById('info');
@@ -1238,6 +1245,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   img.addEventListener('load', function () { settled(true); });
   img.addEventListener('error', function () { settled(false); });
   button.addEventListener('click', function () { vscode.postMessage({ type: 'reconnect' }); });
+  keypadLayoutButton.addEventListener('click', function () { vscode.postMessage({ type: 'editKeypadLayout' }); });
   updateButton.addEventListener('click', function () { vscode.postMessage({ type: 'updateAgent' }); });
   function renderControl() {
     var text = controlOff ? 'Control off on phone' : control ? 'Control' : '';
@@ -1290,6 +1298,7 @@ export function mirrorHtml(nonce: string, device: string): string {
     warnEl.hidden = !hasWarn;
     warnSep.hidden = !hasWarn;
     warnText.textContent = hasWarn ? strip.warning : '';
+    keypadLayoutButton.hidden = strip.action !== 'keypad';
     updateButton.hidden = strip.action !== 'update';
     button.hidden = strip.action !== 'reconnect';
     controlOff = controlState === 'off';

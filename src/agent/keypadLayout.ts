@@ -9,108 +9,178 @@ import {
   type KeypadLayout,
 } from './keypadLayoutCore';
 
-export class KeypadLayouts {
+export interface ResolvedKeypadLayout {
+  configured: boolean;
+  layout?: KeypadLayout;
+}
+
+interface LayoutWatch {
+  uri: vscode.Uri;
+  disposables: vscode.Disposable[];
+}
+
+const STATE_PREFIX = 'sailfish.keypadLayout.';
+
+export class KeypadLayouts implements vscode.Disposable {
   private readonly logged = new Set<string>();
+  private readonly changed = new vscode.EventEmitter<string>();
+  private readonly watches = new Map<string, LayoutWatch>();
+  readonly onDidChange = this.changed.event;
 
   constructor(
     private readonly ctx: vscode.ExtensionContext,
     private readonly services: Services,
   ) {}
 
-  async resolve(info: KeypadInfo): Promise<KeypadLayout> {
-    const override = this.overrideUri(info.model);
-    const userText = await this.read(override);
-    if (userText !== undefined) return this.validated(userText, info, override.fsPath) ?? buildDefaultKeypadLayout(info);
-
-    const bundled = vscode.Uri.joinPath(this.ctx.extensionUri, 'media', 'keypads', keypadLayoutFileName(info.model));
-    const bundledText = await this.read(bundled);
-    if (bundledText !== undefined) return this.validated(bundledText, info, bundled.fsPath) ?? buildDefaultKeypadLayout(info);
-    return buildDefaultKeypadLayout(info);
+  configured(model: string): boolean {
+    return this.layoutUri(model) !== undefined;
   }
 
-  async importLayout(info: KeypadInfo): Promise<boolean> {
-    const picked = await this.services.prompts.showOpenDialog({
-      canSelectFiles: true,
-      canSelectFolders: false,
-      canSelectMany: false,
-      filters: { 'Keypad layout': ['json'] },
-      openLabel: 'Import Keypad Layout',
-    });
-    const source = picked?.[0];
-    if (!source) return false;
-    let text: string;
+  async resolve(info: KeypadInfo): Promise<ResolvedKeypadLayout> {
+    const uri = this.layoutUri(info.model);
+    if (!uri) return { configured: false };
+    this.watch(info.model, uri);
     try {
-      text = Buffer.from(await vscode.workspace.fs.readFile(source)).toString('utf8');
+      const text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+      return { configured: true, layout: this.validated(text, info, uri.fsPath) };
     } catch (err) {
-      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout not imported: ${this.message(err)}`);
-      return false;
-    }
-    const parsed = parseKeypadLayout(text);
-    const checked = parsed.error ? { errors: [parsed.error], warnings: [] } : validateKeypadLayout(parsed.value, info.keys, info.model);
-    if (!checked.layout) {
-      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout not imported: ${checked.errors.join('; ')}`);
-      return false;
-    }
-    this.logWarnings(source.fsPath, checked.warnings);
-    const target = this.overrideUri(info.model);
-    try {
-      await vscode.workspace.fs.createDirectory(this.overrideDir());
-      await vscode.workspace.fs.writeFile(target, Buffer.from(`${JSON.stringify(checked.layout, null, 2)}\n`, 'utf8'));
-    } catch (err) {
-      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout not imported: ${this.message(err)}`);
-      return false;
-    }
-    await this.services.prompts.showInformationMessage(`Sailfish: keypad layout imported for ${info.model}`);
-    return true;
-  }
-
-  async reset(info: KeypadInfo): Promise<boolean> {
-    const target = this.overrideUri(info.model);
-    try {
-      await vscode.workspace.fs.delete(target, { recursive: false, useTrash: false });
-    } catch (err) {
-      if (!(err instanceof vscode.FileSystemError && err.code === 'FileNotFound')) {
-        await this.services.prompts.showErrorMessage(`Sailfish: keypad layout was not reset: ${this.message(err)}`);
-        return false;
+      if (this.notFound(err)) {
+        await this.forget(info.model);
+        return { configured: false };
       }
+      this.logOnce(`${uri.toString()}:read:${this.message(err)}`, `keypad layout ${uri.fsPath}: ${this.message(err)}; keypad hidden`);
+      return { configured: true };
     }
-    await this.services.prompts.showInformationMessage(`Sailfish: keypad layout reset for ${info.model}`);
+  }
+
+  /** Opens the remembered layout, or creates a starter when this model has none. */
+  async edit(info: KeypadInfo): Promise<boolean> {
+    const uri = this.layoutUri(info.model);
+    if (!uri) return this.create(info);
+    try {
+      await vscode.workspace.fs.stat(uri);
+      await this.open(uri);
+      return false;
+    } catch (err) {
+      if (this.notFound(err)) {
+        await this.forget(info.model);
+        return this.create(info);
+      }
+      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be opened: ${this.message(err)}`);
+      return false;
+    }
+  }
+
+  /** Forgets the association without deleting the user's file. */
+  async reset(info: KeypadInfo): Promise<boolean> {
+    if (!this.configured(info.model)) return false;
+    await this.forget(info.model);
+    await this.services.prompts.showInformationMessage(`Sailfish: keypad layout reset for ${info.model}; the file was not deleted`);
     return true;
   }
 
-  private overrideUri(model: string): vscode.Uri {
-    return vscode.Uri.joinPath(this.overrideDir(), keypadLayoutFileName(model));
+  dispose(): void {
+    for (const watch of this.watches.values()) this.disposeWatch(watch);
+    this.watches.clear();
+    this.changed.dispose();
   }
 
-  private overrideDir(): vscode.Uri {
+  private async create(info: KeypadInfo): Promise<boolean> {
+    const dir = this.defaultDir();
+    try {
+      await vscode.workspace.fs.createDirectory(dir);
+    } catch (err) {
+      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be created: ${this.message(err)}`);
+      return false;
+    }
+    const uri = await this.services.prompts.showSaveDialog({
+      defaultUri: vscode.Uri.joinPath(dir, keypadLayoutFileName(info.model)),
+      filters: { 'Keypad layout': ['json'] },
+      saveLabel: 'Create Keypad Layout',
+    });
+    if (!uri) return false;
+    const starter = `${JSON.stringify(buildDefaultKeypadLayout(info), null, 2)}\n`;
+    try {
+      await vscode.workspace.fs.writeFile(uri, Buffer.from(starter, 'utf8'));
+      await this.ctx.workspaceState.update(this.stateKey(info.model), uri.toString());
+      this.watch(info.model, uri);
+    } catch (err) {
+      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be created: ${this.message(err)}`);
+      return false;
+    }
+    try {
+      await this.open(uri);
+    } catch (err) {
+      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout was created but could not be opened: ${this.message(err)}`);
+    }
+    return true;
+  }
+
+  private async open(uri: vscode.Uri): Promise<void> {
+    const document = await vscode.workspace.openTextDocument(uri);
+    await vscode.window.showTextDocument(document, { preview: false });
+  }
+
+  private async forget(model: string): Promise<void> {
+    await this.ctx.workspaceState.update(this.stateKey(model), undefined);
+    const watch = this.watches.get(model);
+    if (watch) this.disposeWatch(watch);
+    this.watches.delete(model);
+  }
+
+  private stateKey(model: string): string {
+    return `${STATE_PREFIX}${model}`;
+  }
+
+  private layoutUri(model: string): vscode.Uri | undefined {
+    const raw = this.ctx.workspaceState.get<string>(this.stateKey(model));
+    if (!raw) return undefined;
+    try {
+      return vscode.Uri.parse(raw, true);
+    } catch {
+      return undefined;
+    }
+  }
+
+  private defaultDir(): vscode.Uri {
     const root = vscode.workspace.workspaceFolders?.[0]?.uri;
     return root
       ? vscode.Uri.joinPath(root, '.sailfish', 'keypads')
       : vscode.Uri.joinPath(this.ctx.globalStorageUri, 'keypads');
   }
 
-  private async read(uri: vscode.Uri): Promise<string | undefined> {
-    try {
-      return Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-    } catch (err) {
-      if (err instanceof vscode.FileSystemError && err.code === 'FileNotFound') return undefined;
-      this.logOnce(`${uri.toString()}:read`, `keypad layout ${uri.fsPath}: ${this.message(err)}; using the default layout`);
-      return undefined;
-    }
-  }
-
   private validated(text: string, info: KeypadInfo, source: string): KeypadLayout | undefined {
     const parsed = parseKeypadLayout(text);
     if (parsed.error) {
-      this.logOnce(`${source}:parse:${parsed.error}`, `keypad layout ${source}: ${parsed.error}; using the default layout`);
+      this.logOnce(`${source}:parse:${parsed.error}`, `keypad layout ${source}: ${parsed.error}; keypad hidden`);
       return undefined;
     }
     const checked = validateKeypadLayout(parsed.value, info.keys, info.model);
     this.logWarnings(source, checked.warnings);
     if (!checked.layout) {
-      this.logOnce(`${source}:invalid:${checked.errors.join('|')}`, `keypad layout ${source}: ${checked.errors.join('; ')}; using the default layout`);
+      this.logOnce(`${source}:invalid:${checked.errors.join('|')}`, `keypad layout ${source}: ${checked.errors.join('; ')}; keypad hidden`);
     }
     return checked.layout;
+  }
+
+  private watch(model: string, uri: vscode.Uri): void {
+    const current = this.watches.get(model);
+    if (current?.uri.toString() === uri.toString()) return;
+    if (current) this.disposeWatch(current);
+    const slash = uri.path.lastIndexOf('/');
+    const dir = uri.with({ path: slash > 0 ? uri.path.slice(0, slash) : '/', query: '', fragment: '' });
+    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(dir, '*'));
+    const changed = (candidate: vscode.Uri): void => {
+      if (candidate.toString() === uri.toString()) this.changed.fire(model);
+    };
+    this.watches.set(model, {
+      uri,
+      disposables: [watcher, watcher.onDidChange(changed), watcher.onDidCreate(changed), watcher.onDidDelete(changed)],
+    });
+  }
+
+  private disposeWatch(watch: LayoutWatch): void {
+    for (const disposable of watch.disposables) disposable.dispose();
   }
 
   private logWarnings(source: string, warnings: readonly string[]): void {
@@ -125,5 +195,9 @@ export class KeypadLayouts {
 
   private message(err: unknown): string {
     return err instanceof Error ? err.message : String(err);
+  }
+
+  private notFound(err: unknown): boolean {
+    return err instanceof vscode.FileSystemError && err.code === 'FileNotFound';
   }
 }
