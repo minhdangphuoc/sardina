@@ -61,7 +61,9 @@ import { cachedSocketPath, privateDir, readPinnedKeys, resolveDeviceEndpoint, sw
 import { forwardEligibility, hostKeyAlias } from './sshForwardCore';
 import { scaledHeight, type AdaptCause, type AdaptDecision } from './mirrorAdapt';
 import { LogRateLimiter, parseDecodingSize, sanitizeLogText } from './mirrorLog';
-import { InputFocusSchedule, InputRateLimiter, captureAllowsInput, mapGesture, parseWebviewFocus, parseWebviewGesture, phoneInputAccepted, supportsLiveContacts } from './mirrorInput';
+import { InputFocusSchedule, InputRateLimiter, captureAllowsInput, mapGesture, parseWebviewFocus, parseWebviewGesture, parseWebviewKey, phoneInputAccepted, supportsLiveContacts } from './mirrorInput';
+import { KeypadLayouts } from './keypadLayout';
+import type { KeypadInfo, KeypadLayout } from './keypadLayoutCore';
 
 export { FORWARD_FIRST_BYTE_MS, FORWARD_IDLE_MS, FORWARD_READY_TIMEOUT_MS, FORWARD_TIMING, MIRROR_TIMING, SFDK_STDIN_KEEPALIVE };
 
@@ -120,6 +122,8 @@ export interface MirrorSessionOptions {
   getEndpoint: () => Promise<SfdkDeviceInfo | undefined>;
   /** The strip's Update agent action: runs the install flow for this device. */
   updateAgent?: () => Promise<unknown>;
+  keypadLayouts: KeypadLayouts;
+  keypadContextChanged: () => void;
 }
 
 export class MirrorSession {
@@ -201,6 +205,7 @@ export class MirrorSession {
   private inputCaptureSafe = false;
   private webviewFocused = false;
   private controlPosted: boolean | undefined;
+  private keypadLayout: KeypadLayout | undefined;
   /** An agent install is running (see agentInstalling). */
   private agentUpdating = false;
   /** The stream ended during that install and waits for it. */
@@ -225,6 +230,7 @@ export class MirrorSession {
       if (this.panel.visible) this.onVisible();
       else this.onHidden();
       this.syncInput();
+      this.opts.keypadContextChanged();
     });
     panel.webview.onDidReceiveMessage((m: unknown) => this.onMessage(m));
   }
@@ -259,6 +265,7 @@ export class MirrorSession {
     this.forwardDisposal ??= this.opts.forward?.dispose() ?? Promise.resolve();
     this.onGone(this);
     this.panel.dispose();
+    this.opts.keypadContextChanged();
   }
 
   private async stopForDeviceSwitch(): Promise<void> {
@@ -301,6 +308,7 @@ export class MirrorSession {
     this.waitingForAgent = false;
     this.opts.probe = next;
     this.forwardFailed = false;
+    void this.refreshKeypad();
     // The previous run is cancelled first (begin() then waits for it); a hidden panel only starts on its next show.
     this.transport?.inputActive(false);
     this.cts?.cancel();
@@ -326,6 +334,19 @@ export class MirrorSession {
   /** Full integration-suite seam: injects the same untrusted message shape a focused page sends. */
   inputForTest(message: unknown): void {
     if (process.env.TEST_MODE === 'full') this.onMessage(message);
+  }
+
+  keypadInfo(): KeypadInfo | undefined {
+    return this.opts.probe.keypad;
+  }
+
+  async refreshKeypad(): Promise<void> {
+    const info = this.keypadInfo();
+    const layout = info ? await this.opts.keypadLayouts.resolve(info) : undefined;
+    if (this.state === 'disposed') return;
+    this.keypadLayout = layout;
+    this.postKeypad();
+    this.opts.keypadContextChanged();
   }
 
   /** Full integration-suite seam: focus is otherwise owned by Electron and cannot be made deterministic. */
@@ -395,6 +416,7 @@ export class MirrorSession {
         this.requestKeyframe('the panel was reloaded');
       }
       this.syncInput();
+      this.postKeypad();
     } else if (type === 'shown') {
       if (this.codec === 'vp8') {
         this.videoInFlight = Math.max(0, this.videoInFlight - 1);
@@ -425,11 +447,18 @@ export class MirrorSession {
       this.webviewFocused = focused;
       this.syncInput();
     } else if (type === 'input') {
-      const gesture = parseWebviewGesture(m);
+      const key = parseWebviewKey(m);
+      const gesture = key ? undefined : parseWebviewGesture(m);
       // A valid release is fail-open. Everything else, including malformed messages that merely
       // claim to be a release, consumes the bounded gesture budget before it can be acted on.
-      if (gesture?.type !== 'up' && !this.inputRate.allow(Date.now())) return;
-      if (!gesture || !this.inputOn()) return;
+      if (gesture?.type !== 'up' && key?.pressed !== false && !this.inputRate.allow(Date.now())) return;
+      if ((!gesture && !key) || !this.inputOn()) return;
+      if (key) {
+        const keypad = this.keypadInfo();
+        if (keypad?.keys.includes(key.key)) this.transport?.input(key);
+        return;
+      }
+      if (!gesture) return;
       if (gesture.type === 'up') {
         this.transport?.input({ type: 'up' });
         return;
@@ -898,6 +927,10 @@ export class MirrorSession {
     this.send({ type: 'control', enabled, liveContacts: supportsLiveContacts(this.opts.probe.mirrorInput) });
   }
 
+  private postKeypad(): void {
+    this.send({ type: 'keypad', layout: this.keypadLayout ?? null });
+  }
+
   private medianLatency(now: number): number | undefined {
     this.latencies = this.latencies.filter((l) => now - l.at <= LATENCY_WINDOW_MS);
     if (this.latencies.length === 0) return undefined;
@@ -985,7 +1018,13 @@ export class MirrorSession {
   }
 }
 
-function openMirror(ctx: vscode.ExtensionContext, services: Services, sessions: Map<string, MirrorSession>) {
+function openMirror(
+  ctx: vscode.ExtensionContext,
+  services: Services,
+  sessions: Map<string, MirrorSession>,
+  keypadLayouts: KeypadLayouts,
+  keypadContextChanged: () => void,
+) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
@@ -1041,11 +1080,20 @@ function openMirror(ctx: vscode.ExtensionContext, services: Services, sessions: 
         { enableScripts: true, localResourceRoots: [], retainContextWhenHidden: false },
       );
       panel.webview.html = mirrorHtml(randomBytes(16).toString('hex'), device);
-      const session = new MirrorSession(device, panel, services, { probe: state, forward, getEndpoint, updateAgent: () => installAgentOn(ctx, services, device) }, (s) => {
-        if (sessions.get(s.device) === s) sessions.delete(s.device);
-      });
+      const session = new MirrorSession(
+        device,
+        panel,
+        services,
+        { probe: state, forward, getEndpoint, updateAgent: () => installAgentOn(ctx, services, device), keypadLayouts, keypadContextChanged },
+        (s) => {
+          if (sessions.get(s.device) === s) sessions.delete(s.device);
+          keypadContextChanged();
+        },
+      );
       handedOver = true;
       sessions.set(device, session);
+      void session.refreshKeypad();
+      keypadContextChanged();
       session.start();
       // The install reports to the session through onAgentInstall (activateMirror).
       void offerAgentUpdate(ctx, services, device, state).catch(() => undefined);
@@ -1057,8 +1105,19 @@ function openMirror(ctx: vscode.ExtensionContext, services: Services, sessions: 
 
 export function activateMirror(ctx: vscode.ExtensionContext, services: Services): void {
   const sessions = new Map<string, MirrorSession>();
+  const keypadLayouts = new KeypadLayouts(ctx, services);
+  const keypadContextChanged = (): void => {
+    const shown = [...sessions.values()].some((session) => session.panel.active && session.keypadInfo() !== undefined);
+    void vscode.commands.executeCommand('setContext', 'sailfish.mirrorKeypad', shown);
+  };
+  const activeKeypadSession = (): MirrorSession | undefined =>
+    [...sessions.values()].find((session) => session.panel.active && session.keypadInfo() !== undefined);
+  const refreshModel = async (model: string): Promise<void> => {
+    await Promise.all([...sessions.values()].filter((session) => session.keypadInfo()?.model === model).map((session) => session.refreshKeypad()));
+  };
   // Directories (and ssh processes) left by extension hosts that died without cleaning up.
   void sweepOrphans(privateDir()).catch(() => 0);
+  keypadContextChanged();
   if (process.env.TEST_MODE === 'full') {
     ctx.subscriptions.push(
       vscode.commands.registerCommand('sailfish._test.mirrorInput', (device: unknown, message: unknown) => {
@@ -1070,7 +1129,25 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
     );
   }
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.agent.mirror', openMirror(ctx, services, sessions)),
+    vscode.commands.registerCommand('sailfish.agent.mirror', openMirror(ctx, services, sessions, keypadLayouts, keypadContextChanged)),
+    vscode.commands.registerCommand('sailfish.agent.importKeypadLayout', async () => {
+      const session = activeKeypadSession();
+      const info = session?.keypadInfo();
+      if (!info) {
+        await services.prompts.showInformationMessage('Sailfish: open a keypad phone mirror first');
+        return;
+      }
+      if (await keypadLayouts.importLayout(info)) await refreshModel(info.model);
+    }),
+    vscode.commands.registerCommand('sailfish.agent.resetKeypadLayout', async () => {
+      const session = activeKeypadSession();
+      const info = session?.keypadInfo();
+      if (!info) {
+        await services.prompts.showInformationMessage('Sailfish: open a keypad phone mirror first');
+        return;
+      }
+      if (await keypadLayouts.reset(info)) await refreshModel(info.model);
+    }),
     // Any install over a running agent (the update offer, Install Device Agent) restarts it.
     onAgentInstall((e) => {
       const session = sessions.get(e.device);

@@ -661,6 +661,7 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
   type PageEvent = Record<string, unknown>;
   type PageListener = (event: PageEvent) => void;
   class FakeElement {
+    constructor(readonly tagName = '') {}
     readonly listeners = new Map<string, PageListener[]>();
     readonly classes = new Set<string>();
     readonly classList = {
@@ -677,9 +678,22 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
     width = 0;
     height = 0;
     src = '';
+    type = '';
+    disabled = false;
+    readonly style: Record<string, string> = {};
+
+    get firstChild(): FakeElement | undefined { return this.children[0]; }
+    get childElementCount(): number { return this.children.length; }
 
     setAttribute(name: string, value: string): void { this.attributes.set(name, value); }
     appendChild(child: FakeElement): void { this.children.push(child); }
+    removeChild(child: FakeElement): void { this.children = this.children.filter((entry) => entry !== child); }
+    querySelectorAll(selector: string): FakeElement[] {
+      return this.children.flatMap((child) => [
+        ...(selector === 'button' && child.tagName === 'button' ? [child] : []),
+        ...child.querySelectorAll(selector),
+      ]);
+    }
     contains(other: unknown): boolean { return other === this; }
     focus(): void { this.focused++; }
     addEventListener(name: string, listener: PageListener): void {
@@ -703,7 +717,7 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
     send(message: object): void;
     window(name: string, event: PageEvent): void;
   } {
-    const elements = Object.fromEntries(['screen', 'video', 'stage', 'strip', 'dot', 'label', 'fps', 'fpsSep', 'warning', 'warningText', 'warnSep', 'reconnect', 'update', 'control', 'info', 'details', 'detailsGrid', 'detailsClose', 'copyDetails'].map((id) => [id, new FakeElement()])) as Record<string, FakeElement>;
+    const elements = Object.fromEntries(['screen', 'video', 'stage', 'keypad', 'strip', 'dot', 'label', 'fps', 'fpsSep', 'warning', 'warningText', 'warnSep', 'reconnect', 'update', 'control', 'info', 'details', 'detailsGrid', 'detailsClose', 'copyDetails'].map((id) => [id, new FakeElement()])) as Record<string, FakeElement>;
     elements.video.classes.add('hidden');
     elements.details.hidden = true;
     const messages: Record<string, unknown>[] = [];
@@ -719,7 +733,7 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
     assert.ok(script);
     vm.runInNewContext(script, {
       acquireVsCodeApi: () => ({ postMessage: (message: Record<string, unknown>) => messages.push(message) }),
-      document: { getElementById: (id: string) => elements[id], hasFocus: () => true, createElement: () => new FakeElement() },
+      document: { getElementById: (id: string) => elements[id], hasFocus: () => true, createElement: (tag: string) => new FakeElement(tag) },
       window: pageWindow,
       URL: { createObjectURL: () => `blob:${messages.length}`, revokeObjectURL: () => undefined },
       Blob: class {},
@@ -782,11 +796,23 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
     assert.deepStrictEqual(input?.screen, [720, 1600]);
     assert.strictEqual(input?.frame, 2);
   });
-  it('exposes only pointer gestures, never key or power injection', () => {
-    assert.ok(!html.includes("action: 'key'"));
+  it('exposes keypad buttons without forwarding the physical keyboard or power', () => {
+    assert.ok(html.includes("action: 'key'"));
     assert.ok(!html.includes('keyup'));
     assert.ok(!html.includes('power'));
-    // The one key handler closes the details popover on Escape and posts nothing.
+    const p = page();
+    p.send({ type: 'control', enabled: true });
+    p.send({ type: 'keypad', layout: { rows: [[{ key: 'OK', label: 'OK', style: 'primary' }]] } });
+    assert.strictEqual(p.elements.keypad.hidden, false);
+    const button = p.elements.keypad.querySelectorAll('button')[0];
+    const event = { button: 0, pointerId: 4, preventDefault: () => undefined };
+    button.dispatch('pointerdown', event);
+    button.dispatch('pointerup', event);
+    assert.deepStrictEqual(JSON.parse(JSON.stringify(p.messages.slice(-2))), [
+      { type: 'input', action: 'key', key: 'OK', pressed: true },
+      { type: 'input', action: 'key', key: 'OK', pressed: false },
+    ]);
+    // The only physical key handler closes the details popover on Escape and posts nothing.
     assert.strictEqual(html.match(/keydown/g)?.length, 1);
     assert.ok(html.includes("window.addEventListener('keydown', function (event) {\n    if (event.key === 'Escape' && detailsOpen()) setDetails(false, true);"));
   });

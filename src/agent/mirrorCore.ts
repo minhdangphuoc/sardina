@@ -1027,10 +1027,19 @@ export function mirrorHtml(nonce: string, device: string): string {
   #screen, #video { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
   #stage.control { cursor: crosshair; touch-action: none; }
   #screen.hidden, #video.hidden { display: none; }
+  #keypad { flex: none; width: min(420px, calc(100% - 16px)); margin: 0 auto; padding: 8px 0; display: flex; flex-direction: column; gap: 5px; }
+  .keypad-row { display: grid; gap: 5px; }
+  .keypad-key, .keypad-space { min-width: 0; height: 30px; }
+  .keypad-key { border: 1px solid var(--vscode-button-border, var(--vscode-panel-border)); border-radius: 4px; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); font: 600 12px var(--vscode-font-family); cursor: pointer; touch-action: none; }
+  .keypad-key:hover:not(:disabled) { background: var(--vscode-button-secondaryHoverBackground); }
+  .keypad-key.primary { background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+  .keypad-key.call { color: var(--vscode-testing-iconPassed); }
+  .keypad-key:disabled { opacity: 0.45; cursor: default; }
 </style>
 </head>
 <body>
 <div id="stage"><img id="screen" alt="Device screen" draggable="false"><canvas id="video" class="hidden" aria-label="Device screen"></canvas></div>
+<div id="keypad" aria-label="Device keypad" hidden></div>
 <div id="strip" role="status" aria-live="polite" title="">
   <span id="dot"></span>
   <span id="label">Connecting…</span>
@@ -1054,6 +1063,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   var img = document.getElementById('screen');
   var canvas = document.getElementById('video');
   var stage = document.getElementById('stage');
+  var keypadEl = document.getElementById('keypad');
   var paint = canvas.getContext('2d');
   var stripEl = document.getElementById('strip');
   var dotEl = document.getElementById('dot');
@@ -1081,6 +1091,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   var control = false;
   var liveContacts = false;
   var pointer = null;
+  var keypadHeld = null;
   var shownUrl = null;
   var loadingUrl = null;
   var decoder = null;
@@ -1292,6 +1303,59 @@ export function mirrorHtml(nonce: string, device: string): string {
     if (held && held.live) postContact('up', held);
     pointer = null;
   }
+  function postKey(key, pressed) {
+    vscode.postMessage({ type: 'input', action: 'key', key: key, pressed: pressed });
+  }
+  function cancelKey() {
+    var held = keypadHeld;
+    if (held) postKey(held.key, false);
+    keypadHeld = null;
+  }
+  function renderKeypad(layout) {
+    while (keypadEl.firstChild) keypadEl.removeChild(keypadEl.firstChild);
+    if (!layout || !Array.isArray(layout.rows)) { keypadEl.hidden = true; return; }
+    layout.rows.forEach(function (cells) {
+      if (!Array.isArray(cells) || cells.length === 0) return;
+      var row = document.createElement('div');
+      row.className = 'keypad-row';
+      row.style.gridTemplateColumns = 'repeat(' + cells.length + ', minmax(0, 1fr))';
+      cells.forEach(function (cell) {
+        if (!cell) {
+          var space = document.createElement('span');
+          space.className = 'keypad-space';
+          row.appendChild(space);
+          return;
+        }
+        var key = cell.key;
+        var keyButton = document.createElement('button');
+        keyButton.type = 'button';
+        keyButton.className = 'keypad-key' + (cell.style ? ' ' + cell.style : '');
+        keyButton.textContent = cell.label;
+        keyButton.setAttribute('aria-label', key);
+        keyButton.disabled = !control;
+        keyButton.addEventListener('pointerdown', function (event) {
+          if (keypadHeld || !control || !document.hasFocus() || event.button !== 0) return;
+          keypadHeld = { key: key, id: event.pointerId };
+          try { keyButton.setPointerCapture(event.pointerId); } catch (e) { keypadHeld = null; return; }
+          postKey(key, true);
+          event.preventDefault();
+        });
+        function release(event) {
+          if (!keypadHeld || keypadHeld.id !== event.pointerId || keypadHeld.key !== key) return;
+          postKey(key, false);
+          keypadHeld = null;
+          event.preventDefault();
+        }
+        keyButton.addEventListener('pointerup', release);
+        keyButton.addEventListener('pointercancel', release);
+        keyButton.addEventListener('lostpointercapture', release);
+        keyButton.addEventListener('contextmenu', function (event) { event.preventDefault(); });
+        row.appendChild(keyButton);
+      });
+      keypadEl.appendChild(row);
+    });
+    keypadEl.hidden = keypadEl.childElementCount === 0;
+  }
   stage.addEventListener('pointerdown', function (event) {
     if (pointer || !control || !document.hasFocus() || event.button !== 0 || !displayedFrame || !displayedScreen) return;
     var p = point(event, surface().getBoundingClientRect());
@@ -1340,7 +1404,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   stage.addEventListener('lostpointercapture', cancelPointer);
   stage.addEventListener('contextmenu', function (event) { if (control) event.preventDefault(); });
   window.addEventListener('focus', function () { vscode.postMessage({ type: 'focus', focused: true }); });
-  window.addEventListener('blur', function () { cancelPointer(); vscode.postMessage({ type: 'focus', focused: false }); });
+  window.addEventListener('blur', function () { cancelPointer(); cancelKey(); vscode.postMessage({ type: 'focus', focused: false }); });
   window.addEventListener('message', function (event) {
     var m = event.data;
     if (!m || typeof m !== 'object') return;
@@ -1361,12 +1425,17 @@ export function mirrorHtml(nonce: string, device: string): string {
     } else if (m.type === 'reset') {
       closeDecoder(true);
       cancelPointer();
+      cancelKey();
     } else if (m.type === 'control') {
       control = m.enabled === true;
       liveContacts = m.liveContacts === true;
-      if (!control) cancelPointer();
+      if (!control) { cancelPointer(); cancelKey(); }
       stage.classList.toggle('control', control);
+      Array.prototype.forEach.call(keypadEl.querySelectorAll('button'), function (keyButton) { keyButton.disabled = !control; });
       renderControl();
+    } else if (m.type === 'keypad') {
+      cancelKey();
+      renderKeypad(m.layout);
     } else if (m.type === 'state') {
       var s = m.strip;
       if (s && typeof s === 'object' && typeof s.label === 'string') {

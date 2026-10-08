@@ -4,6 +4,8 @@
  * frame's integer screen coordinates.
  */
 
+import { isKeypadKey, type KeypadKey } from './keypadLayoutCore';
+
 export const MIRROR_INPUT_MIN_AGENT_VERSION = '1.7.0';
 export const MIRROR_CONTACT_INPUT_MIN_AGENT_VERSION = '1.9.0';
 export const MIRROR_INPUT_TIMING = { activeIntervalMs: 1000 };
@@ -23,7 +25,8 @@ export type MirrorInput =
   | { type: 'swipe'; x1: number; y1: number; x2: number; y2: number; duration: number }
   | { type: 'down'; x: number; y: number }
   | { type: 'move'; x: number; y: number }
-  | { type: 'up' };
+  | { type: 'up' }
+  | { type: 'key'; key: KeypadKey; pressed: boolean };
 
 export type WebviewGesture =
   | { type: 'tap'; frame: number; screen: [number, number]; x: number; y: number }
@@ -32,9 +35,19 @@ export type WebviewGesture =
   | { type: 'move'; frame: number; screen: [number, number]; x: number; y: number }
   | { type: 'up'; frame: number; screen: [number, number] };
 
+export interface WebviewKey {
+  type: 'key';
+  key: KeypadKey;
+  pressed: boolean;
+}
+
 /** Live contacts are opt-in so extension 0.1.8 remains compatible with agents 1.7/1.8. */
 export function supportsLiveContacts(capabilities: readonly string[] | undefined): boolean {
   return capabilities?.includes('down') === true && capabilities.includes('move') && capabilities.includes('up');
+}
+
+export function supportsKeypad(capabilities: readonly string[] | undefined): boolean {
+  return capabilities?.includes('key') === true;
 }
 
 /** The stream/status settings fields enable input only as one complete, capability-gated pair. */
@@ -81,6 +94,16 @@ export function parseWebviewGesture(message: unknown): WebviewGesture | undefine
     };
   }
   return undefined;
+}
+
+/** Strictly parses one pointer-generated keypad event; physical keyboard events never use this path. */
+export function parseWebviewKey(message: unknown): WebviewKey | undefined {
+  if (typeof message !== 'object' || message === null || Array.isArray(message)) return undefined;
+  const o = message as Record<string, unknown>;
+  return exactKeys(o, ['type', 'action', 'key', 'pressed']) && o.type === 'input' && o.action === 'key'
+    && isKeypadKey(o.key) && typeof o.pressed === 'boolean'
+    ? { type: 'key', key: o.key, pressed: o.pressed }
+    : undefined;
 }
 
 /** Strict focus signal parser; false is never inferred from malformed data. */

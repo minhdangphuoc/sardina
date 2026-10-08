@@ -12,7 +12,9 @@ import {
   mapGesture,
   parseWebviewFocus,
   parseWebviewGesture,
+  parseWebviewKey,
   phoneInputAccepted,
+  supportsKeypad,
   supportsLiveContacts,
 } from '../../../src/agent/mirrorInput';
 
@@ -71,6 +73,19 @@ describe('mirrorInput webview validation and mapping', () => {
     assert.strictEqual(supportsLiveContacts(['tap', 'swipe']), false);
     assert.strictEqual(supportsLiveContacts(['tap', 'swipe', 'down', 'move']), false);
     assert.strictEqual(supportsLiveContacts(['tap', 'swipe', 'down', 'move', 'up']), true);
+  });
+
+  it('accepts only whitelisted keypad press and release messages', () => {
+    assert.deepStrictEqual(parseWebviewKey({ type: 'input', action: 'key', key: 'OK', pressed: true }), {
+      type: 'key', key: 'OK', pressed: true,
+    });
+    assert.deepStrictEqual(parseWebviewKey({ type: 'input', action: 'key', key: '#', pressed: false }), {
+      type: 'key', key: '#', pressed: false,
+    });
+    assert.strictEqual(parseWebviewKey({ type: 'input', action: 'key', key: 'POWER', pressed: true }), undefined);
+    assert.strictEqual(parseWebviewKey({ type: 'input', action: 'key', key: '1', pressed: true, repeat: true }), undefined);
+    assert.strictEqual(supportsKeypad(['tap', 'key']), true);
+    assert.strictEqual(supportsKeypad(['tap', 'swipe']), false);
   });
 
   it('wires live contacts into the page while retaining the release-time fallback', () => {
@@ -137,6 +152,7 @@ describe('mirrorInput webview validation and mapping', () => {
     assert.strictEqual(inputLine({ type: 'down', x: 2, y: 3 }), '{"input":{"type":"down","x":2,"y":3}}\n');
     assert.strictEqual(inputLine({ type: 'move', x: 4, y: 5 }), '{"input":{"type":"move","x":4,"y":5}}\n');
     assert.strictEqual(inputLine({ type: 'up' }), '{"input":{"type":"up"}}\n');
+    assert.strictEqual(inputLine({ type: 'key', key: 'F23', pressed: true }), '{"input":{"type":"key","key":"F23","pressed":true}}\n');
   });
 });
 
