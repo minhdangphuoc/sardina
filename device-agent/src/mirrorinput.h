@@ -23,6 +23,7 @@ public:
     bool available() const { return m_fd >= 0; }
     QString error() const { return m_error; }
     bool busy() const { return m_down; }
+    bool liveContact() const { return m_down && m_liveContact; }
 
     void setScreen(const QSize &size, bool nativeCoordinates)
     {
@@ -50,7 +51,7 @@ private slots:
 
 private:
     bool openTouchscreen();
-    bool begin(const QPoint &point);
+    bool begin(const QPoint &point, bool live);
     bool move(const QPoint &point);
     bool end();
     bool writePosition(const QPoint &point, bool down, bool up);
@@ -85,6 +86,7 @@ private:
     int m_selectedSlot;
     int m_trackingId;
     bool m_down;
+    bool m_liveContact;
     QPoint m_lastPoint;
     QPoint m_from;
     QPoint m_to;

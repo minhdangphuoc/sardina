@@ -98,6 +98,7 @@ MirrorInput::MirrorInput(QObject *parent)
     , m_selectedSlot(-1)
     , m_trackingId(1)
     , m_down(false)
+    , m_liveContact(false)
     , m_durationMs(0)
     , m_step(0)
     , m_steps(0)
@@ -296,13 +297,12 @@ bool MirrorInput::writePosition(const QPoint &point, bool down, bool up)
         events << inputEvent(EV_ABS, ABS_MT_POSITION_X, p.x())
                << inputEvent(EV_ABS, ABS_MT_POSITION_Y, p.y());
     }
-    if (m_absX && m_absY) {
-        // Some stacks use the legacy axes for the primary contact even on an MT device.
+    if (!m_multi && m_absX && m_absY) {
         const int legacyX = scaleAxis(panel.x(), m_screen.width() - 1, m_absXMin, m_absXMax);
         const int legacyY = scaleAxis(panel.y(), m_screen.height() - 1, m_absYMin, m_absYMax);
         events << inputEvent(EV_ABS, ABS_X, legacyX) << inputEvent(EV_ABS, ABS_Y, legacyY);
     }
-    if (m_btnTouch && down) {
+    if (!m_multi && m_btnTouch && down) {
         events << inputEvent(EV_KEY, BTN_TOUCH, 1);
     }
     if (m_multi && !m_slot) {
@@ -359,7 +359,7 @@ bool MirrorInput::releaseContact()
         }
         events << inputEvent(EV_ABS, ABS_MT_TRACKING_ID, -1);
     }
-    if (m_btnTouch) {
+    if (!m_multi && m_btnTouch) {
         events << inputEvent(EV_KEY, BTN_TOUCH, 0);
     }
     if (m_multi && !m_slot) {
@@ -376,13 +376,14 @@ bool MirrorInput::releaseContact()
     return true;
 }
 
-bool MirrorInput::begin(const QPoint &point)
+bool MirrorInput::begin(const QPoint &point, bool live)
 {
     if (m_down || !chooseSlot() || !writePosition(point, true, false)) {
         m_selectedSlot = -1;
         return false;
     }
     m_down = true;
+    m_liveContact = live;
     return true;
 }
 
@@ -400,6 +401,7 @@ bool MirrorInput::end()
     // mapping failure during a swipe must not leave BTN_TOUCH/tracking id held down.
     const bool ok = releaseContact();
     m_down = false;
+    m_liveContact = false;
     return ok;
 }
 
@@ -413,7 +415,7 @@ bool MirrorInput::tap(const QPoint &point)
     m_durationMs = 40;
     m_step = 0;
     m_steps = 1;
-    if (!begin(point)) {
+    if (!begin(point, false)) {
         return false;
     }
     m_timer.start(m_durationMs);
@@ -423,16 +425,19 @@ bool MirrorInput::tap(const QPoint &point)
 bool MirrorInput::contactDown(const QPoint &point)
 {
     m_timer.stop();
-    return begin(point);
+    return begin(point, true);
 }
 
 bool MirrorInput::contactMove(const QPoint &point)
 {
-    return move(point);
+    return liveContact() && move(point);
 }
 
 bool MirrorInput::contactUp()
 {
+    if (!liveContact()) {
+        return true;
+    }
     m_timer.stop();
     return end();
 }
@@ -447,7 +452,7 @@ bool MirrorInput::swipe(const QPoint &from, const QPoint &to, int durationMs)
     m_durationMs = durationMs;
     m_step = 0;
     m_steps = qMax(1, durationMs / SWIPE_INTERVAL_MS);
-    if (!begin(from)) {
+    if (!begin(from, false)) {
         return false;
     }
     m_timer.start(qMax(1, durationMs / m_steps));
