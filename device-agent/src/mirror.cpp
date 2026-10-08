@@ -120,7 +120,6 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
     , m_leaseSeconds(leaseSeconds)
     , m_indicator(indicator)
     , m_indicated(false)
-    , m_unacked(0)
     , m_lastImageFrame(0)
     , m_lastAcked(0)
     , m_settings(settings)
@@ -443,10 +442,11 @@ void MirrorStream::handleUpstreamLine(const QByteArray &line)
         const double d = ack.toDouble();
         if (d >= 1 && d <= static_cast<double>(m_lastImageFrame) && d == static_cast<qint64>(d)) {
             const qint64 n = static_cast<qint64>(d);
-            if (n > m_lastAcked) {
+            const int acknowledgedAt = m_pendingAcks.indexOf(n);
+            if (n > m_lastAcked && acknowledgedAt >= 0) {
                 m_lastAcked = n;
-                if (m_unacked > 0) {
-                    --m_unacked;
+                for (int i = 0; i <= acknowledgedAt; ++i) {
+                    m_pendingAcks.removeFirst();
                 }
                 if (m_adapt) {
                     const auto it = m_sentAt.constFind(n);
@@ -587,7 +587,7 @@ void MirrorStream::handleInput(const QJsonObject &input)
     // Release is idempotent and fail-open: neither a full budget nor a stale screen mapping may
     // leave a contact held down.
     if (type == QLatin1String("up")) {
-        if (m_input) {
+        if (m_input && m_input->liveContact()) {
             m_input->contactUp();
         }
         return;
@@ -634,7 +634,7 @@ void MirrorStream::handleInput(const QJsonObject &input)
         return;
     }
     if (type == QLatin1String("move")) {
-        if (!m_input->busy() || !jsonInteger(input, QStringLiteral("x"), 0, 9999, &x)
+        if (!m_input->liveContact() || !jsonInteger(input, QStringLiteral("x"), 0, 9999, &x)
             || !jsonInteger(input, QStringLiteral("y"), 0, 9999, &y)) {
             return;
         }
@@ -718,7 +718,8 @@ void MirrorStream::tick()
         return;
     }
     const bool recorderBusy = m_recorder && m_recorder->pending();
-    const bool linkBusy = m_socket->bytesToWrite() > 0 || (m_encoding == MirrorEncoding::Binary && m_unacked >= m_window);
+    const bool linkBusy = m_socket->bytesToWrite() > 0
+        || (m_encoding == MirrorEncoding::Binary && m_pendingAcks.size() >= m_window);
     ++m_ticks;
     if (linkBusy) {
         ++m_linkSkips;
@@ -1062,7 +1063,7 @@ void MirrorStream::sendFrame(const QByteArray &hash, const QByteArray &data, con
         }
         writeRecord(header + adapt + "}", data);
         m_lastImageFrame = m_frame;
-        ++m_unacked;
+        m_pendingAcks.append(m_frame);
         if (m_adapt) {
             m_sentAt.insert(m_frame, m_streamClock.elapsed());
         }
@@ -1132,7 +1133,7 @@ void MirrorStream::cleanup()
 
 bool MirrorStream::linkBusy() const
 {
-    return m_socket->bytesToWrite() > 0 || m_unacked >= m_window;
+    return m_socket->bytesToWrite() > 0 || m_pendingAcks.size() >= m_window;
 }
 
 void MirrorStream::onBytesWritten()
@@ -1364,7 +1365,7 @@ void MirrorStream::sendVideoFrame(const QByteArray &data, bool key, qint64 pts, 
     }
     writeRecord(header + "}", data);
     m_lastImageFrame = m_frame;
-    ++m_unacked;
+    m_pendingAcks.append(m_frame);
     if (m_adapt) {
         m_sentAt.insert(m_frame, m_streamClock.elapsed());
     }

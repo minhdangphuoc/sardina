@@ -176,7 +176,7 @@ private:
     QPointer<StreamIndicator> m_indicator;
     bool m_indicated; // streamStarted() was called, so cleanup() owes one streamStopped()
     QByteArray m_upstream;
-    qint64 m_unacked;
+    QList<qint64> m_pendingAcks;
     qint64 m_lastImageFrame;
     qint64 m_lastAcked;
     QElapsedTimer m_captureClock;
