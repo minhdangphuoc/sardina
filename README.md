@@ -690,11 +690,13 @@ emulator. This extension includes agent **1.10.5**.
    while the mirror tab and the VS Code window have focus; switching away stops
    it at once. Only taps and one-finger swipes exist on the screen: no text or
    power button. On a phone with a hardware keypad (agent 1.10.3 or newer, for
-   example the Commodore Callback) a keypad appears under the picture; click its
-   buttons to press the phone's keys (your PC keyboard is not forwarded).
-   **Sailfish: Import Keypad Layout…** replaces its layout with a JSON file
-   (saved to `.sailfish/keypads/` in the workspace), **Sailfish: Reset Keypad
-   Layout** removes it again.
+   example the Commodore Callback) the strip shows `Keypad detected` with
+   **Create layout**: it saves a starter layout built from the phone's keys
+   (default `.sailfish/keypads/<model>.json`) and opens it. The keypad then
+   appears under the picture; click its buttons to press the phone's keys (your
+   PC keyboard is not forwarded). Saving the file reloads the keypad.
+   **Sailfish: Edit Keypad Layout** opens the file again, **Sailfish: Reset
+   Keypad Layout** forgets it (the file is kept).
    With **Show touch indicator** on in the phone's Developer agent settings, a
    circle marks where you touch: on the phone itself, or (agent 1.10.4, when
    the phone cannot show it) in the mirror. The ⓘ details show `Touch
