@@ -715,7 +715,7 @@ export class MirrorSession {
         this.touchIndicatorPath = 'mirror';
         this.touchIndicatorPathReported = true;
         this.postTouchIndicator();
-        this.send({ type: 'contact', ...contact, screen: this.screen });
+        this.send({ type: 'contact', x: contact.x, y: contact.y, down: contact.down, screen: this.screen });
         this.postState();
       },
       frame: (f) => {
