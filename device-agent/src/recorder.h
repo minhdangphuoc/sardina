@@ -61,12 +61,9 @@ private slots:
 
 private:
     explicit Recorder(QObject *parent);
-    bool connectDisplay(QString *error);
-    bool roundtrip(int timeoutMs);
     bool createBuffer(QString *error);
     void destroyBuffer();
     void fatal(const QString &error);
-    QString displayError() const;
 
     wl_display *m_display;
     wl_registry *m_registry;

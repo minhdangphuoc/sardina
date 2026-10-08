@@ -26,6 +26,7 @@ SOURCES += \
     src/touchoverlay.cpp \
     src/indicator.cpp \
     src/recorder.cpp \
+    src/waylandutil.cpp \
     src/videoencoder.cpp \
     src/settings.cpp \
     src/settingsservice.cpp \
@@ -45,6 +46,7 @@ HEADERS += \
     src/touchoverlay.h \
     src/indicator.h \
     src/recorder.h \
+    src/waylandutil.h \
     src/videoencoder.h \
     src/settings.h \
     src/settingsservice.h \

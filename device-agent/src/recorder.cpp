@@ -1,21 +1,17 @@
 #include "recorder.h"
 #include "paths.h"
+#include "waylandutil.h"
 
 #include "lipstick-recorder-client-protocol.h"
 
-#include <QElapsedTimer>
 #include <QSocketNotifier>
-#include <QStringList>
 #include <wayland-client.h>
 
 #include <cerrno>
 #include <cstdlib>
 #include <cstring>
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/mman.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <unistd.h>
 
 namespace {
@@ -48,36 +44,6 @@ bool mapFormat(int setupFormat, QImage::Format *imageFormat)
     }
 }
 
-int connectUnix(const QByteArray &path)
-{
-    sockaddr_un addr;
-    std::memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    if (path.size() >= static_cast<int>(sizeof(addr.sun_path))) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-    std::memcpy(addr.sun_path, path.constData(), static_cast<size_t>(path.size()));
-    const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (fd < 0) {
-        return -1;
-    }
-    if (::connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
-        const int saved = errno;
-        close(fd);
-        errno = saved;
-        return -1;
-    }
-    return fd;
-}
-
-void onSyncDone(void *data, wl_callback *callback, uint32_t)
-{
-    *static_cast<bool *>(data) = true;
-    wl_callback_destroy(callback);
-}
-
-const wl_callback_listener syncListener = { onSyncDone };
 
 }
 
@@ -109,14 +75,15 @@ Recorder::Recorder(QObject *parent)
 Recorder *Recorder::open(QString *error, QObject *parent)
 {
     Recorder *r = new Recorder(parent);
-    if (!r->connectDisplay(error)) {
+    r->m_display = WaylandUtil::connectDisplay(error);
+    if (!r->m_display) {
         delete r;
         return nullptr;
     }
     r->m_registry = wl_display_get_registry(r->m_display);
     wl_registry_add_listener(r->m_registry, &registryListener, r);
-    if (!r->roundtrip(OPEN_TIMEOUT_MS)) {
-        *error = QStringLiteral("no answer from the compositor: ") + r->displayError();
+    if (!WaylandUtil::roundtrip(r->m_display, OPEN_TIMEOUT_MS)) {
+        *error = QStringLiteral("no answer from the compositor: ") + WaylandUtil::displayError(r->m_display);
         delete r;
         return nullptr;
     }
@@ -129,10 +96,10 @@ Recorder *Recorder::open(QString *error, QObject *parent)
     r->m_recorder = lipstick_recorder_manager_create_recorder(r->m_manager, r->m_output);
     lipstick_recorder_add_listener(r->m_recorder, &recorderListener, r);
     // Also where a refused bind shows: the compositor answers it with a protocol error.
-    if (!r->roundtrip(OPEN_TIMEOUT_MS) || r->m_width <= 0) {
+    if (!WaylandUtil::roundtrip(r->m_display, OPEN_TIMEOUT_MS) || r->m_width <= 0) {
         *error = r->m_width <= 0 && wl_display_get_error(r->m_display) == 0
             ? QStringLiteral("the recorder sent no setup")
-            : QStringLiteral("the compositor refused the recorder: ") + r->displayError();
+            : QStringLiteral("the compositor refused the recorder: ") + WaylandUtil::displayError(r->m_display);
         delete r;
         return nullptr;
     }
@@ -169,101 +136,6 @@ Recorder::~Recorder()
         wl_display_flush(m_display);
         wl_display_disconnect(m_display);
     }
-}
-
-// The socket is opened here rather than by wl_display_connect, so the agent needs no
-// XDG_RUNTIME_DIR: lipstick's socket is /run/display/wayland-0 (WAYLAND_DISPLAY=../../display/wayland-0
-// relative to /run/user/<uid> in lipstick's own clients).
-bool Recorder::connectDisplay(QString *error)
-{
-    QList<QByteArray> candidates;
-    const QByteArray name = qgetenv("WAYLAND_DISPLAY");
-    if (!name.isEmpty()) {
-        QByteArray dir = qgetenv("XDG_RUNTIME_DIR");
-        if (dir.isEmpty()) {
-            dir = Paths::userRuntimeDir().toLocal8Bit();
-        }
-        candidates << (name.startsWith('/') ? name : dir + '/' + name);
-    } else {
-        candidates << QByteArrayLiteral("/run/display/wayland-0") << (Paths::userRuntimeDir().toLocal8Bit() + "/wayland-0");
-    }
-    QStringList tried;
-    for (const QByteArray &path : candidates) {
-        const int fd = connectUnix(path);
-        if (fd < 0) {
-            tried << QString::fromLocal8Bit(path) + QStringLiteral(": ") + QString::fromLocal8Bit(strerror(errno));
-            continue;
-        }
-        m_display = wl_display_connect_to_fd(fd); // owns fd from here, also on failure
-        if (m_display) {
-            return true;
-        }
-        tried << QString::fromLocal8Bit(path) + QStringLiteral(": wl_display_connect_to_fd failed");
-    }
-    *error = QStringLiteral("no Wayland display (") + tried.join(QStringLiteral(", ")) + QStringLiteral(")");
-    return false;
-}
-
-// wl_display_roundtrip with a deadline, so a stuck compositor cannot hang the daemon.
-bool Recorder::roundtrip(int timeoutMs)
-{
-    bool done = false;
-    wl_callback *callback = wl_display_sync(m_display);
-    wl_callback_add_listener(callback, &syncListener, &done);
-    QElapsedTimer clock;
-    clock.start();
-    const int fd = wl_display_get_fd(m_display);
-    while (!done) {
-        if (wl_display_dispatch_pending(m_display) < 0) {
-            return false;
-        }
-        if (done) {
-            break;
-        }
-        if (wl_display_flush(m_display) < 0 && errno != EAGAIN) {
-            return false;
-        }
-        const qint64 left = timeoutMs - clock.elapsed();
-        if (left <= 0) {
-            // `done` lives on this stack: the caller deletes the connection, so the callback
-            // never fires later.
-            return false;
-        }
-        if (wl_display_prepare_read(m_display) != 0) {
-            continue; // events queued meanwhile: dispatch them first
-        }
-        pollfd p = { fd, POLLIN, 0 };
-        const int n = poll(&p, 1, static_cast<int>(left));
-        if (n <= 0) {
-            wl_display_cancel_read(m_display);
-            if (n < 0 && errno == EINTR) {
-                continue;
-            }
-            if (n == 0) {
-                continue; // the deadline check above ends the loop
-            }
-            return false;
-        }
-        if (wl_display_read_events(m_display) < 0) {
-            return false;
-        }
-    }
-    return wl_display_get_error(m_display) == 0;
-}
-
-QString Recorder::displayError() const
-{
-    const int err = wl_display_get_error(m_display);
-    if (err == 0) {
-        return QStringLiteral("timeout");
-    }
-    if (err == EPROTO) {
-        const wl_interface *iface = nullptr;
-        uint32_t id = 0;
-        const uint32_t code = wl_display_get_protocol_error(m_display, &iface, &id);
-        return QStringLiteral("protocol error %1 on %2").arg(code).arg(QLatin1String(iface ? iface->name : "?"));
-    }
-    return QString::fromLocal8Bit(strerror(err));
 }
 
 bool Recorder::createBuffer(QString *error)
@@ -331,7 +203,7 @@ bool Recorder::requestFrame(bool repaint)
         lipstick_recorder_repaint(m_recorder);
     }
     if (wl_display_flush(m_display) < 0 && errno != EAGAIN) {
-        fatal(QStringLiteral("the compositor connection failed: ") + displayError());
+        fatal(QStringLiteral("the compositor connection failed: ") + WaylandUtil::displayError(m_display));
         return false;
     }
     return true;
@@ -353,12 +225,12 @@ void Recorder::onReadable()
     }
     if (wl_display_prepare_read(m_display) == 0) {
         if (wl_display_read_events(m_display) < 0) {
-            fatal(QStringLiteral("the compositor connection closed: ") + displayError());
+            fatal(QStringLiteral("the compositor connection closed: ") + WaylandUtil::displayError(m_display));
             return;
         }
     }
     if (wl_display_dispatch_pending(m_display) < 0) {
-        fatal(QStringLiteral("the compositor connection failed: ") + displayError());
+        fatal(QStringLiteral("the compositor connection failed: ") + WaylandUtil::displayError(m_display));
         return;
     }
     wl_display_flush(m_display);

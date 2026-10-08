@@ -1,13 +1,12 @@
 #include "touchoverlay.h"
 #include "paths.h"
+#include "waylandutil.h"
 
 #include "alien-manager-client-protocol.h"
 
-#include <QElapsedTimer>
 #include <QImage>
 #include <QPainter>
 #include <QSocketNotifier>
-#include <QStringList>
 #include <wayland-client.h>
 
 #include <cerrno>
@@ -16,10 +15,7 @@
 #include <cstdio>
 #include <cstring>
 #include <fcntl.h>
-#include <poll.h>
 #include <sys/mman.h>
-#include <sys/socket.h>
-#include <sys/un.h>
 #include <unistd.h>
 
 namespace {
@@ -30,36 +26,6 @@ const int FADE_STEPS = 10;
 const int MAX_SIDE = 10000;
 const qint64 MAX_PIXELS = 16000000;
 
-int connectUnix(const QByteArray &path)
-{
-    sockaddr_un addr;
-    std::memset(&addr, 0, sizeof(addr));
-    addr.sun_family = AF_UNIX;
-    if (path.size() >= static_cast<int>(sizeof(addr.sun_path))) {
-        errno = ENAMETOOLONG;
-        return -1;
-    }
-    std::memcpy(addr.sun_path, path.constData(), static_cast<size_t>(path.size()));
-    const int fd = socket(AF_UNIX, SOCK_STREAM | SOCK_CLOEXEC, 0);
-    if (fd < 0) {
-        return -1;
-    }
-    if (::connect(fd, reinterpret_cast<sockaddr *>(&addr), sizeof(addr)) != 0) {
-        const int saved = errno;
-        close(fd);
-        errno = saved;
-        return -1;
-    }
-    return fd;
-}
-
-void onSyncDone(void *data, wl_callback *callback, uint32_t)
-{
-    *static_cast<bool *>(data) = true;
-    wl_callback_destroy(callback);
-}
-
-const wl_callback_listener syncListener = { onSyncDone };
 const wl_registry_listener registryListener = { TouchOverlay::onGlobal, TouchOverlay::onGlobalRemove };
 const alien_manager_listener managerListener = { TouchOverlay::onManagerPing };
 const alien_client_listener clientListener = { TouchOverlay::onClientOomScore };
@@ -172,13 +138,17 @@ void TouchOverlay::setContact(const QPoint &point, bool pressed)
 
 bool TouchOverlay::initialize()
 {
-    if (m_broken || !connectDisplay()) {
+    if (m_broken) {
+        return false;
+    }
+    m_display = WaylandUtil::connectDisplay(&m_error);
+    if (!m_display) {
         return false;
     }
     m_registry = wl_display_get_registry(m_display);
     wl_registry_add_listener(m_registry, &registryListener, this);
-    if (!roundtrip(OPEN_TIMEOUT_MS)) {
-        fail(QStringLiteral("no answer from the compositor: ") + displayError());
+    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS)) {
+        fail(QStringLiteral("no answer from the compositor: ") + WaylandUtil::displayError(m_display));
         return false;
     }
     if (!m_compositor || !m_shm || !m_manager) {
@@ -201,88 +171,13 @@ bool TouchOverlay::initialize()
     wl_surface_set_input_region(m_surface, empty);
     wl_region_destroy(empty);
     wl_surface_commit(m_surface);
-    if (!roundtrip(OPEN_TIMEOUT_MS) || m_surfaceSize.isEmpty() || !m_buffers[0].handle) {
+    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS) || m_surfaceSize.isEmpty() || !m_buffers[0].handle) {
         fail(m_error.isEmpty() ? QStringLiteral("the compositor did not configure the touch overlay") : m_error);
         return false;
     }
     m_notifier = new QSocketNotifier(wl_display_get_fd(m_display), QSocketNotifier::Read, this);
     connect(m_notifier, &QSocketNotifier::activated, this, &TouchOverlay::onReadable);
     return true;
-}
-
-bool TouchOverlay::connectDisplay()
-{
-    QList<QByteArray> candidates;
-    const QByteArray name = qgetenv("WAYLAND_DISPLAY");
-    if (!name.isEmpty()) {
-        QByteArray dir = qgetenv("XDG_RUNTIME_DIR");
-        if (dir.isEmpty()) {
-            dir = Paths::userRuntimeDir().toLocal8Bit();
-        }
-        candidates << (name.startsWith('/') ? name : dir + '/' + name);
-    } else {
-        candidates << QByteArrayLiteral("/run/display/wayland-0")
-                   << (Paths::userRuntimeDir().toLocal8Bit() + "/wayland-0");
-    }
-    QStringList tried;
-    for (const QByteArray &path : candidates) {
-        const int fd = connectUnix(path);
-        if (fd < 0) {
-            tried << QString::fromLocal8Bit(path) + QStringLiteral(": ") + QString::fromLocal8Bit(strerror(errno));
-            continue;
-        }
-        m_display = wl_display_connect_to_fd(fd);
-        if (m_display) {
-            return true;
-        }
-        tried << QString::fromLocal8Bit(path) + QStringLiteral(": wl_display_connect_to_fd failed");
-    }
-    m_error = QStringLiteral("no Wayland display (") + tried.join(QStringLiteral(", ")) + QStringLiteral(")");
-    return false;
-}
-
-bool TouchOverlay::roundtrip(int timeoutMs)
-{
-    bool done = false;
-    wl_callback *callback = wl_display_sync(m_display);
-    wl_callback_add_listener(callback, &syncListener, &done);
-    QElapsedTimer clock;
-    clock.start();
-    const int fd = wl_display_get_fd(m_display);
-    while (!done) {
-        if (wl_display_dispatch_pending(m_display) < 0) {
-            return false;
-        }
-        if (done) {
-            break;
-        }
-        if (wl_display_flush(m_display) < 0 && errno != EAGAIN) {
-            return false;
-        }
-        const qint64 left = timeoutMs - clock.elapsed();
-        if (left <= 0) {
-            return false;
-        }
-        if (wl_display_prepare_read(m_display) != 0) {
-            continue;
-        }
-        pollfd p = { fd, POLLIN, 0 };
-        const int n = poll(&p, 1, static_cast<int>(left));
-        if (n <= 0) {
-            wl_display_cancel_read(m_display);
-            if (n < 0 && errno == EINTR) {
-                continue;
-            }
-            if (n == 0) {
-                continue;
-            }
-            return false;
-        }
-        if (wl_display_read_events(m_display) < 0) {
-            return false;
-        }
-    }
-    return wl_display_get_error(m_display) == 0;
 }
 
 bool TouchOverlay::createBuffers()
@@ -402,7 +297,7 @@ void TouchOverlay::render()
     wl_surface_commit(m_surface);
     m_mapped = true;
     if (wl_display_flush(m_display) < 0 && errno != EAGAIN) {
-        fail(QStringLiteral("the touch overlay compositor connection failed: ") + displayError());
+        fail(QStringLiteral("the touch overlay compositor connection failed: ") + WaylandUtil::displayError(m_display));
     }
 }
 
@@ -439,12 +334,12 @@ void TouchOverlay::onReadable()
     }
     if (wl_display_prepare_read(m_display) == 0) {
         if (wl_display_read_events(m_display) < 0) {
-            fail(QStringLiteral("the touch overlay compositor connection closed: ") + displayError());
+            fail(QStringLiteral("the touch overlay compositor connection closed: ") + WaylandUtil::displayError(m_display));
             return;
         }
     }
     if (wl_display_dispatch_pending(m_display) < 0) {
-        fail(QStringLiteral("the touch overlay compositor connection failed: ") + displayError());
+        fail(QStringLiteral("the touch overlay compositor connection failed: ") + WaylandUtil::displayError(m_display));
         return;
     }
     wl_display_flush(m_display);
@@ -462,21 +357,6 @@ void TouchOverlay::fail(const QString &error)
         m_notifier->setEnabled(false);
     }
     hideSurface();
-}
-
-QString TouchOverlay::displayError() const
-{
-    const int err = m_display ? wl_display_get_error(m_display) : 0;
-    if (err == 0) {
-        return QStringLiteral("timeout");
-    }
-    if (err == EPROTO) {
-        const wl_interface *iface = nullptr;
-        uint32_t id = 0;
-        const uint32_t code = wl_display_get_protocol_error(m_display, &iface, &id);
-        return QStringLiteral("protocol error %1 on %2").arg(code).arg(QLatin1String(iface ? iface->name : "?"));
-    }
-    return QString::fromLocal8Bit(strerror(err));
 }
 
 void TouchOverlay::onGlobal(void *data, wl_registry *registry, uint32_t name, const char *interface, uint32_t version)

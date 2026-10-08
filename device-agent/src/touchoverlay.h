@@ -67,14 +67,11 @@ private:
     };
 
     bool initialize();
-    bool connectDisplay();
-    bool roundtrip(int timeoutMs);
     bool createBuffers();
     void destroyBuffers();
     void render();
     void hideSurface();
     void fail(const QString &error);
-    QString displayError() const;
     QPoint surfacePoint() const;
 
     wl_display *m_display;
