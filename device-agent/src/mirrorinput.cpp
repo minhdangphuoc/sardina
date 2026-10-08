@@ -1,6 +1,7 @@
 #include "mirrorinput.h"
 
 #include <QDir>
+#include <QFile>
 #include <QFileInfoList>
 #include <QVector>
 
@@ -72,11 +73,116 @@ struct Candidate {
     input_absinfo slotRange = {};
 };
 
+struct KeySpec {
+    const char *name;
+    int code;
+};
+
+const KeySpec KEYPAD_KEYS[] = {
+    { "0", KEY_0 }, { "1", KEY_1 }, { "2", KEY_2 }, { "3", KEY_3 }, { "4", KEY_4 }, { "5", KEY_5 },
+    { "6", KEY_6 }, { "7", KEY_7 }, { "8", KEY_8 }, { "9", KEY_9 }, { "*", KEY_NUMERIC_STAR },
+    { "#", KEY_NUMERIC_POUND }, { "OK", KEY_ENTER }, { "UP", KEY_UP }, { "DOWN", KEY_DOWN },
+    { "LEFT", KEY_LEFT }, { "RIGHT", KEY_RIGHT }, { "MENU", KEY_MENU }, { "BACK", KEY_BACK },
+    { "CALL", KEY_PHONE }, { "F21", KEY_F21 }, { "F22", KEY_F22 }, { "F23", KEY_F23 },
+};
+
+int keypadCode(const QString &name)
+{
+    for (const KeySpec &key : KEYPAD_KEYS) {
+        if (name == QLatin1String(key.name)) {
+            return key.code;
+        }
+    }
+    return -1;
+}
+
+struct KeypadCandidate {
+    int fd = -1;
+    int score = 0;
+    QString path;
+    QString name;
+    QStringList keys;
+    QSet<int> codes;
+};
+
+KeypadCandidate findKeypad()
+{
+    KeypadCandidate best;
+    const QFileInfoList entries = QDir(QStringLiteral("/dev/input"))
+                                      .entryInfoList(QStringList() << QStringLiteral("event*"), QDir::System | QDir::Files,
+                                                     QDir::Name);
+    for (const QFileInfo &entry : entries) {
+        const QByteArray path = entry.absoluteFilePath().toLocal8Bit();
+        const int fd = open(path.constData(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+        if (fd < 0) {
+            continue;
+        }
+        unsigned long evBits[(EV_CNT + sizeof(unsigned long) * CHAR_BIT - 1)
+                             / (sizeof(unsigned long) * CHAR_BIT)] = {};
+        unsigned long keyBits[(KEY_CNT + sizeof(unsigned long) * CHAR_BIT - 1)
+                              / (sizeof(unsigned long) * CHAR_BIT)] = {};
+        if (ioctl(fd, EVIOCGBIT(0, sizeof(evBits)), evBits) < 0 || !bit(evBits, EV_KEY)
+            || ioctl(fd, EVIOCGBIT(EV_KEY, sizeof(keyBits)), keyBits) < 0
+            || !bit(keyBits, KEY_NUMERIC_STAR) || !bit(keyBits, KEY_PHONE)) {
+            close(fd);
+            continue;
+        }
+        KeypadCandidate candidate;
+        candidate.fd = fd;
+        candidate.path = entry.absoluteFilePath();
+        char rawName[256] = {};
+        ioctl(fd, EVIOCGNAME(sizeof(rawName) - 1), rawName);
+        candidate.name = QString::fromLocal8Bit(rawName);
+        for (const KeySpec &key : KEYPAD_KEYS) {
+            if (bit(keyBits, key.code)) {
+                candidate.keys.append(QLatin1String(key.name));
+                candidate.codes.insert(key.code);
+            }
+        }
+        candidate.score = candidate.keys.size();
+        if (candidate.name.contains(QStringLiteral("kpd"), Qt::CaseInsensitive)
+            || candidate.name.contains(QStringLiteral("key"), Qt::CaseInsensitive)) {
+            candidate.score += 10;
+        }
+        if (candidate.score <= best.score) {
+            close(fd);
+            continue;
+        }
+        if (best.fd >= 0) {
+            close(best.fd);
+        }
+        best = candidate;
+    }
+    return best;
+}
+
+QString hardwareModel()
+{
+    QFile file(QStringLiteral("/etc/hw-release"));
+    if (!file.open(QIODevice::ReadOnly)) {
+        return QString();
+    }
+    while (!file.atEnd()) {
+        const QByteArray line = file.readLine().trimmed();
+        if (!line.startsWith("NAME=")) {
+            continue;
+        }
+        QString value = QString::fromUtf8(line.mid(5)).trimmed();
+        if (value.size() >= 2 && ((value.startsWith(QLatin1Char('"')) && value.endsWith(QLatin1Char('"')))
+                                  || (value.startsWith(QLatin1Char('\'')) && value.endsWith(QLatin1Char('\''))))) {
+            value = value.mid(1, value.size() - 2);
+        }
+        return value.left(128);
+    }
+    return QString();
+}
+
 }
 
 MirrorInput::MirrorInput(QObject *parent)
     : QObject(parent)
     , m_fd(-1)
+    , m_keyFd(-1)
     , m_nativeCoordinates(false)
     , m_multi(false)
     , m_slot(false)
@@ -99,6 +205,7 @@ MirrorInput::MirrorInput(QObject *parent)
     , m_trackingId(1)
     , m_down(false)
     , m_liveContact(false)
+    , m_keyCode(-1)
     , m_durationMs(0)
     , m_step(0)
     , m_steps(0)
@@ -106,6 +213,12 @@ MirrorInput::MirrorInput(QObject *parent)
     m_timer.setSingleShot(true);
     connect(&m_timer, &QTimer::timeout, this, &MirrorInput::advance);
     openTouchscreen();
+    openKeypad();
+    if (available()) {
+        m_error.clear();
+    } else {
+        m_error = QStringLiteral("no writable touchscreen or keypad input device");
+    }
 }
 
 MirrorInput::~MirrorInput()
@@ -114,6 +227,26 @@ MirrorInput::~MirrorInput()
     if (m_fd >= 0) {
         close(m_fd);
     }
+    if (m_keyFd >= 0) {
+        close(m_keyFd);
+    }
+}
+
+MirrorKeypadInfo MirrorInput::keypadInfo()
+{
+    KeypadCandidate keypad = findKeypad();
+    MirrorKeypadInfo info;
+    if (keypad.fd >= 0) {
+        close(keypad.fd);
+        info.model = hardwareModel();
+        info.keys = keypad.keys;
+    }
+    return info;
+}
+
+bool MirrorInput::validKeyName(const QString &key)
+{
+    return keypadCode(key) >= 0;
 }
 
 bool MirrorInput::openTouchscreen()
@@ -244,6 +377,19 @@ bool MirrorInput::openTouchscreen()
     return true;
 }
 
+bool MirrorInput::openKeypad()
+{
+    const KeypadCandidate keypad = findKeypad();
+    if (keypad.fd < 0) {
+        return false;
+    }
+    m_keyFd = keypad.fd;
+    m_keyCodes = keypad.codes;
+    fprintf(stderr, "sailfish-devagent: mirror keypad: %s (%s), %d keys\n", qPrintable(keypad.path),
+            qPrintable(keypad.name), keypad.keys.size());
+    return true;
+}
+
 int MirrorInput::scaleAxis(int value, int screenMax, int axisMin, int axisMax) const
 {
     if (screenMax <= 0) {
@@ -255,7 +401,7 @@ int MirrorInput::scaleAxis(int value, int screenMax, int axisMin, int axisMax) c
 QPoint MirrorInput::mapToPanel(const QPoint &point, bool *ok) const
 {
     *ok = false;
-    if (!available() || !m_nativeCoordinates || m_screen.width() < 1 || m_screen.height() < 1
+    if (!touchAvailable() || !m_nativeCoordinates || m_screen.width() < 1 || m_screen.height() < 1
         || point.x() < 0 || point.y() < 0
         || point.x() >= m_screen.width() || point.y() >= m_screen.height()) {
         return QPoint();
@@ -323,6 +469,13 @@ bool MirrorInput::physicalTouchDown() const
     unsigned long keys[(KEY_CNT + sizeof(unsigned long) * CHAR_BIT - 1)
                        / (sizeof(unsigned long) * CHAR_BIT)] = {};
     return m_btnTouch && ioctl(m_fd, EVIOCGKEY(sizeof(keys)), keys) >= 0 && bit(keys, BTN_TOUCH);
+}
+
+bool MirrorInput::physicalKeyDown(int code) const
+{
+    unsigned long keys[(KEY_CNT + sizeof(unsigned long) * CHAR_BIT - 1)
+                       / (sizeof(unsigned long) * CHAR_BIT)] = {};
+    return m_keyFd >= 0 && ioctl(m_keyFd, EVIOCGKEY(sizeof(keys)), keys) >= 0 && bit(keys, code);
 }
 
 bool MirrorInput::chooseSlot()
@@ -442,6 +595,43 @@ bool MirrorInput::contactUp()
     return end();
 }
 
+bool MirrorInput::keyDown(const QString &key)
+{
+    const int code = keypadCode(key);
+    if (m_keyFd < 0 || m_keyCode >= 0 || code < 0 || !m_keyCodes.contains(code) || physicalKeyDown(code)) {
+        return false;
+    }
+    QVector<input_event> events;
+    events << inputEvent(EV_KEY, static_cast<unsigned short>(code), 1) << inputEvent(EV_SYN, SYN_REPORT, 0);
+    if (!integerWrite(m_keyFd, events)) {
+        m_error = QStringLiteral("keypad write failed: ") + QString::fromLocal8Bit(strerror(errno));
+        return false;
+    }
+    m_keyCode = code;
+    return true;
+}
+
+bool MirrorInput::releaseKey()
+{
+    if (m_keyCode < 0) {
+        return true;
+    }
+    QVector<input_event> events;
+    events << inputEvent(EV_KEY, static_cast<unsigned short>(m_keyCode), 0) << inputEvent(EV_SYN, SYN_REPORT, 0);
+    if (!integerWrite(m_keyFd, events)) {
+        m_error = QStringLiteral("keypad release failed: ") + QString::fromLocal8Bit(strerror(errno));
+        return false;
+    }
+    m_keyCode = -1;
+    return true;
+}
+
+bool MirrorInput::keyUp(const QString &key)
+{
+    const int code = keypadCode(key);
+    return code >= 0 && (m_keyCode < 0 || code == m_keyCode) && releaseKey();
+}
+
 bool MirrorInput::swipe(const QPoint &from, const QPoint &to, int durationMs)
 {
     if (m_down || durationMs < 50 || durationMs > 2000) {
@@ -485,4 +675,5 @@ void MirrorInput::cancel()
     if (m_down) {
         end();
     }
+    releaseKey();
 }

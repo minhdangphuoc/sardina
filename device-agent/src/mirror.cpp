@@ -569,11 +569,9 @@ bool MirrorStream::allowKeyRequest()
     return true;
 }
 
-// Strict, fixed input vocabulary: active, tap, swipe, down, move and up. Except for immediate
-// deactivation and release, every
-// input object consumes the bounded dispatch budget before its type or fields are validated. Thus
-// unknown types (including key/power attempts) and malformed values cannot bypass the agent-side
-// rate limit. No string reaches an executable, path or shell.
+// Strict, fixed input vocabulary: active, touch gestures and whitelisted keypad keys. Except for
+// immediate deactivation and release, every input object consumes the bounded dispatch budget
+// before its fields are validated. No string reaches an executable, path or shell.
 void MirrorStream::handleInput(const QJsonObject &input)
 {
     const QString type = input.value(QStringLiteral("type")).toString();
@@ -589,6 +587,14 @@ void MirrorStream::handleInput(const QJsonObject &input)
     if (type == QLatin1String("up")) {
         if (m_input && m_input->liveContact()) {
             m_input->contactUp();
+        }
+        return;
+    }
+    const QString key = input.value(QStringLiteral("key")).toString();
+    const QJsonValue pressed = input.value(QStringLiteral("pressed"));
+    if (type == QLatin1String("key") && MirrorInput::validKeyName(key) && pressed.isBool() && !pressed.toBool()) {
+        if (m_input) {
+            m_input->keyUp(key);
         }
         return;
     }
@@ -619,6 +625,12 @@ void MirrorStream::handleInput(const QJsonObject &input)
         return;
     }
     if (!m_inputActive || !m_input) {
+        return;
+    }
+    if (type == QLatin1String("key")) {
+        if (MirrorInput::validKeyName(key) && pressed.isBool() && pressed.toBool() && m_input->keypadAvailable()) {
+            m_input->keyDown(key);
+        }
         return;
     }
     // The injector validates against the latest captured screen too. These bounds prevent very large

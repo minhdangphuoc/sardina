@@ -3,13 +3,20 @@
 
 #include <QObject>
 #include <QPoint>
+#include <QSet>
 #include <QSize>
 #include <QString>
+#include <QStringList>
 #include <QTimer>
 
-// Injects one-finger gestures through the phone's existing evdev touchscreen. The service runs
-// as defaultuser and inherits that user's `input` group, so no new privilege is needed. The
-// device is opened without EVIOCGRAB: physical input keeps working while a remote gesture runs.
+struct MirrorKeypadInfo {
+    QString model;
+    QStringList keys;
+};
+
+// Injects one-finger gestures and whitelisted keypad events through the phone's existing evdev
+// devices. The service runs as defaultuser and inherits that user's `input` group, so no new
+// privilege is needed. Devices are opened without EVIOCGRAB: physical input keeps working.
 // Native-recorder coordinates are already in the touchscreen's fixed panel coordinate system.
 // Screenshot input is refused: Lipstick rotates saved screenshots by its top-window orientation,
 // which is not exposed by its D-Bus API, and the physical orientation sensor is not equivalent.
@@ -20,10 +27,14 @@ public:
     explicit MirrorInput(QObject *parent = nullptr);
     ~MirrorInput();
 
-    bool available() const { return m_fd >= 0; }
+    bool available() const { return m_fd >= 0 || m_keyFd >= 0; }
+    bool touchAvailable() const { return m_fd >= 0; }
+    bool keypadAvailable() const { return m_keyFd >= 0; }
     QString error() const { return m_error; }
     bool busy() const { return m_down; }
     bool liveContact() const { return m_down && m_liveContact; }
+    static MirrorKeypadInfo keypadInfo();
+    static bool validKeyName(const QString &key);
 
     void setScreen(const QSize &size, bool nativeCoordinates)
     {
@@ -38,6 +49,8 @@ public:
     bool contactDown(const QPoint &point);
     bool contactMove(const QPoint &point);
     bool contactUp();
+    bool keyDown(const QString &key);
+    bool keyUp(const QString &key);
     void cancel();
 
 signals:
@@ -51,6 +64,7 @@ private slots:
 
 private:
     bool openTouchscreen();
+    bool openKeypad();
     bool begin(const QPoint &point, bool live);
     bool move(const QPoint &point);
     bool end();
@@ -58,10 +72,13 @@ private:
     bool releaseContact();
     bool chooseSlot();
     bool physicalTouchDown() const;
+    bool physicalKeyDown(int code) const;
+    bool releaseKey();
     QPoint mapToPanel(const QPoint &point, bool *ok) const;
     int scaleAxis(int value, int screenMax, int axisMin, int axisMax) const;
 
     int m_fd;
+    int m_keyFd;
     QString m_error;
     QString m_device;
     QSize m_screen;
@@ -87,6 +104,8 @@ private:
     int m_trackingId;
     bool m_down;
     bool m_liveContact;
+    QSet<int> m_keyCodes;
+    int m_keyCode;
     QPoint m_lastPoint;
     QPoint m_from;
     QPoint m_to;
