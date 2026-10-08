@@ -3,7 +3,7 @@
   "displayName": "Sailfish OS Tools",
   "description": "Build, deploy, run and manage Sailfish OS applications from VS Code.",
   "publisher": "sailfish-tools-dev",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -761,13 +761,34 @@
     },
     "menus": {
       "commandPalette": [
-        { "command": "sailfish.agent.editKeypadLayout", "when": "sailfish.mirrorKeypad" },
-        { "command": "sailfish.agent.resetKeypadLayout", "when": "sailfish.mirrorKeypadLayout" },
-        { "command": "sailfish.monitor.restartApp", "when": "false" },
-        { "command": "sailfish.monitor.stopApp", "when": "false" },
-        { "command": "sailfish.monitor.screenshot", "when": "false" },
-        { "command": "sailfish.monitor.mirror", "when": "false" },
-        { "command": "sailfish.monitor.showLogs", "when": "false" }
+        {
+          "command": "sailfish.agent.editKeypadLayout",
+          "when": "sailfish.mirrorKeypad"
+        },
+        {
+          "command": "sailfish.agent.resetKeypadLayout",
+          "when": "sailfish.mirrorKeypadLayout"
+        },
+        {
+          "command": "sailfish.monitor.restartApp",
+          "when": "false"
+        },
+        {
+          "command": "sailfish.monitor.stopApp",
+          "when": "false"
+        },
+        {
+          "command": "sailfish.monitor.screenshot",
+          "when": "false"
+        },
+        {
+          "command": "sailfish.monitor.mirror",
+          "when": "false"
+        },
+        {
+          "command": "sailfish.monitor.showLogs",
+          "when": "false"
+        }
       ],
       "editor/title": [
         {
