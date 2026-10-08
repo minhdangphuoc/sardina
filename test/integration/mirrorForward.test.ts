@@ -555,7 +555,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
       await vscode.commands.executeCommand('sailfish.agent.mirror');
       await waitOrDump(log, () => hasStatus(log, 'video: decoding 90x200'), 10000);
       const req = requests()[0].line ?? '';
-      for (const f of ['"encoding":"vp8"', '"fps":30', '"width":720', '"bitrate":2000', '"adapt":true']) assert.ok(req.includes(f), req);
+      for (const f of ['"encoding":"vp8"', '"fps":60', '"width":720', '"bitrate":2000', '"adapt":true']) assert.ok(req.includes(f), req);
       assert.ok(hasStatus(log, 'the panel decodes vp8'));
       assert.ok(hasStatus(log, 'live (ssh), vp8'));
       await waitFor(() => acks().includes(10), 5000);
@@ -762,6 +762,27 @@ suite('screen mirror over the SSH forward (F6)', () => {
       await waitFor(() => posts.of('state').some((m) => m.strip?.label === 'Connecting… mirroring is restarting'), 8000);
       await waitFor(() => requests().length === 2, 8000);
       await waitFor(() => posts.of('state').some((m) => m.state === 'live' && m.details?.some((r) => r.label === 'Idle mode' && r.value === 'off')), 8000);
+      assert.ok(posts.of('state').every((m) => m.state !== 'disconnected'), 'no disconnect is shown');
+      await sleep(1500);
+      assert.strictEqual(requests().length, 2, 'reconnected exactly once');
+    });
+  });
+
+  test('I31 frame rate limit changed on the phone: the stream restarts once; details show the limit, stages and captured rate', async function () {
+    this.timeout(40000);
+    const posts = capturePosts();
+    const row = (label: string, value: string) => (m: { details?: { label: string; value: string }[] }) =>
+      m.details?.some((r) => r.label === label && r.value === value) ?? false;
+    await withScenario('agent-forward-fps-restart', async () => {
+      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await waitLive();
+      assert.ok((requests()[0].line ?? '').includes('"fps":60'), requests()[0].line);
+      await waitFor(() => posts.of('state').some(row('Frame rate limit', '30')), 8000);
+      await waitFor(() => posts.of('state').some(row('Stages', 'hold 2 · capture 12 · readback 25 · convert 1 · encode 1 · send 0 ms')), 8000);
+      await waitFor(() => posts.of('state').some((m) => m.strip?.label === 'Connecting… mirroring is restarting'), 8000);
+      await waitFor(() => requests().length === 2, 8000);
+      await waitFor(() => posts.of('state').some((m) => m.state === 'live' && row('Frame rate limit', '60')(m)), 8000);
+      await waitFor(() => posts.of('state').some((m) => m.details?.some((r) => r.label === 'Captured' && / fps$/.test(r.value))), 8000);
       assert.ok(posts.of('state').every((m) => m.state !== 'disconnected'), 'no disconnect is shown');
       await sleep(1500);
       assert.strictEqual(requests().length, 2, 'reconnected exactly once');

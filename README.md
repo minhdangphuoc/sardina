@@ -92,7 +92,8 @@ see [Part 3](#part-3-install-vs-code-and-this-extension) to build it.
   ⓘ **Mirror details** popover show the transport, codec and frame rate. With agent 1.7.0 or newer you
   can click to tap and drag to swipe while the panel has focus.
 - The phone's own **Settings → System → Developer agent** page decides what
-  VS Code may do (screen view, control, logs, indicator); it wins over VS Code.
+  VS Code may do (screen view, control, logs, indicator, the mirror's idle mode
+  and frame rate limit of 30 or 60 fps); it wins over VS Code.
 - The agent is installed once, with your consent and the developer-mode
   password, and works only while Developer Mode is on. See
   [How the device agent stays safe](#how-the-device-agent-stays-safe).
@@ -659,7 +660,7 @@ clear message (gpg matches names as substrings, so `Jane Doe` also matches
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.10.6**.
+emulator. This extension includes agent **1.10.7**.
 
 1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
    on.
@@ -758,7 +759,11 @@ Only one warning shows at a time, in the order above. The ⓘ button opens
 **Mirror details** (close it with ×, Escape or a click outside): Transport
 (`SSH forward` or `SDK connection`), Video or Image (codec, size, target kbit/s
 or JPEG quality, and why it was reduced), Received kbit/s, Frame rate, Latency
-(phone to your screen), Phone time (per frame), Capture, Dropped and Control.
+(phone to your screen), Phone time (per frame), Stages and Captured (agent
+1.10.7: where the phone spends each captured frame, e.g. `hold 0 · capture 12 ·
+readback 25 · convert 6 · encode 9 · send 1 ms`, and how many new screen
+pictures per second it captured), Capture, Dropped, Idle mode, Frame rate limit
+and Control.
 **Copy details** puts them on the clipboard for a bug report.
 
 **The lease.** While the tab is visible, VS Code renews the mirror every 20

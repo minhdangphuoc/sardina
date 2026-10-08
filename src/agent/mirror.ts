@@ -36,6 +36,8 @@ import {
   controlState,
   hasReasonText,
   MIRROR_RESTART_REASON,
+  isRestartReason,
+  StageMeter,
   agentSupportsPhoneState,
   VIDEO_CODEC,
   type MirrorFormat,
@@ -156,6 +158,10 @@ export class MirrorSession {
   private controlOffReason: string | undefined;
   private leaseActive = false;
   private frameMs: number | undefined;
+  /** Stage times of captured VP8 frames (agent 1.10.7). */
+  private stageMeter = new StageMeter();
+  /** The phone's frame rate limit from the `settings` message (agent 1.10.7). */
+  private phoneMaxFps: number | undefined;
   /** The last image's size and quality, for the strip. */
   private image: { width: number; height: number; quality?: number } | undefined;
   /** The stream's requested quality (status line): the quality of frames whose header has no `q`. */
@@ -548,6 +554,8 @@ export class MirrorSession {
     this.inputCaptureSafe = false;
     this.phoneTouchIndicator = false;
     this.phoneIdleMode = undefined;
+    this.phoneMaxFps = undefined;
+    this.stageMeter.clear();
     this.touchIndicatorPath = 'off';
     this.touchIndicatorPathReported = false;
     this.inputFocus.update(false);
@@ -722,6 +730,7 @@ export class MirrorSession {
         }
         if (s.touchIndicator !== undefined) this.phoneTouchIndicator = s.touchIndicator;
         if (s.idleMode !== undefined) this.phoneIdleMode = s.idleMode;
+        if (s.maxFps !== undefined) this.phoneMaxFps = s.maxFps;
         if (s.touchIndicatorPath !== undefined) {
           this.touchIndicatorPath = s.touchIndicatorPath;
           this.touchIndicatorPathReported = true;
@@ -769,7 +778,7 @@ export class MirrorSession {
       fatal: (error) => {
         // The strip words the phone's own refusals itself (`REASON_TEXT`); other reasons get the plain-language text.
         if (!live()) return;
-        if (error === MIRROR_RESTART_REASON) this.restartReconnect = true;
+        if (isRestartReason(error)) this.restartReconnect = true;
         this.fail(hasReasonText(error) ? error : describeAgentRefusal(error));
       },
       corrupt: () => {
@@ -856,6 +865,7 @@ export class MirrorSession {
       if (f.capture) this.log(`capture path: ${f.capture}`);
     }
     if (f.cms !== undefined || f.ems !== undefined) this.frameMs = (f.cms ?? 0) + (f.ems ?? 0);
+    if (video && f.stages) this.stageMeter.add(now, f.stages);
     const offset = this.clock.offsetMs;
     if (this.transportKind === 'ssh' && offset !== undefined) {
       this.latencies.push({ at: now, ms: latencyMs(f.ts, now, offset) });
@@ -1015,6 +1025,9 @@ export class MirrorSession {
       softError: live ? this.softError : undefined,
       fps: live ? this.meter.rate(now) : undefined,
       idleMode: live ? this.phoneIdleMode : undefined,
+      maxFps: live ? this.phoneMaxFps : undefined,
+      stages: live ? this.stageMeter.stages(now) : undefined,
+      capturedFps: live ? this.stageMeter.fps(now) : undefined,
       idle: live && this.phoneIdleMode !== false && screenIdle(this.lastChangeAt, this.lastSameAt, now),
       latencyMs: live ? this.medianLatency(now) : undefined,
       frameMs: live ? this.frameMs : undefined,

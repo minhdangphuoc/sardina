@@ -106,7 +106,7 @@ describe('mirror video: wire format (agent 1.6.0)', () => {
   it('the vp8 request carries fps, width, bitrate and adapt; the JPEG request is unchanged', () => {
     assert.strictEqual(
       mirrorRequestLine({ ...MIRROR_VIDEO_DEFAULTS, lease: 60, adapt: true }, 'vp8'),
-      '{"cmd":"mirror","fps":30,"width":720,"quality":60,"encoding":"vp8","bitrate":2000,"lease":60,"adapt":true}\n',
+      '{"cmd":"mirror","fps":60,"width":720,"quality":60,"encoding":"vp8","bitrate":2000,"lease":60,"adapt":true}\n',
     );
     // A bitrate never leaks into the JPEG request.
     assert.strictEqual(
@@ -313,6 +313,12 @@ describe('mirror video: adaptive control', () => {
   it('a good link at 30 fps stays at the top (the round trip is judged against the 4-frame window)', () => {
     // 60 ms round trips are 1.8 frame intervals, but under 1.2 x (33 ms x 4 / 2).
     const d = run(new AdaptiveQuality(START), 20_000, () => ({ rtt: 60, ems: 12 }));
+    assert.deepStrictEqual(d, []);
+  });
+
+  it('60 fps (agent 1.10.7): the encode time is judged against 30 fps, the round trip against the 8-frame window', () => {
+    // 25 ms per frame does not fit 16.7 ms, but the agent's pacer takes the rate down first: the width stays.
+    const d = run(new AdaptiveQuality({ ...START, fps: 60, window: 8 }), 30_000, () => ({ rtt: 60, ems: 25, cvms: 6 }));
     assert.deepStrictEqual(d, []);
   });
 

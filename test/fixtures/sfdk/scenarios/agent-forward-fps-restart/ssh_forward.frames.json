@@ -1,0 +1,296 @@
+[
+ {
+  "status": {
+   "ok": true,
+   "stream": "mirror",
+   "fps": 4,
+   "width": 360,
+   "quality": 60,
+   "encoding": "binary",
+   "window": 2,
+   "lease": "$request",
+   "input": "$request",
+   "inputLease": 3
+  },
+  "connection": 1
+ },
+ {
+  "settings": {
+   "settings": {
+    "control": true,
+    "touchIndicator": false,
+    "touchIndicatorPath": "off",
+    "idleMode": true,
+    "maxFps": 30
+   },
+   "input": true,
+   "inputLease": 3
+  },
+  "connection": 1
+ },
+ {
+  "header": {
+   "frame": 1,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    1,
+    1
+   ],
+   "format": "png",
+   "bytes": 69,
+   "cms": 12,
+   "ems": 3,
+   "capture": "native"
+  },
+  "payload": "png1x1",
+  "connection": 1
+ },
+ {
+  "header": {
+   "frame": 1,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 33,
+   "bytes": 939,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000,
+   "hms": 2,
+   "wms": 12,
+   "rbms": 25,
+   "cnms": 1,
+   "enms": 1,
+   "sdms": 0
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI69zIs779APSAiYmpbgjuVog6rfdL+zYIdwDugP9Z6gHnz/Y5/ZX9q8Nd01ewPaU3RAbjCz9QnOZ+S/sB7ANshCZgBFD2/Sx/w9WQMt9759L3iDG5OEIVa+tlaQVAHmvrUzxCD3Xa+Ohrz5NnZtzwvqvjLdVHq+e00ayp/K0ZDHcEF8gndZiKmc1Fb3keqso6kNaO/1OAEUTMAl5xWYuSVtZ9hgAjAAChAQDEAAD+9S5hFmtwNlEC3rmkO9gHcjpH7WiKpnoR/X+zkYpnFJlYAPz94lUv8EyN6wro82lspvoJ8p0T4Xr5wUdzimoaTVMRs7t3c+6MmziB0qMI7GueSrZ4oeqcKrlG869d9SYLwsCtPEftzqJkzQ5XIid6HJIofyV0ynvD2XZS06Fg+A7/EuwQO3L7Ic8V92dbK4J7HK9uineheDTPgzTVTtLbLPn5hvqQszqX/+RdtCfBA7qObh/pYOtL/pHyNFhu/GagHO34UiHzdDWAfSdJoA1c1LDQ2kfzQsrlGpTwEmwXhs7UT2Xd38VSt+B6TlfHjf/5Xk8mKfNIhzdzjDx+GuafVHtvWzjpGNK2atnD9MD0HUL9/9QnB+xVwtyJotz90PDJ//dJQQtepvjiB/Qhmprk1sRRJfH6hd3Ot/c075C8U+0AIA3kPf3uEbV8ieU9P41vc2ybCZUB/x0YUXpbw7My/8ooVXnom7/ndq76QPxOvbXlcOCcfq5/ivErFavSx3G9HRz6L0bvvZgD9Bn72nj/bf+J1V7v4YauzcvaHyNoYuZURbHU7dpy4uQQuElgWl98/eQ0JEHR9a/0L14Q2qC7jqlrAP2PAZQy2zhtLl+h2iG30WHmUX0u2RJIghKjKx5uL+AfebOeG0yYw8eQwcLgT3ZPsoiDRQ3oBqt7j3wGELdAP8PTUCyfHSgGuJ5mph++fJwnn0a5gYFUaZzLYc8Jz7NRCJpJMEHdaMzHqMJhfC1XYgk+s3gX7FnpN2I+X2W+f5b9Pdo03GAsaj8jmv9w/mzXuo7c98IXT1BjSotI71qmg7AfUMLPhyVtw/XY88ICw/0Gdrm3HcP2lgXKUnHJeP7bofXqQYD8Bw9kLAgm1OGJt3mhlYiChwhaM+LMtPR2okl/u7e1iRT5D7GjDn/FgZxczO6TjeAm32ZVW07u05njN1ztDkej2gHlpBOj+egCYwoW0/SUCiE+h5wJinvCXrAAQRUA",
+  "afterMs": 100,
+  "connection": 1
+ },
+ {
+  "header": {
+   "ok": false,
+   "error": "restarting: frame rate limit changed on the phone"
+  },
+  "afterMs": 1500,
+  "connection": 1
+ },
+ {
+  "status": {
+   "ok": true,
+   "stream": "mirror",
+   "fps": 4,
+   "width": 360,
+   "quality": 60,
+   "encoding": "binary",
+   "window": 2,
+   "lease": "$request",
+   "input": "$request",
+   "inputLease": 3
+  },
+  "connection": 2
+ },
+ {
+  "settings": {
+   "settings": {
+    "control": true,
+    "touchIndicator": false,
+    "touchIndicatorPath": "off",
+    "idleMode": true,
+    "maxFps": 60
+   },
+   "input": true,
+   "inputLease": 3
+  },
+  "connection": 2
+ },
+ {
+  "header": {
+   "frame": 1,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    1,
+    1
+   ],
+   "format": "png",
+   "bytes": 69,
+   "cms": 12,
+   "ems": 3,
+   "capture": "native"
+  },
+  "payload": "png1x1",
+  "connection": 2
+ },
+ {
+  "header": {
+   "frame": 1,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 33,
+   "bytes": 939,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000,
+   "hms": 2,
+   "wms": 12,
+   "rbms": 25,
+   "cnms": 1,
+   "enms": 1,
+   "sdms": 0
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI69zIs779APSAiYmpbgjuVog6rfdL+zYIdwDugP9Z6gHnz/Y5/ZX9q8Nd01ewPaU3RAbjCz9QnOZ+S/sB7ANshCZgBFD2/Sx/w9WQMt9759L3iDG5OEIVa+tlaQVAHmvrUzxCD3Xa+Ohrz5NnZtzwvqvjLdVHq+e00ayp/K0ZDHcEF8gndZiKmc1Fb3keqso6kNaO/1OAEUTMAl5xWYuSVtZ9hgAjAAChAQDEAAD+9S5hFmtwNlEC3rmkO9gHcjpH7WiKpnoR/X+zkYpnFJlYAPz94lUv8EyN6wro82lspvoJ8p0T4Xr5wUdzimoaTVMRs7t3c+6MmziB0qMI7GueSrZ4oeqcKrlG869d9SYLwsCtPEftzqJkzQ5XIid6HJIofyV0ynvD2XZS06Fg+A7/EuwQO3L7Ic8V92dbK4J7HK9uineheDTPgzTVTtLbLPn5hvqQszqX/+RdtCfBA7qObh/pYOtL/pHyNFhu/GagHO34UiHzdDWAfSdJoA1c1LDQ2kfzQsrlGpTwEmwXhs7UT2Xd38VSt+B6TlfHjf/5Xk8mKfNIhzdzjDx+GuafVHtvWzjpGNK2atnD9MD0HUL9/9QnB+xVwtyJotz90PDJ//dJQQtepvjiB/Qhmprk1sRRJfH6hd3Ot/c075C8U+0AIA3kPf3uEbV8ieU9P41vc2ybCZUB/x0YUXpbw7My/8ooVXnom7/ndq76QPxOvbXlcOCcfq5/ivErFavSx3G9HRz6L0bvvZgD9Bn72nj/bf+J1V7v4YauzcvaHyNoYuZURbHU7dpy4uQQuElgWl98/eQ0JEHR9a/0L14Q2qC7jqlrAP2PAZQy2zhtLl+h2iG30WHmUX0u2RJIghKjKx5uL+AfebOeG0yYw8eQwcLgT3ZPsoiDRQ3oBqt7j3wGELdAP8PTUCyfHSgGuJ5mph++fJwnn0a5gYFUaZzLYc8Jz7NRCJpJMEHdaMzHqMJhfC1XYgk+s3gX7FnpN2I+X2W+f5b9Pdo03GAsaj8jmv9w/mzXuo7c98IXT1BjSotI71qmg7AfUMLPhyVtw/XY88ICw/0Gdrm3HcP2lgXKUnHJeP7bofXqQYD8Bw9kLAgm1OGJt3mhlYiChwhaM+LMtPR2okl/u7e1iRT5D7GjDn/FgZxczO6TjeAm32ZVW07u05njN1ztDkej2gHlpBOj+egCYwoW0/SUCiE+h5wJinvCXrAAQRUA",
+  "afterMs": 100,
+  "connection": 2
+ },
+ {
+  "header": {
+   "frame": 2,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 66,
+   "bytes": 939,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000,
+   "hms": 2,
+   "wms": 12,
+   "rbms": 25,
+   "cnms": 1,
+   "enms": 1,
+   "sdms": 0
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI69zIs779APSAiYmpbgjuVog6rfdL+zYIdwDugP9Z6gHnz/Y5/ZX9q8Nd01ewPaU3RAbjCz9QnOZ+S/sB7ANshCZgBFD2/Sx/w9WQMt9759L3iDG5OEIVa+tlaQVAHmvrUzxCD3Xa+Ohrz5NnZtzwvqvjLdVHq+e00ayp/K0ZDHcEF8gndZiKmc1Fb3keqso6kNaO/1OAEUTMAl5xWYuSVtZ9hgAjAAChAQDEAAD+9S5hFmtwNlEC3rmkO9gHcjpH7WiKpnoR/X+zkYpnFJlYAPz94lUv8EyN6wro82lspvoJ8p0T4Xr5wUdzimoaTVMRs7t3c+6MmziB0qMI7GueSrZ4oeqcKrlG869d9SYLwsCtPEftzqJkzQ5XIid6HJIofyV0ynvD2XZS06Fg+A7/EuwQO3L7Ic8V92dbK4J7HK9uineheDTPgzTVTtLbLPn5hvqQszqX/+RdtCfBA7qObh/pYOtL/pHyNFhu/GagHO34UiHzdDWAfSdJoA1c1LDQ2kfzQsrlGpTwEmwXhs7UT2Xd38VSt+B6TlfHjf/5Xk8mKfNIhzdzjDx+GuafVHtvWzjpGNK2atnD9MD0HUL9/9QnB+xVwtyJotz90PDJ//dJQQtepvjiB/Qhmprk1sRRJfH6hd3Ot/c075C8U+0AIA3kPf3uEbV8ieU9P41vc2ybCZUB/x0YUXpbw7My/8ooVXnom7/ndq76QPxOvbXlcOCcfq5/ivErFavSx3G9HRz6L0bvvZgD9Bn72nj/bf+J1V7v4YauzcvaHyNoYuZURbHU7dpy4uQQuElgWl98/eQ0JEHR9a/0L14Q2qC7jqlrAP2PAZQy2zhtLl+h2iG30WHmUX0u2RJIghKjKx5uL+AfebOeG0yYw8eQwcLgT3ZPsoiDRQ3oBqt7j3wGELdAP8PTUCyfHSgGuJ5mph++fJwnn0a5gYFUaZzLYc8Jz7NRCJpJMEHdaMzHqMJhfC1XYgk+s3gX7FnpN2I+X2W+f5b9Pdo03GAsaj8jmv9w/mzXuo7c98IXT1BjSotI71qmg7AfUMLPhyVtw/XY88ICw/0Gdrm3HcP2lgXKUnHJeP7bofXqQYD8Bw9kLAgm1OGJt3mhlYiChwhaM+LMtPR2okl/u7e1iRT5D7GjDn/FgZxczO6TjeAm32ZVW07u05njN1ztDkej2gHlpBOj+egCYwoW0/SUCiE+h5wJinvCXrAAQRUA",
+  "afterMs": 500,
+  "connection": 2
+ },
+ {
+  "header": {
+   "frame": 3,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 99,
+   "bytes": 939,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000,
+   "hms": 2,
+   "wms": 12,
+   "rbms": 25,
+   "cnms": 1,
+   "enms": 1,
+   "sdms": 0
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI69zIs779APSAiYmpbgjuVog6rfdL+zYIdwDugP9Z6gHnz/Y5/ZX9q8Nd01ewPaU3RAbjCz9QnOZ+S/sB7ANshCZgBFD2/Sx/w9WQMt9759L3iDG5OEIVa+tlaQVAHmvrUzxCD3Xa+Ohrz5NnZtzwvqvjLdVHq+e00ayp/K0ZDHcEF8gndZiKmc1Fb3keqso6kNaO/1OAEUTMAl5xWYuSVtZ9hgAjAAChAQDEAAD+9S5hFmtwNlEC3rmkO9gHcjpH7WiKpnoR/X+zkYpnFJlYAPz94lUv8EyN6wro82lspvoJ8p0T4Xr5wUdzimoaTVMRs7t3c+6MmziB0qMI7GueSrZ4oeqcKrlG869d9SYLwsCtPEftzqJkzQ5XIid6HJIofyV0ynvD2XZS06Fg+A7/EuwQO3L7Ic8V92dbK4J7HK9uineheDTPgzTVTtLbLPn5hvqQszqX/+RdtCfBA7qObh/pYOtL/pHyNFhu/GagHO34UiHzdDWAfSdJoA1c1LDQ2kfzQsrlGpTwEmwXhs7UT2Xd38VSt+B6TlfHjf/5Xk8mKfNIhzdzjDx+GuafVHtvWzjpGNK2atnD9MD0HUL9/9QnB+xVwtyJotz90PDJ//dJQQtepvjiB/Qhmprk1sRRJfH6hd3Ot/c075C8U+0AIA3kPf3uEbV8ieU9P41vc2ybCZUB/x0YUXpbw7My/8ooVXnom7/ndq76QPxOvbXlcOCcfq5/ivErFavSx3G9HRz6L0bvvZgD9Bn72nj/bf+J1V7v4YauzcvaHyNoYuZURbHU7dpy4uQQuElgWl98/eQ0JEHR9a/0L14Q2qC7jqlrAP2PAZQy2zhtLl+h2iG30WHmUX0u2RJIghKjKx5uL+AfebOeG0yYw8eQwcLgT3ZPsoiDRQ3oBqt7j3wGELdAP8PTUCyfHSgGuJ5mph++fJwnn0a5gYFUaZzLYc8Jz7NRCJpJMEHdaMzHqMJhfC1XYgk+s3gX7FnpN2I+X2W+f5b9Pdo03GAsaj8jmv9w/mzXuo7c98IXT1BjSotI71qmg7AfUMLPhyVtw/XY88ICw/0Gdrm3HcP2lgXKUnHJeP7bofXqQYD8Bw9kLAgm1OGJt3mhlYiChwhaM+LMtPR2okl/u7e1iRT5D7GjDn/FgZxczO6TjeAm32ZVW07u05njN1ztDkej2gHlpBOj+egCYwoW0/SUCiE+h5wJinvCXrAAQRUA",
+  "afterMs": 500,
+  "connection": 2
+ },
+ {
+  "header": {
+   "frame": 4,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 132,
+   "bytes": 939,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000,
+   "hms": 2,
+   "wms": 12,
+   "rbms": 25,
+   "cnms": 1,
+   "enms": 1,
+   "sdms": 0
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI69zIs779APSAiYmpbgjuVog6rfdL+zYIdwDugP9Z6gHnz/Y5/ZX9q8Nd01ewPaU3RAbjCz9QnOZ+S/sB7ANshCZgBFD2/Sx/w9WQMt9759L3iDG5OEIVa+tlaQVAHmvrUzxCD3Xa+Ohrz5NnZtzwvqvjLdVHq+e00ayp/K0ZDHcEF8gndZiKmc1Fb3keqso6kNaO/1OAEUTMAl5xWYuSVtZ9hgAjAAChAQDEAAD+9S5hFmtwNlEC3rmkO9gHcjpH7WiKpnoR/X+zkYpnFJlYAPz94lUv8EyN6wro82lspvoJ8p0T4Xr5wUdzimoaTVMRs7t3c+6MmziB0qMI7GueSrZ4oeqcKrlG869d9SYLwsCtPEftzqJkzQ5XIid6HJIofyV0ynvD2XZS06Fg+A7/EuwQO3L7Ic8V92dbK4J7HK9uineheDTPgzTVTtLbLPn5hvqQszqX/+RdtCfBA7qObh/pYOtL/pHyNFhu/GagHO34UiHzdDWAfSdJoA1c1LDQ2kfzQsrlGpTwEmwXhs7UT2Xd38VSt+B6TlfHjf/5Xk8mKfNIhzdzjDx+GuafVHtvWzjpGNK2atnD9MD0HUL9/9QnB+xVwtyJotz90PDJ//dJQQtepvjiB/Qhmprk1sRRJfH6hd3Ot/c075C8U+0AIA3kPf3uEbV8ieU9P41vc2ybCZUB/x0YUXpbw7My/8ooVXnom7/ndq76QPxOvbXlcOCcfq5/ivErFavSx3G9HRz6L0bvvZgD9Bn72nj/bf+J1V7v4YauzcvaHyNoYuZURbHU7dpy4uQQuElgWl98/eQ0JEHR9a/0L14Q2qC7jqlrAP2PAZQy2zhtLl+h2iG30WHmUX0u2RJIghKjKx5uL+AfebOeG0yYw8eQwcLgT3ZPsoiDRQ3oBqt7j3wGELdAP8PTUCyfHSgGuJ5mph++fJwnn0a5gYFUaZzLYc8Jz7NRCJpJMEHdaMzHqMJhfC1XYgk+s3gX7FnpN2I+X2W+f5b9Pdo03GAsaj8jmv9w/mzXuo7c98IXT1BjSotI71qmg7AfUMLPhyVtw/XY88ICw/0Gdrm3HcP2lgXKUnHJeP7bofXqQYD8Bw9kLAgm1OGJt3mhlYiChwhaM+LMtPR2okl/u7e1iRT5D7GjDn/FgZxczO6TjeAm32ZVW07u05njN1ztDkej2gHlpBOj+egCYwoW0/SUCiE+h5wJinvCXrAAQRUA",
+  "afterMs": 500,
+  "connection": 2
+ },
+ {
+  "header": {
+   "frame": 5,
+   "ts": "now",
+   "screen": [
+    720,
+    1600
+   ],
+   "size": [
+    90,
+    200
+   ],
+   "format": "vp8",
+   "key": true,
+   "pts": 165,
+   "bytes": 939,
+   "ems": 2,
+   "cvms": 1,
+   "capture": "native",
+   "kbps": 2000,
+   "hms": 2,
+   "wms": 12,
+   "rbms": 25,
+   "cnms": 1,
+   "enms": 1,
+   "sdms": 0
+  },
+  "payloadBase64": "UBYAnQEqWgDIADkfAB8cIhYWImYSIjwI69zIs779APSAiYmpbgjuVog6rfdL+zYIdwDugP9Z6gHnz/Y5/ZX9q8Nd01ewPaU3RAbjCz9QnOZ+S/sB7ANshCZgBFD2/Sx/w9WQMt9759L3iDG5OEIVa+tlaQVAHmvrUzxCD3Xa+Ohrz5NnZtzwvqvjLdVHq+e00ayp/K0ZDHcEF8gndZiKmc1Fb3keqso6kNaO/1OAEUTMAl5xWYuSVtZ9hgAjAAChAQDEAAD+9S5hFmtwNlEC3rmkO9gHcjpH7WiKpnoR/X+zkYpnFJlYAPz94lUv8EyN6wro82lspvoJ8p0T4Xr5wUdzimoaTVMRs7t3c+6MmziB0qMI7GueSrZ4oeqcKrlG869d9SYLwsCtPEftzqJkzQ5XIid6HJIofyV0ynvD2XZS06Fg+A7/EuwQO3L7Ic8V92dbK4J7HK9uineheDTPgzTVTtLbLPn5hvqQszqX/+RdtCfBA7qObh/pYOtL/pHyNFhu/GagHO34UiHzdDWAfSdJoA1c1LDQ2kfzQsrlGpTwEmwXhs7UT2Xd38VSt+B6TlfHjf/5Xk8mKfNIhzdzjDx+GuafVHtvWzjpGNK2atnD9MD0HUL9/9QnB+xVwtyJotz90PDJ//dJQQtepvjiB/Qhmprk1sRRJfH6hd3Ot/c075C8U+0AIA3kPf3uEbV8ieU9P41vc2ybCZUB/x0YUXpbw7My/8ooVXnom7/ndq76QPxOvbXlcOCcfq5/ivErFavSx3G9HRz6L0bvvZgD9Bn72nj/bf+J1V7v4YauzcvaHyNoYuZURbHU7dpy4uQQuElgWl98/eQ0JEHR9a/0L14Q2qC7jqlrAP2PAZQy2zhtLl+h2iG30WHmUX0u2RJIghKjKx5uL+AfebOeG0yYw8eQwcLgT3ZPsoiDRQ3oBqt7j3wGELdAP8PTUCyfHSgGuJ5mph++fJwnn0a5gYFUaZzLYc8Jz7NRCJpJMEHdaMzHqMJhfC1XYgk+s3gX7FnpN2I+X2W+f5b9Pdo03GAsaj8jmv9w/mzXuo7c98IXT1BjSotI71qmg7AfUMLPhyVtw/XY88ICw/0Gdrm3HcP2lgXKUnHJeP7bofXqQYD8Bw9kLAgm1OGJt3mhlYiChwhaM+LMtPR2okl/u7e1iRT5D7GjDn/FgZxczO6TjeAm32ZVW07u05njN1ztDkej2gHlpBOj+egCYwoW0/SUCiE+h5wJinvCXrAAQRUA",
+  "afterMs": 500,
+  "connection": 2
+ }
+]

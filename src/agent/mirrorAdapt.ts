@@ -267,7 +267,11 @@ export class AdaptiveQuality {
   private readonly start: AdaptStart;
   /** The time a round trip is judged against: the frame interval, times window / 2 (1 for JPEG's window of 2). */
   private readonly interval: number;
-  /** The frame interval, for the encode time. */
+  /**
+   * The frame interval the encode time is judged against: that of the stream's rate, but at most
+   * 30 fps. Above 30 (agent 1.10.7, the phone's 60 fps limit) the agent's pacer gives up frame rate
+   * (60, 45, 30) before the width has to go.
+   */
   private readonly frameInterval: number;
   private readonly video: boolean;
   /** JPEG: the ladder. */
@@ -303,8 +307,9 @@ export class AdaptiveQuality {
   constructor(start: AdaptStart) {
     this.start = start;
     this.video = start.codec === 'vp8';
-    this.frameInterval = 1000 / Math.max(1, start.fps);
-    this.interval = (this.frameInterval * Math.max(1, start.window ?? 2)) / 2;
+    const fps = Math.max(1, start.fps);
+    this.frameInterval = 1000 / Math.min(fps, 30);
+    this.interval = ((1000 / fps) * Math.max(1, start.window ?? 2)) / 2;
   }
 
   /** 0 at the top; for VP8 the sum of the steps on both axes. */

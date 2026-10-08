@@ -525,7 +525,7 @@ describe('ForwardTransport', () => {
       const run = t.run(e.sink, c.token);
       await waitFor(() => e.frames.length === 12);
       assert.deepStrictEqual(JSON.parse(received()[0]) as unknown, {
-        cmd: 'mirror', fps: 30, width: 720, quality: 60, encoding: 'vp8', bitrate: 2000, lease: 60, adapt: true,
+        cmd: 'mirror', fps: 60, width: 720, quality: 60, encoding: 'vp8', bitrate: 2000, lease: 60, adapt: true,
       });
       assert.deepStrictEqual(e.frames.map((f) => [f.format, f.key, f.pts]).slice(0, 2), [['vp8', true, 33], ['vp8', false, 66]]);
       t.requestKeyframe();

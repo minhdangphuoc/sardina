@@ -91,6 +91,8 @@ export interface PhoneSettings {
   touchIndicator?: boolean;
   /** Agent 1.10.6: whether the mirror goes idle while the screen is still. */
   idleMode?: boolean;
+  /** Agent 1.10.7: the mirror's frame rate limit, 30 or 60. */
+  maxFps?: 30 | 60;
 }
 
 const PHONE_BOOLEAN_KEYS = ['screenView', 'control', 'logs', 'muteNotifications', 'touchIndicator', 'idleMode'] as const;
@@ -106,6 +108,7 @@ export function parsePhoneSettings(value: unknown): PhoneSettings | undefined {
   if (typeof raw.indicator === 'string' && (INDICATOR_LEVELS as readonly string[]).includes(raw.indicator)) {
     out.indicator = raw.indicator as IndicatorLevel;
   }
+  if (raw.maxFps === 30 || raw.maxFps === 60) out.maxFps = raw.maxFps;
   return out;
 }
 

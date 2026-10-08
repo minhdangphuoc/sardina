@@ -9,10 +9,12 @@ import { MIRROR_CONTACT_TIMING, MIRROR_INPUT_MIN_AGENT_VERSION } from './mirrorI
 
 export const MIRROR_DEFAULTS = { fps: 4, width: 360, quality: 60 } as const;
 /**
- * The VP8 request (agent 1.6.0, `"encoding":"vp8"`): up to 30 fps at 720 px wide (or the screen's
- * width when narrower) and a target of 2000 kbit/s; adaptive quality lowers bitrate and width.
+ * The VP8 request (agent 1.6.0, `"encoding":"vp8"`): up to 60 fps at 720 px wide (or the screen's
+ * width when narrower) and a target of 2000 kbit/s; adaptive quality lowers bitrate and width. The
+ * phone caps the rate: agent 1.10.7 at its Frame rate limit (30 unless set to 60 on the phone),
+ * older agents at 30. The status line says what the stream got.
  */
-export const MIRROR_VIDEO_DEFAULTS = { fps: 30, width: 720, quality: MIRROR_DEFAULTS.quality, bitrate: 2000 } as const;
+export const MIRROR_VIDEO_DEFAULTS = { fps: 60, width: 720, quality: MIRROR_DEFAULTS.quality, bitrate: 2000 } as const;
 /** The codec the page decodes with WebCodecs; the only video codec the agent offers. */
 export const VIDEO_CODEC = 'vp8';
 export const MIRROR_MIN_AGENT_VERSION = '1.1.0';
@@ -160,6 +162,8 @@ export interface PhoneSettingsLine {
   control?: boolean;
   touchIndicator?: boolean;
   idleMode?: boolean;
+  /** Agent 1.10.7: the phone's frame rate limit (30 or 60). */
+  maxFps?: 30 | 60;
   touchIndicatorPath?: TouchIndicatorPath;
   input?: boolean;
   inputLease?: number;
@@ -244,6 +248,40 @@ export interface VideoFields {
   pace?: number;
   /** Agent 1.8.0: the unchanged last picture encoded again on an idle screen (it sharpens). */
   refresh?: boolean;
+  /** Agent 1.10.7: where the phone spent the time of a captured frame (absent on re-encodes). */
+  stages?: FrameStages;
+}
+
+/**
+ * The stage times of one captured VP8 frame (agent 1.10.7), ms: `hold` the request was held for the
+ * pace or the link after the previous frame arrived, `wait` for the compositor's render, `readback`
+ * its screen readback and delivery, `convert`, `encode`, and `send` the socket write of the frame
+ * before. A missing one was not measured.
+ */
+export interface FrameStages {
+  hold?: number;
+  wait?: number;
+  readback?: number;
+  convert?: number;
+  encode?: number;
+  send?: number;
+}
+
+const STAGE_FIELDS: readonly [keyof FrameStages, string][] = [
+  ['hold', 'hms'], ['wait', 'wms'], ['readback', 'rbms'], ['convert', 'cnms'], ['encode', 'enms'], ['send', 'sdms'],
+];
+
+function parseStages(o: Record<string, unknown>): FrameStages | undefined {
+  const st: FrameStages = {};
+  let any = false;
+  for (const [name, field] of STAGE_FIELDS) {
+    const v = clampMs(o[field]);
+    if (v !== undefined) {
+      st[name] = v;
+      any = true;
+    }
+  }
+  return any ? st : undefined;
 }
 
 export type MirrorFormat = 'jpeg' | 'png' | 'vp8';
@@ -321,6 +359,7 @@ function parseSettings(o: Record<string, unknown>): PhoneSettingsLine | undefine
   if (typeof v.control === 'boolean') m.control = v.control;
   if (typeof v.touchIndicator === 'boolean') m.touchIndicator = v.touchIndicator;
   if (typeof v.idleMode === 'boolean') m.idleMode = v.idleMode;
+  if (v.maxFps === 30 || v.maxFps === 60) m.maxFps = v.maxFps;
   if (v.touchIndicatorPath === 'phone' || v.touchIndicatorPath === 'mirror' || v.touchIndicatorPath === 'off') {
     m.touchIndicatorPath = v.touchIndicatorPath;
   }
@@ -420,6 +459,8 @@ export function parseMirrorHeader(
       // Agent 1.8.0; a malformed value is dropped without failing the frame.
       if (isNum(o.pace) && Number.isInteger(o.pace) && o.pace >= 1 && o.pace <= 60000) h.pace = o.pace;
       if (o.refresh === true) h.refresh = true;
+      const stages = parseStages(o);
+      if (stages) h.stages = stages;
     }
     return h;
   }
@@ -561,6 +602,12 @@ export interface MirrorStatus {
   idle?: boolean;
   /** The phone's idle mode switch, once the agent reported it (1.10.6); off: the stream never goes idle. */
   idleMode?: boolean;
+  /** The phone's frame rate limit, once the agent reported it (1.10.7). */
+  maxFps?: number;
+  /** Medians of the latest captured frames' stage times (agent 1.10.7). */
+  stages?: FrameStages;
+  /** Captured (not re-encoded) frames per second, from the frames that carry stage times. */
+  capturedFps?: number;
   /** The phone has turned control off (Settings page); shown as a part of the live strip. */
   controlOffReason?: string;
   touchIndicatorPath?: TouchIndicatorPath;
@@ -596,11 +643,19 @@ function reducedText(reduced: boolean | undefined, causes: readonly ('link' | 'c
 
 /** The agent ends the stream with this when the phone's idle mode changes; the session then connects again once. */
 export const MIRROR_RESTART_REASON = 'restarting: idle mode changed on the phone';
+/** Agent 1.10.7: the same for a change of the phone's frame rate limit. */
+export const MIRROR_FPS_RESTART_REASON = 'restarting: frame rate limit changed on the phone';
+
+/** A reason the agent ends the stream with on purpose, to be connected again at once. */
+export function isRestartReason(reason: string): boolean {
+  return reason === MIRROR_RESTART_REASON || reason === MIRROR_FPS_RESTART_REASON;
+}
 
 const REASON_TEXT: Record<string, string> = {
   'screen view disabled on the phone': 'screen view is disabled on the phone (Settings › System › Developer agent)',
   'stopped from the phone': 'stopped from the phone (Settings › System › Developer agent)',
   [MIRROR_RESTART_REASON]: 'mirroring is restarting (idle mode changed on the phone)',
+  [MIRROR_FPS_RESTART_REASON]: 'mirroring is restarting (frame rate limit changed on the phone)',
   'lease expired': 'the device stopped the mirror because VS Code did not renew it in time (lease expired)',
 };
 
@@ -771,9 +826,13 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   }
   rows.push({ label: 'Latency', value: s.latencyMs === undefined ? '—' : `${Math.round(s.latencyMs)} ms` });
   if (s.frameMs !== undefined) rows.push({ label: 'Phone time', value: `${Math.round(s.frameMs)} ms per frame` });
+  const stages = stagesText(s.stages);
+  if (stages !== undefined) rows.push({ label: 'Stages', value: stages });
+  if (s.capturedFps !== undefined) rows.push({ label: 'Captured', value: `${s.capturedFps.toFixed(1)} fps` });
   if (s.capture === 'native') rows.push({ label: 'Capture', value: 'native recorder' });
   if (s.dropped !== undefined) rows.push({ label: 'Dropped', value: String(s.dropped) });
   if (s.idleMode !== undefined) rows.push({ label: 'Idle mode', value: s.idleMode ? 'on' : 'off' });
+  if (s.maxFps !== undefined) rows.push({ label: 'Frame rate limit', value: String(s.maxFps) });
   if (s.keypadLayoutMissing) rows.push({ label: 'Keypad', value: 'detected · Create layout' });
   const control = controlState(s, inputActive);
   rows.push({ label: 'Control', value: control === 'off' ? `off (${s.controlOffReason})` : control === 'active' ? 'on' : 'view only' });
@@ -783,6 +842,60 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   });
   if (s.softError) rows.push({ label: 'Phone error', value: s.softError });
   return rows;
+}
+
+const STAGE_WORDS: readonly [keyof FrameStages, string][] = [
+  ['hold', 'hold'], ['wait', 'capture'], ['readback', 'readback'], ['convert', 'convert'], ['encode', 'encode'], ['send', 'send'],
+];
+
+/** `hold 17 · capture 30 · readback 25 · convert 6 · encode 9 · send 1 ms`; undefined without stages. */
+export function stagesText(st: FrameStages | undefined): string | undefined {
+  if (!st) return undefined;
+  const parts = STAGE_WORDS.filter(([k]) => st[k] !== undefined).map(([k, word]) => `${word} ${Math.round(st[k] as number)}`);
+  return parts.length ? `${parts.join(' · ')} ms` : undefined;
+}
+
+/**
+ * The latest captured frames' stage times (agent 1.10.7): per-stage medians over the last
+ * STAGE_WINDOW_MS (at most STAGE_SAMPLES frames) and the rate of captured frames, which leaves out
+ * the re-encodes an idle screen gets.
+ */
+export class StageMeter {
+  static readonly WINDOW_MS = 3000;
+  static readonly SAMPLES = 120;
+  private samples: { at: number; st: FrameStages }[] = [];
+
+  add(at: number, st: FrameStages): void {
+    this.samples.push({ at, st });
+    if (this.samples.length > StageMeter.SAMPLES) this.samples.shift();
+  }
+
+  clear(): void {
+    this.samples = [];
+  }
+
+  private recent(now: number): { at: number; st: FrameStages }[] {
+    return this.samples.filter((x) => now - x.at <= StageMeter.WINDOW_MS && x.at <= now);
+  }
+
+  stages(now: number): FrameStages | undefined {
+    const recent = this.recent(now);
+    if (!recent.length) return undefined;
+    const out: FrameStages = {};
+    for (const [k] of STAGE_FIELDS) {
+      const xs = recent.map((x) => x.st[k]).filter((v): v is number => v !== undefined).sort((a, b) => a - b);
+      if (xs.length) out[k] = xs[Math.floor(xs.length / 2)];
+    }
+    return out;
+  }
+
+  /** Captured frames per second over the window; undefined with fewer than two. */
+  fps(now: number): number | undefined {
+    const recent = this.recent(now);
+    if (recent.length < 2) return undefined;
+    const span = recent[recent.length - 1].at - recent[0].at;
+    return span > 0 ? ((recent.length - 1) * 1000) / span : undefined;
+  }
 }
 
 /** The one-line form of the strip (label · fps · warning · control) for the tooltip and the aria-label. */
