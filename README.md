@@ -659,7 +659,7 @@ clear message (gpg matches names as substrings, so `Jane Doe` also matches
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.10.2**.
+emulator. This extension includes agent **1.10.3**.
 
 1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
    on.
@@ -689,8 +689,13 @@ emulator. This extension includes agent **1.10.2**.
    (nothing while the mirror is view only; `Control off on phone` when the
    phone turned it off). Control works only
    while the mirror tab and the VS Code window have focus; switching away stops
-   it at once. Only taps and one-finger swipes exist: no keys, text or power
-   button.
+   it at once. Only taps and one-finger swipes exist on the screen: no text or
+   power button. On a phone with a hardware keypad (agent 1.10.3 or newer, for
+   example the Commodore Callback) a keypad appears under the picture; click its
+   buttons to press the phone's keys (your PC keyboard is not forwarded).
+   **Sailfish: Import Keypad Layout…** replaces its layout with a JSON file
+   (saved to `.sailfish/keypads/` in the workspace), **Sailfish: Reset Keypad
+   Layout** removes it again.
 7. **Remove the agent.** **Sailfish: Uninstall Device Agent** (one password
    prompt) first stops the mirror, device logs and app monitor of that device,
    then removes the package, its service, socket, settings and notifications,

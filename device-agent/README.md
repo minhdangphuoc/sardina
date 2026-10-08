@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.2-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.3-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -99,8 +99,10 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
 - Remote input has a separate 3 s focus lease. It is opt-in per mirror, accepts only bounded taps
   and one-finger swipes, and has a rolling rate limit. VS Code renews it once a second only while the
   mirror panel and its window are focused and the current frame reports native capture; blur, hide,
-  close, capture fallback and stream cleanup cancel any contact and stop renewal. There is no key,
-  text, power or arbitrary input command.
+  close, capture fallback and stream cleanup cancel any contact and stop renewal. Since 1.10.3 a
+  phone with a hardware keypad also accepts press and release of one whitelisted keypad key
+  (0-9 * # OK UP DOWN LEFT RIGHT MENU BACK CALL F21 F22 F23) under the same lease, switch, rate
+  limit and indicator. There is no text, power, volume or arbitrary key code input.
 - While a stream runs, the agent keeps one notification on the phone ("Screen is being viewed from
   VS Code"). Remote input remains disabled until an asynchronous notification call confirms the
   change to "Screen is being controlled from VS Code"; failure therefore leaves the stream
@@ -136,12 +138,12 @@ protocol; 1.4.0 adds opt-in adaptive quality to binary mirror streams; 1.5.0 add
 frames and reports an idle screen (optional header fields only); 1.8.1 corrects the pacing rule; 1.10.0 adds JSON log output with cursor resume and the `stats` stream
 (for the Device Monitor); 1.10.1 changes only the package's uninstall cleanup, not the protocol; 1.10.2 makes
 an explicit `"lease":0` mean no lease for text mirror streams and ends log and stats streams when
-Developer Mode goes off. All additions are
+Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts the `key` input. All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
 |---|---|
-| `{"cmd":"ping"}` | `{"ok":true,"version":"1.8.1","developerMode":true,"socket":"/run/user/100000/sailfish-devagent/agent.sock","mirrorEncodings":["text","binary","vp8"],"mirrorInput":["tap","swipe"],"logFormats":["text","json"],"stats":true}` (`mirrorInput` since 1.7.0; absence means view-only; `logFormats` and `stats` since 1.10.0, absence means text logs only and no stats stream) |
+| `{"cmd":"ping"}` | `{"ok":true,"version":"1.8.1","developerMode":true,"socket":"/run/user/100000/sailfish-devagent/agent.sock","mirrorEncodings":["text","binary","vp8"],"mirrorInput":["tap","swipe"],"logFormats":["text","json"],"stats":true}` (`mirrorInput` since 1.7.0; absence means view-only; `logFormats` and `stats` since 1.10.0, absence means text logs only and no stats stream). Since 1.10.3, a phone with a hardware keypad (an input device with `KEY_NUMERIC_STAR` and `KEY_PHONE`) and a model name in `/etc/hw-release` also gets `"key"` in `mirrorInput` and `"keypad":{"model":"Commodore Callback","keys":["0",…,"CALL","F21"]}` (the whitelisted keys that device really has); otherwise both are absent |
 | `{"cmd":"screenshot"}` | `{"ok":true,"path":"/run/user/100000/sailfish-devagent/shot-<ts>.png"}` |
 | `{"cmd":"logs","lines":100}` | Raw `journalctl` lines (`short-precise`), streamed until the client disconnects. Optional (1.10.0): `"format":"json"` streams `journalctl -o json` (one object per line, `__CURSOR` included) with a fixed `--output-fields` list when the installed `journalctl` accepts it (probed once at daemon start); `"after":"<cursor>"` resumes after that cursor (`--after-cursor`, else the last `lines`) and is ignored unless it matches `^[A-Za-z0-9;=:._-]{1,512}$`. Any other `format` is text. A phone-side stop ends the stream with `{"ok":false,"error":…}`. Reserved for later: `"filter":{"priority":0..7,"identifiers":[…],"pids":[…]}`. |
 | `{"cmd":"stats","exe":"/usr/bin/harbour-demo","interval":1000}` | 1.10.0. Streamed: first `{"ok":true,"stream":"stats","interval":1000}`, then per interval `{"ts":…,"pid":4321,"state":"S","cpu":12.4,"rssKb":48216,"threads":9,"started":…,"sys":{"cpu":31.0,"load1":0.82,"memAvailableKb":812000}}` (`pid` 0 and no process fields when the app is not running; `cpu` is percent of one core and absent on the first sample of a pid), and `{"event":"start"|"exit","pid":…,"ts":…}` at pid transitions. The process is the lowest pid whose first command line argument equals `exe` (fallback: `comm` equals the base name cut to 15 characters). `exe` must match `^/[A-Za-z0-9._+/-]{1,255}$` without `..` (else `{"ok":false,"error":"invalid exe"}`); `interval` is clamped to 250..10000 ms (default 1000). Gated by Developer Mode only (reads `/proc`, no phone setting, no indicator); counted as `monitorStreams` in the Settings service status. |
@@ -220,6 +222,9 @@ Upstream, the client sends JSON lines (at most 256 bytes; unknown or malformed l
   gestures in the current frame's real `screen` coordinates. Swipe duration is 50..2000 ms. They
   are ignored unless the request opted in, the status accepted input, the frame uses native capture,
   the controlled indicator is visible and the focus lease is active.
+- `{"input":{"type":"key","key":K,"pressed":true|false}}` (1.10.3, only when `ping` lists `key`):
+  press or release of one whitelisted keypad key the device has. A press passes the same checks as
+  a gesture; a release is accepted at once, like `up`, so a key is never left held down.
 
 Lease: in binary mode the lease is always on (`"lease":<seconds>`, clamped to 10..300, default 60).
 In text mode it is on only when the request has a positive `lease` (`--request mirror --lease N`,
