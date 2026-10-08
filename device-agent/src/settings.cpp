@@ -23,6 +23,7 @@ const char *const KEY_LOGS = "logs";
 const char *const KEY_TOUCH = "touchIndicator";
 const char *const KEY_MUTE = "muteNotifications";
 const char *const KEY_IDLE_MODE = "idleMode";
+const char *const KEY_MAX_FPS = "maxFps";
 const char *const KEY_INDICATOR = "indicator";
 
 bool indicatorFromName(const QString &name, IndicatorLevel *level)
@@ -55,6 +56,7 @@ Settings::Settings(QObject *parent)
     , m_touchIndicator(false)
     , m_muteNotifications(false)
     , m_idleMode(true)
+    , m_maxFps(30)
     , m_indicator(IndicatorLevel::Normal)
 {
 }
@@ -131,11 +133,20 @@ bool Settings::load()
             clean = false;
         }
     }
+    const QJsonValue maxFps = o.value(QLatin1String(KEY_MAX_FPS));
+    if (!maxFps.isUndefined()) {
+        if (maxFps.isDouble() && validMaxFps(maxFps.toDouble())) {
+            m_maxFps = static_cast<int>(maxFps.toDouble());
+        } else {
+            ignored(QStringLiteral("\"maxFps\" is not 30 or 60"));
+            clean = false;
+        }
+    }
     fprintf(stderr,
             "sailfish-devagent: settings: screenView %d, control %d, logs %d, indicator %s, "
-            "muteNotifications %d, touchIndicator %d, idleMode %d\n",
+            "muteNotifications %d, touchIndicator %d, idleMode %d, maxFps %d\n",
             m_screenView, m_control, m_logs, qPrintable(indicatorName(m_indicator)), m_muteNotifications,
-            m_touchIndicator, m_idleMode);
+            m_touchIndicator, m_idleMode, m_maxFps);
     return clean;
 }
 
@@ -176,6 +187,26 @@ bool Settings::setBool(const QString &key, bool value, QString *error)
 
 bool Settings::setString(const QString &key, const QString &value, QString *error)
 {
+    if (key == QLatin1String(KEY_MAX_FPS)) {
+        const int fps = value == QLatin1String("30") ? 30 : value == QLatin1String("60") ? 60 : 0;
+        if (!fps) {
+            if (error) {
+                *error = QStringLiteral("maxFps must be 30 or 60");
+            }
+            return false;
+        }
+        if (fps == m_maxFps) {
+            return true;
+        }
+        m_maxFps = fps;
+        QString saveError;
+        if (!save(&saveError)) {
+            fprintf(stderr, "sailfish-devagent: settings: cannot save %s: %s (the change applies until a restart)\n",
+                    qPrintable(Paths::settingsPath()), qPrintable(saveError));
+        }
+        emit changed(key);
+        return true;
+    }
     IndicatorLevel level;
     if (key != QLatin1String(KEY_INDICATOR)) {
         if (error) {
@@ -212,6 +243,7 @@ QVariantMap Settings::toMap() const
     m.insert(QLatin1String(KEY_MUTE), m_muteNotifications);
     m.insert(QLatin1String(KEY_TOUCH), m_touchIndicator);
     m.insert(QLatin1String(KEY_IDLE_MODE), m_idleMode);
+    m.insert(QLatin1String(KEY_MAX_FPS), m_maxFps);
     return m;
 }
 

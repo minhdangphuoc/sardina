@@ -3,6 +3,7 @@
 #include "idleplan.h"
 
 #include <cstdio>
+#include <cstring>
 
 namespace {
 int failures = 0;
@@ -31,6 +32,17 @@ int main()
     check(restartBlocksSetting(true, "idleMode") && restartBlocksSetting(true, "screenView"), "restart refuses idleMode and screenView");
     check(!restartBlocksSetting(true, "control") && !restartBlocksSetting(true, "logs"), "restart leaves other switches alone");
     check(!restartBlocksSetting(false, "idleMode"), "no restart, no refusal");
+    check(restartBlocksSetting(true, "maxFps") && !restartBlocksSetting(false, "maxFps"), "restart refuses maxFps");
+    check(std::strcmp(restartReason("idleMode"), "restarting: idle mode changed on the phone") == 0,
+          "idle mode restart reason");
+    check(std::strcmp(restartReason("maxFps"), "restarting: frame rate limit changed on the phone") == 0,
+          "frame rate limit restart reason");
+    check(!restartReason("control") && !restartReason("screenView") && !restartReason(nullptr),
+          "other settings do not restart the mirror");
+    check(videoFps(30, 30) == 30 && videoFps(60, 30) == 30 && videoFps(60, 60) == 60 && videoFps(90, 60) == 60,
+          "the request is capped by the phone's limit");
+    check(videoFps(20, 60) == 20 && videoFps(0, 60) == 1 && videoFps(-5, 30) == 1, "lower requests are kept, at least 1");
+    check(videoFps(60, 45) == 30 && videoFps(60, 0) == 30, "an invalid limit is 30");
     check(true, "off never reports same and follows the pace");
     return failures == 0 ? 0 : 1;
 }

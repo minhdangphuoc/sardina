@@ -20,6 +20,10 @@ Page {
         return level === "quiet" ? 1 : level === "minimal" ? 2 : 0
     }
 
+    function fpsIndex(fps) {
+        return fps === 60 ? 1 : 0
+    }
+
     // The status travels as a JSON string (GetStatusJson, ChangedJson), parsed here, so nothing
     // depends on how Nemo.DBus hands an a{sv} variant map to JavaScript.
     function applyJson(text) {
@@ -82,6 +86,10 @@ Page {
         var index = levelIndex(st.indicator)
         if (indicatorBox.currentIndex !== index) {
             indicatorBox.currentIndex = index
+        }
+        var fps = fpsIndex(st.maxFps)
+        if (maxFpsBox.currentIndex !== fps) {
+            maxFpsBox.currentIndex = fps
         }
     }
 
@@ -217,6 +225,25 @@ Page {
                 text: "Idle mode"
                 description: "Stop sending frames while the screen does not change. Changing this restarts a running mirror."
                 onClicked: page.setBool("idleMode", !checked)
+            }
+
+            ComboBox {
+                id: maxFpsBox
+                enabled: page.available && !page.restarting
+                label: "Frame rate limit"
+                description: "The most frames per second the mirror sends. 60 needs a fast phone. Changing this restarts a running mirror."
+                currentIndex: 0
+
+                menu: ContextMenu {
+                    MenuItem {
+                        text: "30 fps"
+                        onClicked: page.setString("maxFps", "30")
+                    }
+                    MenuItem {
+                        text: "60 fps"
+                        onClicked: page.setString("maxFps", "60")
+                    }
+                }
             }
 
             SectionHeader {

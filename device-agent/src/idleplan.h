@@ -24,11 +24,35 @@ inline int idleDelayMs(bool idleMode, int refreshes, int maxRefreshes, int after
     return refreshes < maxRefreshes ? afterMs : heartbeatMs;
 }
 
-// While the mirror restarts after an idle mode change, the two switches that would end or change
-// it again are refused (SetBool on the settings service).
+// While the mirror restarts after an idle mode or frame rate limit change, the settings that would
+// end or change it again are refused (SetBool and SetString on the settings service).
 inline bool restartBlocksSetting(bool restarting, const char *key)
 {
-    return restarting && key && (std::strcmp(key, "idleMode") == 0 || std::strcmp(key, "screenView") == 0);
+    return restarting && key
+        && (std::strcmp(key, "idleMode") == 0 || std::strcmp(key, "screenView") == 0 || std::strcmp(key, "maxFps") == 0);
+}
+
+// Settings whose change restarts a running mirror (it reads them when it starts), and the reason the
+// stream ends with; nullptr for the others. The extension matches the "restarting: " prefix.
+inline const char *restartReason(const char *key)
+{
+    if (!key) {
+        return nullptr;
+    }
+    if (std::strcmp(key, "idleMode") == 0) {
+        return "restarting: idle mode changed on the phone";
+    }
+    if (std::strcmp(key, "maxFps") == 0) {
+        return "restarting: frame rate limit changed on the phone";
+    }
+    return nullptr;
+}
+
+// The VP8 stream's frame rate: the request's (default 30), at most the phone's limit (30 or 60).
+inline int videoFps(int requested, int phoneLimit)
+{
+    const int limit = (phoneLimit == 60) ? 60 : 30;
+    return requested < 1 ? 1 : requested > limit ? limit : requested;
 }
 
 #endif

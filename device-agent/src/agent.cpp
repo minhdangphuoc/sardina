@@ -1,4 +1,5 @@
 #include "agent.h"
+#include "idleplan.h"
 #include "paths.h"
 #include "screenshot.h"
 #include "logs.h"
@@ -40,23 +41,24 @@ const int MIRROR_MAX_WIDTH = 2160;
 const int MIRROR_MIN_WIDTH = 90;
 const int MIRROR_DEFAULT_WINDOW = 2;
 const int MIRROR_DEFAULT_LEASE = 60;
-// VP8 video (1.6.0): up to 30 fps, a target bitrate in kbit/s, and a deeper ack window (about
-// 130 ms at 30 fps), since frames are small and come often.
+// VP8 video (1.6.0): up to 30 fps (60 since 1.10.7, capped by the phone's frame rate limit), a
+// target bitrate in kbit/s, and a deeper ack window (about 130 ms, 4 frames at 30 fps and 8 above),
+// since frames are small and come often.
 const int MIRROR_MAX_FPS = 10;
-const int MIRROR_VIDEO_MAX_FPS = 30;
 const int MIRROR_VIDEO_DEFAULT_FPS = 30;
 const int MIRROR_VIDEO_DEFAULT_BITRATE = 2000;
 const int MIRROR_VIDEO_MIN_BITRATE = 100;
 const int MIRROR_VIDEO_MAX_BITRATE = 20000;
 const int MIRROR_VIDEO_WINDOW = 4;
+const int MIRROR_VIDEO_FAST_WINDOW = 8; // above 30 fps: the same 133 ms in flight as 4 frames at 30
 const int MIRROR_MIN_LEASE = 10;
 const int MIRROR_MAX_LEASE = 300;
 
 const int NOTIFY_TIMEOUT_MS = 1500;
 const int DEVELOPER_MODE_CHECK_MS = 3000;
-// An idle mode change ends the mirror with this reason (the extension matches it and connects
-// again once); the Settings page waits for the new stream for at most this long.
-const char *const MIRROR_RESTART_REASON = "restarting: idle mode changed on the phone";
+// An idle mode or frame rate limit change ends the mirror with a reason from restartReason
+// (idleplan.h; the extension matches it and connects again once); the Settings page waits for the
+// new stream for at most this long.
 const int MIRROR_RESTART_MS = 10000;
 const char *const DEVELOPER_MODE_OFF = "developer mode is off";
 
@@ -110,8 +112,8 @@ QJsonObject errorReply(const QString &message)
 
 Agent::Agent(QObject *parent)
     : QObject(parent)
-    , m_notified(false)
     , m_mirrorRestarting(false)
+    , m_notified(false)
     , m_settings(new Settings(this))
     , m_indicator(new StreamIndicator(m_settings, this))
     , m_service(nullptr)
@@ -421,13 +423,15 @@ void Agent::setMirrorRestarting(bool on)
 
 void Agent::onSettingChanged(const QString &key)
 {
-    // A running mirror cannot change its idle behaviour: it ends with a reason VS Code answers by
+    // A running mirror cannot change its idle behaviour or frame rate limit: it ends with a reason VS Code answers by
     // connecting once more, and the new stream starts with the new value.
-    if (key == QLatin1String("idleMode") && m_mirror && m_mirror->active()) {
-        fprintf(stderr, "sailfish-devagent: settings: idleMode changed, restarting the mirror\n");
+    const QByteArray keyName = key.toUtf8();
+    const char *restart = restartReason(keyName.constData());
+    if (restart && m_mirror && m_mirror->active()) {
+        fprintf(stderr, "sailfish-devagent: settings: %s changed, restarting the mirror\n", keyName.constData());
         m_mirrorRestarting = true;
         m_restartTimer.start();
-        m_mirror->finish(QString::fromLatin1(MIRROR_RESTART_REASON));
+        m_mirror->finish(QString::fromLatin1(restart));
     } else if (m_mirror) {
         m_mirror->applySetting(key); // screenView off ends it; control/touchIndicator go to its hooks
     }
@@ -698,7 +702,7 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
                                                                                 : MirrorEncoding::Text;
         const bool video = encoding == MirrorEncoding::Vp8;
         int fps = request.value(QStringLiteral("fps")).toInt(video ? MIRROR_VIDEO_DEFAULT_FPS : MIRROR_DEFAULT_FPS);
-        fps = qBound(1, fps, video ? MIRROR_VIDEO_MAX_FPS : MIRROR_MAX_FPS);
+        fps = video ? videoFps(fps, m_settings->maxFps()) : qBound(1, fps, MIRROR_MAX_FPS);
         int width = request.value(QStringLiteral("width")).toInt(MIRROR_DEFAULT_WIDTH);
         if (width <= 0) {
             width = 0; // native size
@@ -724,7 +728,7 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
         m_mirrorClient = client;
         setMirrorRestarting(false);
         m_mirror = new MirrorStream(socket, fps, width, quality, encoding,
-                                    video ? MIRROR_VIDEO_WINDOW : MIRROR_DEFAULT_WINDOW, lease, m_indicator, adapt,
+                                    video ? (fps > 30 ? MIRROR_VIDEO_FAST_WINDOW : MIRROR_VIDEO_WINDOW) : MIRROR_DEFAULT_WINDOW, lease, m_indicator, adapt,
                                     bitrate, input, m_settings, phoneState);
         connect(m_mirror.data(), &MirrorStream::stateChanged, this, &Agent::onSessionChanged);
         onSessionChanged();

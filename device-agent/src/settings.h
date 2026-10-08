@@ -26,6 +26,9 @@ public:
     bool logs() const { return m_logs; }
     bool touchIndicator() const { return m_touchIndicator; }
     bool idleMode() const { return m_idleMode; }
+    // The mirror's frame rate limit (agent 1.10.7): 30 or 60.
+    int maxFps() const { return m_maxFps; }
+    static bool validMaxFps(double fps) { return fps == 30 || fps == 60; }
     bool muteNotifications() const { return m_muteNotifications; }
     IndicatorLevel indicator() const { return m_indicator; }
 
@@ -42,7 +45,7 @@ public:
     bool setBool(const QString &key, bool value, QString *error);
     bool setString(const QString &key, const QString &value, QString *error);
 
-    // The seven keys, for ping, GetStatus and the stream message.
+    // The eight keys, for ping, GetStatus and the stream message.
     QVariantMap toMap() const;
 
     static QString indicatorName(IndicatorLevel level);
@@ -59,6 +62,7 @@ private:
     bool m_touchIndicator;
     bool m_muteNotifications;
     bool m_idleMode;
+    int m_maxFps;
     IndicatorLevel m_indicator;
 };
 

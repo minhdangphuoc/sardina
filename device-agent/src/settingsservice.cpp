@@ -175,7 +175,7 @@ bool SettingsService::SetBool(const QString &key, bool value)
     }
     QString error;
     // Logged before the change is applied, so the journal reads in order.
-    if (!m_settings->toMap().contains(key) || key == QLatin1String("indicator")) {
+    if (!m_settings->toMap().contains(key) || key == QLatin1String("indicator") || key == QLatin1String("maxFps")) {
         sendErrorReply(QDBusError::InvalidArgs, QStringLiteral("unknown boolean setting"));
         return false;
     }
@@ -204,11 +204,23 @@ bool SettingsService::SetString(const QString &key, const QString &value)
         return false;
     }
     QString error;
-    if (key != QLatin1String("indicator")
-        || (value != QLatin1String("normal") && value != QLatin1String("quiet") && value != QLatin1String("minimal"))) {
-        sendErrorReply(QDBusError::InvalidArgs, QStringLiteral("only indicator = normal, quiet or minimal"));
+    const bool indicator = key == QLatin1String("indicator")
+        && (value == QLatin1String("normal") || value == QLatin1String("quiet") || value == QLatin1String("minimal"));
+    const bool maxFps = key == QLatin1String("maxFps") && (value == QLatin1String("30") || value == QLatin1String("60"));
+    if (!indicator && !maxFps) {
+        sendErrorReply(QDBusError::InvalidArgs,
+                       QStringLiteral("only indicator = normal, quiet or minimal, or maxFps = 30 or 60"));
         return false;
     }
+    if (restartBlocksSetting(m_agent->mirrorRestarting(), key.toUtf8().constData())) {
+        if (!m_loggedRestartRefusal) {
+            m_loggedRestartRefusal = true;
+            fprintf(stderr, "sailfish-devagent: settings: refused %s while the mirror restarts\n", qPrintable(key));
+        }
+        sendErrorReply(QDBusError::Failed, QStringLiteral("mirroring is restarting"));
+        return false;
+    }
+    m_loggedRestartRefusal = false;
     fprintf(stderr, "sailfish-devagent: settings: %s = %s (from pid %u)\n", qPrintable(key), qPrintable(value), pid);
     if (!m_settings->setString(key, value, &error)) {
         sendErrorReply(QDBusError::InvalidArgs, error);
