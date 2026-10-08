@@ -128,12 +128,6 @@ describe('mirrorWire.MirrorRecordParser', () => {
     });
   });
 
-  it('adds the idle field only to pause', () => {
-    const o = { ...MIRROR_DEFAULTS, lease: 60 };
-    assert.strictEqual((JSON.parse(mirrorRequestLine({ ...o, idle: 'pause' }, 'vp8')) as { idle?: string }).idle, 'pause');
-    assert.strictEqual('idle' in JSON.parse(mirrorRequestLine(o, 'vp8')), false);
-  });
-
   it('delivers the adaptive-quality header fields with the frame', () => {
     const { events, parser } = feed([
       Buffer.from(STATUS.replace('"window":2', '"window":2,"adapt":true')),

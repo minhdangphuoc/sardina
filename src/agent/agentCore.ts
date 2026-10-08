@@ -89,9 +89,11 @@ export interface PhoneSettings {
   indicator?: IndicatorLevel;
   muteNotifications?: boolean;
   touchIndicator?: boolean;
+  /** Agent 1.10.6: whether the mirror goes idle while the screen is still. */
+  idleMode?: boolean;
 }
 
-const PHONE_BOOLEAN_KEYS = ['screenView', 'control', 'logs', 'muteNotifications', 'touchIndicator'] as const;
+const PHONE_BOOLEAN_KEYS = ['screenView', 'control', 'logs', 'muteNotifications', 'touchIndicator', 'idleMode'] as const;
 
 /** Keeps only the known keys with the right types; undefined when the value is not an object. */
 export function parsePhoneSettings(value: unknown): PhoneSettings | undefined {

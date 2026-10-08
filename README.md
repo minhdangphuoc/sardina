@@ -659,7 +659,7 @@ clear message (gpg matches names as substrings, so `Jane Doe` also matches
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.10.5**.
+emulator. This extension includes agent **1.10.6**.
 
 1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
    on.
@@ -739,8 +739,8 @@ Hiding the tab pauses the stream after a moment; closing it stops the stream.
 
 **The status strip** below the picture is one line, for example `● Live · 30
 fps`: a coloured dot (green live, grey waiting, red disconnected), the state,
-the frame rate (`idle` while the screen is still; with `sailfish.mirror.idleStreaming`
-off, agent 1.10.5 sends nothing at all while it is still), at most one warning, and on
+the frame rate (`idle` while the screen is still; never with the phone's **Idle mode**
+switch off, agent 1.10.6, which keeps sending frames), at most one warning, and on
 the right an action button, the control pill and an ⓘ button. Everything else
 is behind ⓘ.
 

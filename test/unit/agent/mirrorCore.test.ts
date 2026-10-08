@@ -38,6 +38,8 @@ import {
   controlState,
   isStaleAgentReason,
   type MirrorStatus,
+  MIRROR_RESTART_REASON,
+  hasReasonText,
 } from '../../../src/agent/mirrorCore';
 import { MirrorRecordParser, mirrorRequestLine } from '../../../src/agent/mirrorWire';
 
@@ -283,6 +285,12 @@ describe('mirrorCore status strip', () => {
 
 describe('mirrorCore detailRows', () => {
   const rows = (s: MirrorStatus, active = false): Record<string, string> => Object.fromEntries(detailRows(s, active).map((r) => [r.label, r.value]));
+
+  it('shows the phone idle mode only once the agent reported it', () => {
+    assert.strictEqual(rows({ state: 'live' })['Idle mode'], undefined);
+    assert.strictEqual(rows({ state: 'live', idleMode: true })['Idle mode'], 'on');
+    assert.strictEqual(rows({ state: 'live', idleMode: false })['Idle mode'], 'off');
+  });
 
   it('lists every field of a live VP8 stream', () => {
     assert.deepStrictEqual(
@@ -1027,6 +1035,18 @@ describe('phone settings (agent 1.9.0)', () => {
     return Buffer.concat([len, h]);
   };
   const status = Buffer.from('{"ok":true,"stream":"mirror","fps":4,"width":360,"quality":60,"encoding":"binary"}\n');
+
+  it('parses idleMode from the settings line and ignores a wrong type', () => {
+    assert.deepStrictEqual(parseMirrorLine('{"settings":{"control":true,"idleMode":false}}'), { kind: 'settings', control: true, idleMode: false });
+    assert.deepStrictEqual(parseMirrorLine('{"settings":{"idleMode":"no"}}'), { kind: 'settings' });
+  });
+
+  it('words the idle mode restart', () => {
+    assert.strictEqual(MIRROR_RESTART_REASON, 'restarting: idle mode changed on the phone');
+    assert.deepStrictEqual(parseMirrorLine(`{"ok":false,"error":"${MIRROR_RESTART_REASON}"}`), { kind: 'fatal', error: MIRROR_RESTART_REASON });
+    assert.strictEqual(hasReasonText(MIRROR_RESTART_REASON), true);
+    assert.deepStrictEqual(stripParts({ state: 'connecting', reason: 'mirroring is restarting' }), { dot: 'wait', label: 'Connecting… mirroring is restarting' });
+  });
 
   it('parses a settings line without and with the input fields', () => {
     assert.deepStrictEqual(parseMirrorLine('{"settings":{"control":false,"touchIndicator":true,"touchIndicatorPath":"mirror"}}'), {

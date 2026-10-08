@@ -73,7 +73,6 @@ const EXPECTED_ROWS: RowSpec[] = [
   { key: 'sailfish.build.sign', type: 'boolean', default: false, scope: 'resource' },
   { key: 'sailfish.build.signingUser', type: 'string', default: '', scope: 'resource' },
   { key: 'sailfish.build.signingPassphraseFile', type: 'string', default: '', scope: 'resource' },
-  { key: 'sailfish.mirror.idleStreaming', type: 'boolean', default: true, scope: 'window' },
   { key: 'sailfish.qtqml.silenceQmlls', type: 'boolean', default: true, scope: 'resource' },
   { key: 'sailfish.logLevel', type: 'string', default: 'info', scope: 'window', enum: ['info', 'debug'] },
   { key: 'sailfish.experimental.enableWindows', type: 'boolean', default: false, scope: 'machine' },

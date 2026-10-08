@@ -383,6 +383,10 @@ describe('agentCore phone settings (agent 1.9.0)', () => {
       touchIndicator: false,
     });
   });
+  it('keeps idleMode only as a boolean', () => {
+    assert.deepStrictEqual(parsePhoneSettings({ idleMode: false }), { idleMode: false });
+    assert.deepStrictEqual(parsePhoneSettings({ idleMode: 'off' }), {});
+  });
   it('drops unknown keys, wrong types and a fourth indicator value', () => {
     assert.deepStrictEqual(parsePhoneSettings({ control: 'no', screenView: false, extra: true, indicator: 'loud' }), { screenView: false });
     assert.deepStrictEqual(parsePhoneSettings({ indicator: 'minimal' }), { indicator: 'minimal' });

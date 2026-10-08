@@ -276,7 +276,6 @@ export class ForwardTransport implements MirrorTransport {
   private inputRequested = false;
   private inputAccepted = false;
   private phoneState = false;
-  private idlePause = false;
   private client: string | undefined;
   /** Cancelled on dispose; `SshForward.open` only reads `isCancellationRequested`. */
   private readonly lifeToken = { isCancellationRequested: false, onCancellationRequested: () => ({ dispose: () => undefined }) };
@@ -295,11 +294,6 @@ export class ForwardTransport implements MirrorTransport {
 
   setInput(on: boolean): void {
     this.inputRequested = on;
-  }
-
-  /** Ask the agent (1.10.5 and later; older ones ignore it) to send nothing while the screen does not change. */
-  setIdlePause(on: boolean): void {
-    this.idlePause = on;
   }
 
   /** Ask for the in-stream `settings` message and name this client (agent 1.9.0 and later; older agents ignore both). */
@@ -587,7 +581,6 @@ export class ForwardTransport implements MirrorTransport {
     const video = this.video;
     const input = this.inputRequested;
     const phone = {
-      ...(this.idlePause ? { idle: 'pause' as const } : {}),
       ...(this.phoneState ? { phoneState: true } : {}),
       ...(this.client ? { client: this.client } : {}),
     };

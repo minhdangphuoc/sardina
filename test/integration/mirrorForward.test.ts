@@ -722,19 +722,50 @@ suite('screen mirror over the SSH forward (F6)', () => {
     });
   });
 
-  test('I29 idle streaming off: the request carries idle:pause', async function () {
-    this.timeout(30000);
-    const config = vscode.workspace.getConfiguration('sailfish');
-    await config.update('mirror.idleStreaming', false, vscode.ConfigurationTarget.Global);
-    try {
-      await withScenario('agent-forward-touch-mirror', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
-        await waitLive();
-        assert.ok((requests()[0].line ?? '').includes('"idle":"pause"'), requests()[0].line);
+  const capturePosts = (): { of: (type: string) => Array<{ type?: string; state?: string; strip?: { label?: string; fps?: string }; details?: Array<{ label: string; value: string }> }> } => {
+    const posted: unknown[] = [];
+    const createPanel = vscode.window.createWebviewPanel.bind(vscode.window);
+    sandbox.stub(vscode.window, 'createWebviewPanel').callsFake((...args: Parameters<typeof vscode.window.createWebviewPanel>) => {
+      const panel = createPanel(...args);
+      const post = panel.webview.postMessage.bind(panel.webview);
+      sandbox.stub(panel.webview, 'postMessage').callsFake((message: unknown) => {
+        posted.push(message);
+        return post(message);
       });
-    } finally {
-      await config.update('mirror.idleStreaming', undefined, vscode.ConfigurationTarget.Global);
-    }
+      return panel;
+    });
+    return { of: (type: string) => (posted as Array<{ type?: string }>).filter((m) => m?.type === type) };
+  };
+
+  test('I29 idle mode off on the phone: no idle in the strip, details say off, nothing about it in the request', async function () {
+    this.timeout(30000);
+    const posts = capturePosts();
+    await withScenario('agent-forward-idle-off', async () => {
+      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await waitLive();
+      assert.ok(!(requests()[0].line ?? '').includes('idle'), requests()[0].line);
+      await waitFor(() => posts.of('state').some((m) => m.details?.some((r) => r.label === 'Idle mode' && r.value === 'off')), 8000);
+      await sleep(3500); // frames for 3 s, then a stale `same` line: the strip must not say idle
+      const states = posts.of('state');
+      assert.ok(states.every((m) => m.strip?.fps !== 'idle'), JSON.stringify(states.map((m) => m.strip)));
+      assert.ok(states.every((m) => !m.details?.some((r) => r.value.includes('idle'))), 'no idle in the details');
+    });
+  });
+
+  test('I30 idle mode changed on the phone: the stream restarts once, the strip says so and ends live with idle mode off', async function () {
+    this.timeout(40000);
+    const posts = capturePosts();
+    await withScenario('agent-forward-idle-restart', async () => {
+      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await waitLive();
+      await waitFor(() => posts.of('state').some((m) => m.details?.some((r) => r.label === 'Idle mode' && r.value === 'on')), 8000);
+      await waitFor(() => posts.of('state').some((m) => m.strip?.label === 'Connecting… mirroring is restarting'), 8000);
+      await waitFor(() => requests().length === 2, 8000);
+      await waitFor(() => posts.of('state').some((m) => m.state === 'live' && m.details?.some((r) => r.label === 'Idle mode' && r.value === 'off')), 8000);
+      assert.ok(posts.of('state').every((m) => m.state !== 'disconnected'), 'no disconnect is shown');
+      await sleep(1500);
+      assert.strictEqual(requests().length, 2, 'reconnected exactly once');
+    });
   });
 
   test('I22 control off on the phone: the strip says so, no active:true is ever sent, Device Agent Status names it', async function () {

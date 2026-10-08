@@ -14,6 +14,7 @@
  * Like agent 1.6.0, it answers a request without "encoding":"vp8" with JPEG/PNG only: a "vp8" status
  * becomes "binary" (no bitrate, window 2) and VP8 records are skipped; a VP8 request skips image
  * records of other formats. Upstream "keyframe" and "set" lines are logged as events.
+ * An entry with `"connection": N` is used only on the Nth mirror request (1-based) logged in the scenario.
  * An entry {"onInput": {...}, "record": {...}} is a header-only record sent once per connection, to a
  * phoneState request, when an upstream input message first matches every field of `onInput` (agent 1.10.4
  * answers input activation with a settings message and an accepted contact with a `contact` record).
@@ -140,11 +141,20 @@ async function replay(socket, frames, requestLine) {
   }
 }
 
+function countRequests(logPath) {
+  try {
+    return fs.readFileSync(logPath, 'utf8').split('\n').filter((l) => l.includes('"ssh_forward.request"')).length;
+  } catch {
+    return 1;
+  }
+}
+
 function serve(scenario, logPath, local, onFirstConnect) {
-  const frames = loadFrames(scenario);
+  const allFrames = loadFrames(scenario);
   const sockets = new Set();
   process.umask(0o177);
   const server = net.createServer((socket) => {
+    let frames = allFrames;
     sockets.add(socket);
     socket.on('error', () => {});
     socket.on('close', () => {
@@ -166,6 +176,9 @@ function serve(scenario, logPath, local, onFirstConnect) {
           started = true;
           core.logEvent(logPath, { bin: 'ssh', event: 'request', key: 'ssh_forward.request', line });
           phoneState = /"phoneState"\s*:\s*true/.test(line);
+          // The Nth request in the log (each reconnect may be a new ssh process, so the log is the counter).
+          const nth = countRequests(logPath);
+          frames = allFrames.filter((f) => f.connection === undefined || f.connection === nth);
           void replay(socket, frames, line);
           continue;
         }

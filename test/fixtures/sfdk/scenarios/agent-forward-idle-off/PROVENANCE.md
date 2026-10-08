@@ -1,0 +1,1 @@
+hand-written: agent 1.10.6 with the phone's Idle mode switch off. The settings record says `idleMode: false`; the agent keeps sending ordinary frames (the key frame of agent-forward-touch-mirror, repeated) and a stale `same` line at the end, which the strip must not turn into `idle`. Details read `Idle mode: off`.

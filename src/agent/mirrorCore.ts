@@ -159,6 +159,7 @@ export interface PhoneSettingsLine {
   kind: 'settings';
   control?: boolean;
   touchIndicator?: boolean;
+  idleMode?: boolean;
   touchIndicatorPath?: TouchIndicatorPath;
   input?: boolean;
   inputLease?: number;
@@ -319,6 +320,7 @@ function parseSettings(o: Record<string, unknown>): PhoneSettingsLine | undefine
   const m: PhoneSettingsLine = { kind: 'settings' };
   if (typeof v.control === 'boolean') m.control = v.control;
   if (typeof v.touchIndicator === 'boolean') m.touchIndicator = v.touchIndicator;
+  if (typeof v.idleMode === 'boolean') m.idleMode = v.idleMode;
   if (v.touchIndicatorPath === 'phone' || v.touchIndicatorPath === 'mirror' || v.touchIndicatorPath === 'off') {
     m.touchIndicatorPath = v.touchIndicatorPath;
   }
@@ -557,6 +559,8 @@ export interface MirrorStatus {
   video?: { width: number; height: number; targetKbps?: number; reduced?: boolean; reducedFor?: readonly ('link' | 'cpu')[] };
   /** The screen has not changed for a while (the agent reports it): shown instead of the frame rate. */
   idle?: boolean;
+  /** The phone's idle mode switch, once the agent reported it (1.10.6); off: the stream never goes idle. */
+  idleMode?: boolean;
   /** The phone has turned control off (Settings page); shown as a part of the live strip. */
   controlOffReason?: string;
   touchIndicatorPath?: TouchIndicatorPath;
@@ -590,9 +594,13 @@ function reducedText(reduced: boolean | undefined, causes: readonly ('link' | 'c
   return ` (reduced for ${link && cpu ? 'the link and the phone CPU' : cpu ? 'the phone CPU' : 'the link'})`;
 }
 
+/** The agent ends the stream with this when the phone's idle mode changes; the session then connects again once. */
+export const MIRROR_RESTART_REASON = 'restarting: idle mode changed on the phone';
+
 const REASON_TEXT: Record<string, string> = {
   'screen view disabled on the phone': 'screen view is disabled on the phone (Settings › System › Developer agent)',
   'stopped from the phone': 'stopped from the phone (Settings › System › Developer agent)',
+  [MIRROR_RESTART_REASON]: 'mirroring is restarting (idle mode changed on the phone)',
   'lease expired': 'the device stopped the mirror because VS Code did not renew it in time (lease expired)',
 };
 
@@ -765,6 +773,7 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   if (s.frameMs !== undefined) rows.push({ label: 'Phone time', value: `${Math.round(s.frameMs)} ms per frame` });
   if (s.capture === 'native') rows.push({ label: 'Capture', value: 'native recorder' });
   if (s.dropped !== undefined) rows.push({ label: 'Dropped', value: String(s.dropped) });
+  if (s.idleMode !== undefined) rows.push({ label: 'Idle mode', value: s.idleMode ? 'on' : 'off' });
   if (s.keypadLayoutMissing) rows.push({ label: 'Keypad', value: 'detected · Create layout' });
   const control = controlState(s, inputActive);
   rows.push({ label: 'Control', value: control === 'off' ? `off (${s.controlOffReason})` : control === 'active' ? 'on' : 'view only' });

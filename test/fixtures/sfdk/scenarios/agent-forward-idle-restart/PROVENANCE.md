@@ -1,0 +1,1 @@
+hand-written: agent 1.10.6. The first connection has idle mode on and ends after 1.5 s with `restarting: idle mode changed on the phone` (what the agent sends when the phone's switch changes during a stream); the second connection (entries with `connection: 2`, the fake ssh counts connections) has it off.

@@ -35,6 +35,7 @@ import {
   detailsCopyText,
   controlState,
   hasReasonText,
+  MIRROR_RESTART_REASON,
   agentSupportsPhoneState,
   VIDEO_CODEC,
   type MirrorFormat,
@@ -206,6 +207,9 @@ export class MirrorSession {
   private webviewFocused = false;
   private controlPosted: boolean | undefined;
   private phoneTouchIndicator = false;
+  private phoneIdleMode: boolean | undefined;
+  /** The agent restarted the stream for an idle mode change: connect again once. */
+  private restartReconnect = false;
   private touchIndicatorPath: TouchIndicatorPath = 'off';
   private touchIndicatorPathReported = false;
   private touchIndicatorPosted: TouchIndicatorPath | undefined;
@@ -533,7 +537,8 @@ export class MirrorSession {
     const cts = new vscode.CancellationTokenSource();
     this.cts = cts;
     this.state = 'connecting';
-    this.reason = this.lastFrame ? 'reconnecting' : undefined;
+    this.reason = this.restartReconnect ? 'mirroring is restarting' : this.lastFrame ? 'reconnecting' : undefined;
+    this.restartReconnect = false;
     this.gotStatus = false;
     this.corrupt = 0;
     this.softError = undefined;
@@ -542,6 +547,7 @@ export class MirrorSession {
     this.inputAccepted = false;
     this.inputCaptureSafe = false;
     this.phoneTouchIndicator = false;
+    this.phoneIdleMode = undefined;
     this.touchIndicatorPath = 'off';
     this.touchIndicatorPathReported = false;
     this.inputFocus.update(false);
@@ -593,6 +599,15 @@ export class MirrorSession {
       this.syncKeepalive();
       const cancelled = 'cancelled' in end && end.cancelled;
       if (this.failReason === undefined && cancelled) return; // we stopped it: hidden (paused) or closed
+      if (this.restartReconnect) {
+        // The phone's idle mode changed and the agent ended the stream on purpose: connect again once.
+        if (this.panel.visible) {
+          this.log(`stream ended: ${this.failReason ?? MIRROR_RESTART_REASON}; connecting again`);
+          this.begin();
+          return;
+        }
+        this.restartReconnect = false;
+      }
       if (this.agentUpdating) {
         // The update restarted the agent: connect again once it answers (agentInstalled), without a
         // disconnect the user would answer with Reconnect while the update reconnects as well.
@@ -620,7 +635,6 @@ export class MirrorSession {
       if (unavailable === undefined) {
         forward.setVideo(await this.wantVideo(token));
         forward.setInput(agentSupportsInput(this.opts.probe));
-        forward.setIdlePause(!this.services.settings.get('mirror.idleStreaming'));
         forward.setPhoneState(agentSupportsPhoneState(this.opts.probe.version), os.hostname());
         if (token.isCancellationRequested || gen !== this.gen) return { cancelled: true };
         const end = await this.runOne(forward, gen, token);
@@ -707,6 +721,7 @@ export class MirrorSession {
           this.services.output.log('info', `mirror "${this.device}": control ${off ? 'turned off on the phone' : 'turned on again on the phone'}`);
         }
         if (s.touchIndicator !== undefined) this.phoneTouchIndicator = s.touchIndicator;
+        if (s.idleMode !== undefined) this.phoneIdleMode = s.idleMode;
         if (s.touchIndicatorPath !== undefined) {
           this.touchIndicatorPath = s.touchIndicatorPath;
           this.touchIndicatorPathReported = true;
@@ -753,7 +768,9 @@ export class MirrorSession {
       },
       fatal: (error) => {
         // The strip words the phone's own refusals itself (`REASON_TEXT`); other reasons get the plain-language text.
-        if (live()) this.fail(hasReasonText(error) ? error : describeAgentRefusal(error));
+        if (!live()) return;
+        if (error === MIRROR_RESTART_REASON) this.restartReconnect = true;
+        this.fail(hasReasonText(error) ? error : describeAgentRefusal(error));
       },
       corrupt: () => {
         if (live()) this.onCorrupt();
@@ -896,8 +913,9 @@ export class MirrorSession {
       this.services.output.log('warn', `mirror "${this.device}": the device ended the stream: lease expired (${age}); the extension host may have stalled or the upstream is broken`);
     }
     this.failReason = reason;
-    this.state = 'disconnected';
-    this.reason = reason;
+    // An intended restart shows as connecting: the session connects again once the run has ended.
+    this.state = this.restartReconnect ? 'connecting' : 'disconnected';
+    this.reason = this.restartReconnect ? 'mirroring is restarting' : reason;
     this.clearStateTimer();
     this.syncKeepalive();
     this.syncInput();
@@ -996,7 +1014,8 @@ export class MirrorSession {
       paceFps: live ? this.statusFps : undefined,
       softError: live ? this.softError : undefined,
       fps: live ? this.meter.rate(now) : undefined,
-      idle: live && screenIdle(this.lastChangeAt, this.lastSameAt, now),
+      idleMode: live ? this.phoneIdleMode : undefined,
+      idle: live && this.phoneIdleMode !== false && screenIdle(this.lastChangeAt, this.lastSameAt, now),
       latencyMs: live ? this.medianLatency(now) : undefined,
       frameMs: live ? this.frameMs : undefined,
       dropped: live ? this.gate.dropped + this.videoDropped : undefined,
