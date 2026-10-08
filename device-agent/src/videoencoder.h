@@ -6,9 +6,12 @@
 #include <QString>
 #include <QVector>
 
+#include <memory>
+
 struct vpx_codec_ctx;
 struct vpx_codec_enc_cfg;
 struct vpx_image;
+class ConvertWorkers;
 
 // VP8 encoding for the mirror's "vp8" encoding (agent 1.6.0) through libvpx in real-time mode.
 // convert() scales an RGBX frame (bytes R, G, B, X, as lipstick's recorder delivers it) to the
@@ -16,8 +19,8 @@ struct vpx_image;
 // encode() compresses the converted frame. Rate control is constant bitrate; key frames are placed
 // only by the caller (forceKey), except the first frame after open(), which is always one. The
 // encoder never drops a frame by itself, so every encoded frame is a valid successor of the last.
-// Conversion runs in horizontal bands on half the cores, at most four (agent 1.8.0); with scaling, each
-// source row is filtered horizontally once and kept for the next output row.
+// Conversion runs in horizontal bands on half the cores, at most four; with scaling, each source
+// row is filtered horizontally once and kept for the next output row.
 class VideoEncoder
 {
 public:
@@ -25,7 +28,7 @@ public:
     ~VideoEncoder();
 
     // (Re)opens the encoder for frames of `size` (both sides even, at least 16).
-    bool open(const QSize &size, int bitrateKbps, int fps, QString *error);
+    bool open(const QSize &size, int bitrateKbps, QString *error);
     void close();
     bool isOpen() const { return m_codec != nullptr; }
     QSize size() const { return m_size; }
@@ -40,10 +43,10 @@ public:
     bool sameAsLast() const;
     // Encodes the current picture. ptsMs and durationMs are in milliseconds of the stream clock.
     bool encode(qint64 ptsMs, qint64 durationMs, bool forceKey, QByteArray *out, bool *key, QString *error);
-    // Encodes the last encoded picture once more (agent 1.8.0): on a screen that stopped changing,
-    // the encoder spends the spare bits on sharpening what is shown. False before the first encode.
+    // Encodes the last encoded picture once more, spending spare bits on a screen that stopped
+    // changing. False before the first encode.
     bool encodeAgain(qint64 ptsMs, qint64 durationMs, QByteArray *out, QString *error);
-    // Threads used for conversion (1..4) and given to libvpx.
+    // Threads used for conversion, including the caller (1..4).
     int convertThreads() const { return m_threads; }
 
     // The output size for a screen of `screen` at `width` (0 or >= screen width: native), with
@@ -73,6 +76,7 @@ private:
     QVector<int> m_y0;
     QVector<int> m_fy;
     int m_threads;
+    std::unique_ptr<ConvertWorkers> m_workers;
     // Per band: two scaled RGB rows and two horizontally filtered source rows (16-bit, 3 channels).
     QVector<QVector<uchar>> m_rgbRows;
     QVector<QVector<quint16>> m_hRows;

@@ -1279,7 +1279,7 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
     bool key = m_forceKey || m_lastKeyAt < 0;
     if (!m_video->isOpen() || m_video->size() != out) {
         QString error;
-        if (!m_video->open(out, m_bitrate, m_fps, &error)) {
+        if (!m_video->open(out, m_bitrate, &error)) {
             fprintf(stderr, "sailfish-devagent: mirror: %s\n", qPrintable(error));
             softError(QStringLiteral("cannot encode frame"));
             m_pace.start(SLOW_INTERVAL_MS);

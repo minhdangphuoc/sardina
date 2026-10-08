@@ -1,7 +1,10 @@
 #include "videoencoder.h"
 
 #include <QThread>
+#include <condition_variable>
 #include <cstring>
+#include <functional>
+#include <mutex>
 #include <thread>
 #include <vector>
 #include <vpx/vp8cx.h>
@@ -10,12 +13,7 @@
 namespace {
 
 const int MIN_SIDE = 16;
-// Real-time speed. A negative value is a fixed speed; a positive one would be libvpx's automatic
-// speed selection, which aims at a share of the frame time and drifts between speeds 4 and 8.
-// Measured on the emulator (scrolling text, 720x1600, agent 1.8.0): on an idle machine -6 encodes
-// in 8.8 ms against 15.3 ms for the former +8; under load both take ~15.5 ms, but +8 then raises
-// its speed and overshoots the target bitrate 5 times, as fixed -7 and faster always do (they lose
-// the motion search a scroll needs). See the plan, "Frame pacing".
+// A fixed speed avoids automatic changes that overshoot the target bitrate during scrolling.
 const int CPU_USED = -6;
 // Macroblocks this similar to the last frame are skipped (screen content; WebRTC uses 100).
 const int STATIC_THRESHOLD = 100;
@@ -80,6 +78,90 @@ void buildTaps(int in, int out, QVector<int> *index, QVector<int> *weight)
 
 }
 
+class ConvertWorkers
+{
+public:
+    explicit ConvertWorkers(int count)
+    {
+        for (int i = 0; i < count; ++i) {
+            try {
+                m_pool.emplace_back([this, i]() { run(i); });
+            } catch (...) {
+                break;
+            }
+        }
+    }
+
+    ~ConvertWorkers()
+    {
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            m_stopping = true;
+            ++m_generation;
+        }
+        m_ready.notify_all();
+        for (std::thread &worker : m_pool) {
+            worker.join();
+        }
+    }
+
+    int size() const { return static_cast<int>(m_pool.size()); }
+
+    void start(int jobs, const std::function<void(int)> &job)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_job = job;
+        m_jobs = jobs;
+        m_done = 0;
+        ++m_generation;
+        m_ready.notify_all();
+    }
+
+    void wait()
+    {
+        std::unique_lock<std::mutex> lock(m_mutex);
+        m_finished.wait(lock, [this]() { return m_done == m_jobs; });
+        m_job = std::function<void(int)>();
+    }
+
+private:
+    void run(int index)
+    {
+        int seen = 0;
+        for (;;) {
+            std::function<void(int)> job;
+            {
+                std::unique_lock<std::mutex> lock(m_mutex);
+                m_ready.wait(lock, [this, seen]() { return m_stopping || m_generation != seen; });
+                if (m_stopping) {
+                    return;
+                }
+                seen = m_generation;
+                if (index >= m_jobs) {
+                    continue;
+                }
+                job = m_job;
+            }
+            job(index + 1);
+            {
+                std::lock_guard<std::mutex> lock(m_mutex);
+                ++m_done;
+            }
+            m_finished.notify_one();
+        }
+    }
+
+    std::vector<std::thread> m_pool;
+    std::mutex m_mutex;
+    std::condition_variable m_ready;
+    std::condition_variable m_finished;
+    std::function<void(int)> m_job;
+    int m_jobs = 0;
+    int m_done = 0;
+    int m_generation = 0;
+    bool m_stopping = false;
+};
+
 VideoEncoder::VideoEncoder()
     : m_codec(nullptr)
     , m_cfg(new vpx_codec_enc_cfg_t)
@@ -87,8 +169,10 @@ VideoEncoder::VideoEncoder()
     , m_bitrate(0)
     , m_current(0)
     , m_hasLast(false)
-    , m_threads(qBound(1, QThread::idealThreadCount() / 2, 4))
+    , m_threads(1)
+    , m_workers(new ConvertWorkers(qBound(1, QThread::idealThreadCount() / 2, 4) - 1))
 {
+    m_threads += m_workers->size();
     std::memset(m_cfg, 0, sizeof(*m_cfg));
     std::memset(m_image, 0, sizeof(*m_image));
 }
@@ -111,7 +195,7 @@ QSize VideoEncoder::outputSize(const QSize &screen, int width)
     return QSize(qMax(MIN_SIDE, evenDown(w)), qMax(MIN_SIDE, evenDown(h)));
 }
 
-bool VideoEncoder::open(const QSize &size, int bitrateKbps, int fps, QString *error)
+bool VideoEncoder::open(const QSize &size, int bitrateKbps, QString *error)
 {
     close();
     if (size.width() < MIN_SIDE || size.height() < MIN_SIDE || (size.width() & 1) || (size.height() & 1)) {
@@ -150,8 +234,6 @@ bool VideoEncoder::open(const QSize &size, int bitrateKbps, int fps, QString *er
     m_cfg->rc_buf_initial_sz = 200;
     m_cfg->rc_buf_optimal_sz = 300;
     m_cfg->kf_mode = VPX_KF_DISABLED; // the stream places key frames itself
-    Q_UNUSED(fps);
-
     m_codec = new vpx_codec_ctx_t;
     std::memset(m_codec, 0, sizeof(*m_codec));
     err = vpx_codec_enc_init(m_codec, vpx_codec_vp8_cx(), m_cfg, 0);
@@ -243,23 +325,14 @@ void VideoEncoder::convert(const uchar *rows, int width, int height, int bytesPe
     }
     auto bandStart = [&](int b) { return evenDown(h * b / bands); };
     auto bandEnd = [&](int b) { return b + 1 == bands ? h : evenDown(h * (b + 1) / bands); };
-    std::vector<std::thread> workers;
-    int started = 1; // band 0 runs on this thread
-    for (int b = 1; b < bands; ++b) {
-        try {
-            workers.emplace_back(&VideoEncoder::convertBand, this, rows, width, height, bytesPerLine, yInverted,
-                                 bandStart(b), bandEnd(b), planes, rgb[b], hRows[b]);
-        } catch (...) {
-            break; // no thread: the remaining rows are converted here
-        }
-        ++started;
+    if (bands > 1) {
+        m_workers->start(bands - 1, [&](int b) {
+            convertBand(rows, width, height, bytesPerLine, yInverted, bandStart(b), bandEnd(b), planes, rgb[b], hRows[b]);
+        });
     }
     convertBand(rows, width, height, bytesPerLine, yInverted, 0, bandEnd(0), planes, rgb[0], hRows[0]);
-    if (started < bands) {
-        convertBand(rows, width, height, bytesPerLine, yInverted, bandStart(started), h, planes, rgb[0], hRows[0]);
-    }
-    for (std::thread &t : workers) {
-        t.join();
+    if (bands > 1) {
+        m_workers->wait();
     }
 }
 
