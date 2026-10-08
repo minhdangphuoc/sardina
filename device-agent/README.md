@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.1-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.2-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -134,7 +134,9 @@ added `mirror`; 1.2.0 added the binary mirror encoding, acks and the lease (see
 protocol; 1.4.0 adds opt-in adaptive quality to binary mirror streams; 1.5.0 adds the `capture` and
 `captureReason` fields; 1.6.0 adds VP8 video; 1.7.0 adds opt-in tap/swipe input; 1.8.0 paces VP8
 frames and reports an idle screen (optional header fields only); 1.8.1 corrects the pacing rule; 1.10.0 adds JSON log output with cursor resume and the `stats` stream
-(for the Device Monitor); 1.10.1 changes only the package's uninstall cleanup, not the protocol. All additions are
+(for the Device Monitor); 1.10.1 changes only the package's uninstall cleanup, not the protocol; 1.10.2 makes
+an explicit `"lease":0` mean no lease for text mirror streams and ends log and stats streams when
+Developer Mode goes off. All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -220,8 +222,9 @@ Upstream, the client sends JSON lines (at most 256 bytes; unknown or malformed l
   the controlled indicator is visible and the focus lease is active.
 
 Lease: in binary mode the lease is always on (`"lease":<seconds>`, clamped to 10..300, default 60).
-In text mode it is on only when the request has `lease` (`--request mirror --lease N`, which also
-forwards stdin lines to the socket, so keepalives can travel over `sfdk device exec`). If no valid
+In text mode it is on only when the request has a positive `lease` (`--request mirror --lease N`,
+which also forwards stdin lines to the socket, so keepalives can travel over `sfdk device exec`);
+`"lease":0` means no lease. If no valid
 keepalive arrives within the lease, the agent sends the fatal `"lease expired"`, closes the stream
 and cleans up. Without a lease, a text stream is byte for byte as in 1.1.0.
 

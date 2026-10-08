@@ -40,6 +40,7 @@ private slots:
     void onOutput();
     void onClientGone();
     void onProcessFinished();
+    void onProcessError(QProcess::ProcessError error);
 
 private:
     void markEnded();

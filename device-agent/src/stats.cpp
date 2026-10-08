@@ -57,9 +57,20 @@ StatsStream::StatsStream(QLocalSocket *socket, const QString &exe, int intervalM
     }
 }
 
+// The process followed so far while its first argument still equals the path, so a tick reads one
+// cmdline instead of every process's.
+int StatsStream::findPid() const
+{
+    if (m_pid != 0
+        && statsmath::cmdlineMatches(readProc(QStringLiteral("/proc/%1/cmdline").arg(m_pid)), m_exe.toStdString())) {
+        return m_pid;
+    }
+    return scanForPid();
+}
+
 // The lowest pid whose first argument equals the path; failing that, whose comm equals the base
 // name cut to 15 characters.
-int StatsStream::findPid() const
+int StatsStream::scanForPid() const
 {
     const std::string exe = m_exe.toStdString();
     int byComm = 0;

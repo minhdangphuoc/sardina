@@ -1,4 +1,5 @@
 #include "client.h"
+#include "firstline.h"
 #include "paths.h"
 
 #include <QCoreApplication>
@@ -130,29 +131,28 @@ int Client::run(const QStringList &args)
     socket.flush();
 
     int exitCode = 0;
-    bool firstChunk = true;
     const bool streaming = cmd == QLatin1String("logs") || cmd == QLatin1String("mirror") || cmd == QLatin1String("stats");
-    const bool checkFirstLine = cmd != QLatin1String("logs");
+    FirstLine firstLine;
+    bool judged = false;
+    // Only the first line is the status. A log stream starts with journal text instead; only a
+    // refusal ("logs disabled on the phone", Developer Mode off) is a JSON object with "ok":false.
+    const auto judgeFirstLine = [&]() {
+        if (judged) {
+            return;
+        }
+        judged = true;
+        const QJsonDocument doc = QJsonDocument::fromJson(
+            QByteArray(firstLine.line().data(), static_cast<int>(firstLine.line().size())));
+        const QJsonValue ok = doc.isObject() ? doc.object().value(QStringLiteral("ok")) : QJsonValue();
+        if (cmd == QLatin1String("logs") ? ok == QJsonValue(false) : !ok.toBool(false)) {
+            exitCode = 1;
+        }
+    };
 
     QObject::connect(&socket, &QLocalSocket::readyRead, &socket, [&]() {
         const QByteArray data = socket.readAll();
-        if (firstChunk && checkFirstLine) {
-            firstChunk = false;
-            // A stream's first chunk may hold more than one line; only the first is the status.
-            const int eol = data.indexOf('\n');
-            const QJsonDocument doc = QJsonDocument::fromJson(eol >= 0 ? data.left(eol) : data);
-            if (!doc.isObject() || !doc.object().value(QStringLiteral("ok")).toBool(false)) {
-                exitCode = 1;
-            }
-        } else if (firstChunk) {
-            // A log stream starts with journal text; only a refusal (agent 1.9.0: "logs disabled on
-            // the phone", or Developer Mode off) is a JSON object with "ok":false.
-            firstChunk = false;
-            const int eol = data.indexOf('\n');
-            const QJsonDocument doc = QJsonDocument::fromJson(eol >= 0 ? data.left(eol) : data);
-            if (doc.isObject() && doc.object().value(QStringLiteral("ok")) == QJsonValue(false)) {
-                exitCode = 1;
-            }
+        if (!judged && firstLine.feed(data.constData(), static_cast<size_t>(data.size()))) {
+            judgeFirstLine();
         }
         if (!writeOut(data)) {
             // stdout is gone (ssh closed): drop the connection so the daemon stops streaming.
@@ -211,6 +211,8 @@ int Client::run(const QStringList &args)
     if (socket.state() == QLocalSocket::ConnectedState) {
         QCoreApplication::exec();
     }
-    // Whatever arrived before the disconnect is already written; nothing buffered remains.
+    // Whatever arrived before the disconnect is already written; nothing buffered remains. A reply
+    // that ended without a newline is judged on what arrived.
+    judgeFirstLine();
     return exitCode;
 }

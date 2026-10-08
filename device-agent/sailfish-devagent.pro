@@ -10,7 +10,7 @@ PKGCONFIG += wayland-client
 # VP8 video for the mirror (src/videoencoder.cpp): libvpx-devel from the target's repositories.
 PKGCONFIG += vpx
 
-AGENT_VERSION = 1.10.1
+AGENT_VERSION = 1.10.2
 DEFINES += AGENT_VERSION=\\\"$$AGENT_VERSION\\\"
 
 SOURCES += \
@@ -50,7 +50,8 @@ HEADERS += \
     src/videoencoder.h \
     src/settings.h \
     src/settingsservice.h \
-    src/client.h
+    src/client.h \
+    src/firstline.h
 
 # Client code for Lipstick's private recorder and overlay protocols, generated from the copies in
 # protocol/ (see each file's copyright comment for its source and licence).

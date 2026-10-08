@@ -47,6 +47,9 @@ private slots:
     void onSettingChanged(const QString &key);
     // A mirror or log stream started or stopped, control or the capture path changed.
     void onSessionChanged();
+    // Ends the log and stats streams once Developer Mode is off: unlike the mirror they get no
+    // keepalives on which to recheck it.
+    void checkDeveloperMode();
 
 private:
     void readRequest(QLocalSocket *socket);
@@ -59,6 +62,7 @@ private:
 
     QLocalServer m_server;
     QTimer m_retry;
+    QTimer m_developerModeCheck; // runs while a log or stats stream does
     bool m_notified;
     Settings *m_settings;         // a child of this, created first: the others read it
     StreamIndicator *m_indicator; // a child of this, so it outlives the sockets in m_server

@@ -52,6 +52,8 @@ const int MIRROR_MIN_LEASE = 10;
 const int MIRROR_MAX_LEASE = 300;
 
 const int NOTIFY_TIMEOUT_MS = 1500;
+const int DEVELOPER_MODE_CHECK_MS = 3000;
+const char *const DEVELOPER_MODE_OFF = "developer mode is off";
 
 QDBusMessage notificationsCall(const QString &method)
 {
@@ -80,6 +82,17 @@ QString clientName(const QJsonValue &value)
     return out.left(CLIENT_MAX_CHARS).trimmed();
 }
 
+// The lease is always on for binary and VP8 streams, which travel over the SSH forward: a missing or
+// non-positive value gets the default. A text stream has one when it asks: "lease":0 (or less) or no
+// field means none, a value that is not a number means the default.
+int mirrorLease(const QJsonValue &requested, bool required)
+{
+    if (requested.isUndefined() || (requested.isDouble() && requested.toDouble() < 1)) {
+        return required ? MIRROR_DEFAULT_LEASE : 0;
+    }
+    return qBound(MIRROR_MIN_LEASE, requested.toInt(MIRROR_DEFAULT_LEASE), MIRROR_MAX_LEASE);
+}
+
 QJsonObject errorReply(const QString &message)
 {
     QJsonObject o;
@@ -105,6 +118,8 @@ Agent::Agent(QObject *parent)
     m_retry.setInterval(RETRY_MS);
     m_retry.setSingleShot(true);
     connect(&m_retry, &QTimer::timeout, this, &Agent::tryListen);
+    m_developerModeCheck.setInterval(DEVELOPER_MODE_CHECK_MS);
+    connect(&m_developerModeCheck, &QTimer::timeout, this, &Agent::checkDeveloperMode);
     connect(&m_server, &QLocalServer::newConnection, this, &Agent::onNewConnection);
     // chmod 0600 on the socket: only the owning user may connect.
     m_server.setSocketOptions(QLocalServer::UserAccessOption);
@@ -158,6 +173,7 @@ void Agent::tryListen()
 void Agent::stop()
 {
     m_retry.stop();
+    m_developerModeCheck.stop();
     m_service->stop();
     // Sessions that end during shutdown must not call back into a half-destroyed agent.
     if (m_mirror) {
@@ -384,7 +400,8 @@ void Agent::onSettingChanged(const QString &key)
         m_mirror->applySetting(key); // screenView off ends it; control/touchIndicator go to its hooks
     }
     if (key == QLatin1String("logs") && !m_settings->logs()) {
-        for (const QPointer<LogStream> &log : m_logs) {
+        const QList<QPointer<LogStream>> logs = m_logs; // ending one prunes m_logs
+        for (const QPointer<LogStream> &log : logs) {
             if (log) {
                 log->endWithError(QStringLiteral("logs disabled on the phone"));
             }
@@ -414,7 +431,33 @@ void Agent::onSessionChanged()
             m_stats.removeAt(i);
         }
     }
+    if (m_logs.isEmpty() && m_stats.isEmpty()) {
+        m_developerModeCheck.stop();
+    } else if (!m_developerModeCheck.isActive()) {
+        m_developerModeCheck.start();
+    }
     m_service->notifyChanged(QStringLiteral("session"));
+}
+
+void Agent::checkDeveloperMode()
+{
+    if (Paths::developerModeOn()) {
+        return;
+    }
+    const QString reason = QLatin1String(DEVELOPER_MODE_OFF);
+    // Copies: ending a stream calls onSessionChanged(), which prunes the lists.
+    const QList<QPointer<LogStream>> logs = m_logs;
+    for (const QPointer<LogStream> &log : logs) {
+        if (log) {
+            log->endWithError(reason);
+        }
+    }
+    const QList<QPointer<StatsStream>> stats = m_stats;
+    for (const QPointer<StatsStream> &stream : stats) {
+        if (stream) {
+            stream->endWithError(reason);
+        }
+    }
 }
 
 QVariantMap Agent::statusMap() const
@@ -564,7 +607,7 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
 
     // Developer Mode gate: turning it off disables the agent without uninstalling it.
     if (!Paths::developerModeOn()) {
-        reply(socket, errorReply(QStringLiteral("developer mode is off")));
+        reply(socket, errorReply(QLatin1String(DEVELOPER_MODE_OFF)));
         return;
     }
 
@@ -621,14 +664,7 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
             width = qBound(MIRROR_MIN_WIDTH, width, MIRROR_MAX_WIDTH);
         }
         const int quality = qBound(1, request.value(QStringLiteral("quality")).toInt(MIRROR_DEFAULT_QUALITY), 100);
-        // The lease is always on for binary streams; text streams have it only when asked.
-        int lease = 0;
-        if (request.contains(QStringLiteral("lease"))) {
-            lease = qBound(MIRROR_MIN_LEASE, request.value(QStringLiteral("lease")).toInt(MIRROR_DEFAULT_LEASE), MIRROR_MAX_LEASE);
-        }
-        if (encoding != MirrorEncoding::Text && request.value(QStringLiteral("lease")).toInt(0) <= 0) {
-            lease = MIRROR_DEFAULT_LEASE;
-        }
+        const int lease = mirrorLease(request.value(QStringLiteral("lease")), encoding != MirrorEncoding::Text);
         // One mirror per daemon: the older stream is told (in its own encoding) and closed first.
         if (m_mirror) {
             m_mirror->finish(QStringLiteral("replaced"));

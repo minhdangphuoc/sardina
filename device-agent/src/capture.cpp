@@ -3,6 +3,7 @@
 
 #include <QDBusConnection>
 #include <QDBusMessage>
+#include <QDBusPendingCallWatcher>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -11,6 +12,7 @@
 namespace {
 
 const int POLL_MS = 100;
+const int CALL_TIMEOUT_MS = 3000; // a timeout fails this capture only
 const char *BUS_NAME = "devagent-screenshot";
 
 }
@@ -48,12 +50,22 @@ void Capture::start()
                                                        QStringLiteral("org.nemomobile.lipstick"),
                                                        QStringLiteral("saveScreenshot"));
     call.setArguments(QVariantList() << m_stagingPath);
-    const QDBusMessage result = bus.call(call);
-    if (!bus.isConnected()) {
+    // Asynchronous: a busy or hung lipstick must not stall the event loop (and with it every stream).
+    QDBusPendingCallWatcher *watcher = new QDBusPendingCallWatcher(bus.asyncCall(call, CALL_TIMEOUT_MS), this);
+    connect(watcher, &QDBusPendingCallWatcher::finished, this, &Capture::onCallFinished);
+}
+
+void Capture::onCallFinished(QDBusPendingCallWatcher *watcher)
+{
+    watcher->deleteLater();
+    if (!QDBusConnection(QLatin1String(BUS_NAME)).isConnected()) {
         QDBusConnection::disconnectFromBus(QLatin1String(BUS_NAME)); // the bus went away: reconnect next time
     }
-    if (result.type() == QDBusMessage::ErrorMessage) {
-        fail(QStringLiteral("lipstick refused: ") + result.errorName() + QStringLiteral(": ") + result.errorMessage());
+    if (watcher->isError()) {
+        // lipstick may still write the file after a timeout; this capture no longer wants it.
+        QFile::remove(m_stagingPath);
+        const QDBusError error = watcher->error();
+        fail(QStringLiteral("lipstick refused: ") + error.name() + QStringLiteral(": ") + error.message());
         return;
     }
     m_poll.start();

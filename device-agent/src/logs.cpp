@@ -68,6 +68,7 @@ LogStream::LogStream(QLocalSocket *socket, int lines, const QString &client, boo
     connect(&m_process, &QProcess::readyReadStandardOutput, this, &LogStream::onOutput);
     connect(&m_process, static_cast<void (QProcess::*)(int, QProcess::ExitStatus)>(&QProcess::finished),
             this, &LogStream::onProcessFinished);
+    connect(&m_process, &QProcess::errorOccurred, this, &LogStream::onProcessError);
     connect(m_socket, &QLocalSocket::disconnected, this, &LogStream::onClientGone);
 
     // Fixed argv; `lines` is a bounded integer and the cursor passed validCursor(): nothing from the
@@ -111,6 +112,7 @@ void LogStream::write(const QByteArray &data)
 
 void LogStream::onClientGone()
 {
+    m_process.disconnect(this); // the kill below is no journalctl failure
     if (m_process.state() != QProcess::NotRunning) {
         m_process.kill();
         m_process.waitForFinished(1000);
@@ -125,6 +127,15 @@ void LogStream::onProcessFinished()
         m_socket->disconnectFromServer();
     }
     markEnded();
+}
+
+// FailedToStart emits no finished(), so without this the client would wait on a silent stream.
+void LogStream::onProcessError(QProcess::ProcessError error)
+{
+    if (error == QProcess::Timedout) {
+        return; // only our own waitForFinished() calls time out
+    }
+    endWithError(QStringLiteral("journalctl failed: ") + m_process.errorString());
 }
 
 void LogStream::endWithError(const QString &reason)

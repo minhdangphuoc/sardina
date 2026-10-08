@@ -32,6 +32,7 @@ private slots:
 
 private:
     int findPid() const;
+    int scanForPid() const;
     void writeLine(const QByteArray &json);
     void markEnded();
 
