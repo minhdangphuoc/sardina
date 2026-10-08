@@ -12,8 +12,8 @@
 #include <QTimer>
 
 #include "pacer.h"
+#include "retrybudget.h"
 
-class Capture;
 class QImage;
 class QJsonObject;
 class Recorder;
@@ -23,12 +23,13 @@ class StreamIndicator;
 class TouchOverlay;
 class VideoEncoder;
 class MirrorInput;
+class DisplayState;
 
 // Text and Binary carry JPEG/PNG images; Vp8 (agent 1.6.0) uses the binary framing with VP8 video.
 enum class MirrorEncoding { Text, Binary, Vp8 };
 
-// Streams the device screen until its socket disconnects. Native compositor capture is preferred;
-// the screenshot path is a slower fallback. Text frames carry base64, while binary JPEG and VP8
+// Streams the device screen until its socket disconnects, captured only through the compositor's
+// recorder (the stream ends if it cannot be used). Text frames carry base64, while binary JPEG and VP8
 // frames use acknowledged records so capture pauses before the client or socket queue is overrun.
 // VP8 drops raw captures under backpressure, never encoded frames, because later deltas depend on
 // earlier frames. Its pacer adapts when conversion cannot keep up, and idle messages distinguish a
@@ -41,7 +42,7 @@ public:
     MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding = MirrorEncoding::Text,
                  int window = 2, int leaseSeconds = 0, StreamIndicator *indicator = nullptr, bool adapt = false,
                  int bitrateKbps = 0, bool inputRequested = false, const Settings *settings = nullptr,
-                 bool phoneState = false);
+                 bool phoneState = false, bool pauseIdle = false);
     ~MirrorStream();
 
     // Writes the fatal reply {"ok":false,"error":...} in the stream's encoding, flushes,
@@ -59,7 +60,7 @@ public:
     bool inputActive() const { return m_inputActive; }
     qint64 startedAt() const { return m_startedAt; } // ms since the epoch
     QString encodingName() const;
-    QString captureName() const; // "native", "screenshot", or "" before the first frame
+    QString captureName() const; // "native", or "" before the recorder opened
 
 signals:
     // The stream stopped or its capture path changed.
@@ -67,7 +68,6 @@ signals:
 
 private slots:
     void tick();
-    void onCaptured(const QString &error);
     void onRecorderFrame(const QImage &view, bool yInverted);
     void onRecorderFailed(const QString &error, bool fatal);
     void onRecorderTimeout();
@@ -79,6 +79,9 @@ private slots:
     void onPace();
     void onBytesWritten();
     void onIdle();
+    void onDisplayChanged();
+    void sendSame();
+    void wakeFromIdle(qint64 now);
     void onContactChanged(const QPoint &point, bool pressed);
 
 private:
@@ -108,19 +111,19 @@ private:
     void softError(const QString &message);
     // Opens the recorder on first use, or again once after a fatal error if it had delivered frames.
     bool ensureRecorder();
-    void setCapturePath(bool native, const QString &reason);
-    QByteArray captureFields(bool native) const;
+    void endWithoutRecorder(const QString &reason);
+    static QByteArray captureFields();
     void sendFrame(const QByteArray &hash, const QByteArray &data, const QByteArray &format, const QSize &screen,
-                   const QSize &size, qint64 captureMs, const QElapsedTimer &agentClock, bool native);
+                   const QSize &size, qint64 captureMs, const QElapsedTimer &agentClock);
     void cleanup();
     bool isVideo() const { return m_encoding == MirrorEncoding::Vp8; }
     bool binaryFraming() const { return m_encoding != MirrorEncoding::Text; }
     bool linkBusy() const;
     void handleKeyRequest();
     // Encodes one captured frame and sends it, or drops it while the link is behind.
-    void videoFrame(const uchar *rows, int width, int height, int bytesPerLine, bool yInverted, bool native);
+    void videoFrame(const uchar *rows, int width, int height, int bytesPerLine, bool yInverted);
     void sendVideoFrame(const QByteArray &data, bool key, qint64 pts, const QSize &screen, const QSize &size,
-                        qint64 encodeMs, qint64 convertMs, bool native, bool refresh = false);
+                        qint64 encodeMs, qint64 convertMs, bool refresh = false);
     // Frame pacing (agent 1.8.0).
     double paceInterval() const;
     qint64 nextRequestAt() const;
@@ -132,20 +135,14 @@ private:
     int m_width;
     int m_quality;
     QTimer m_timer;
-    Capture *m_capture;
     Recorder *m_recorder;
-    bool m_recorderOff;       // the recorder could not be opened: Capture for the rest of the stream
     bool m_recorderDelivered; // the current recorder delivered a frame (worth reopening after a failure)
-    QString m_recorderError;  // last recorder failure, the reason when falling back
-    bool m_pathKnown;         // a capture path was reported (journal line, frame fields)
-    bool m_pathNative;
-    QString m_pathReason;
+    QString m_recorderError;  // last recorder failure, the reason the stream ends with
+    RetryBudget m_recorderTries; // reopens of a broken recorder
     bool m_recorderStale;     // the pending frame already timed out: drop it when it arrives
     QTimer m_frameTimeout;
-    QString m_capturePath;
     qint64 m_captureTs;
     qint64 m_frame;
-    qint64 m_seq;
     qint64 m_drops;
     QByteArray m_lastHash;
     bool m_slow;
@@ -208,9 +205,12 @@ private:
     double m_gridAt;      // m_streamClock ms of the last frame's slot, -1 before the first frame
     QTimer m_idle;        // single shot: the screen has not changed for a while
     int m_refreshes;      // re-encodes of the last picture since it last changed
+    bool m_pauseIdle;     // agent 1.10.5, "idle":"pause": a still screen sends one "same" and then nothing
+    bool m_idleReported;  // that "same" has gone out since the last frame
+    qint64 m_lastFrameAt; // m_streamClock ms of the last encoded frame, -1 before the first
+    DisplayState *m_display; // blank display: nothing is sent while the screen is still
     QSize m_lastScreen;   // the last encoded frame's screen and output sizes, for refresh frames
     QSize m_lastSize;
-    bool m_lastNative;
 };
 
 #endif

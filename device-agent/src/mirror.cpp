@@ -1,5 +1,5 @@
 #include "mirror.h"
-#include "capture.h"
+#include "displaystate.h"
 #include "indicator.h"
 #include "mirrorinput.h"
 #include "paths.h"
@@ -48,7 +48,9 @@ const double PACE_LEAD_SHARE = 0.5;
 const int IDLE_AFTER_MS = 300;
 const int IDLE_REFRESHES = 2;
 const int IDLE_HEARTBEAT_MS = 1000;
-const int SCREENSHOT_MIN_INTERVAL_MS = 250; // the screenshot fallback of a video stream: at most 4 per second
+const int WAKE_AFTER_MS = 1000; // a change after this long without a frame ends the idle pace
+const int RECORDER_TRIES = 3; // reopens of a broken recorder within RECORDER_TRY_WINDOW_MS before the stream ends
+const int RECORDER_TRY_WINDOW_MS = 5000;
 const int INPUT_FOCUS_LEASE_MS = 3000;
 const int INPUT_MESSAGES_PER_SECOND = 20; // also keeps accepted gestures at the existing 20/s ceiling
 const int KEY_REQUESTS_PER_SECOND = 2;
@@ -96,22 +98,18 @@ bool jsonClampedInteger(const QJsonValue &v, int min, int max, int *value)
 
 MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding,
                            int window, int leaseSeconds, StreamIndicator *indicator, bool adapt, int bitrateKbps,
-                           bool inputRequested, const Settings *settings, bool phoneState)
+                           bool inputRequested, const Settings *settings, bool phoneState, bool pauseIdle)
     : QObject(socket)
     , m_socket(socket)
     , m_fps(fps)
     , m_width(width)
     , m_quality(quality)
-    , m_capture(nullptr)
     , m_recorder(nullptr)
-    , m_recorderOff(false)
     , m_recorderDelivered(false)
-    , m_pathKnown(false)
-    , m_pathNative(false)
+    , m_recorderTries(RECORDER_TRIES, RECORDER_TRY_WINDOW_MS)
     , m_recorderStale(false)
     , m_captureTs(0)
     , m_frame(0)
-    , m_seq(0)
     , m_drops(0)
     , m_slow(false)
     , m_cleaned(false)
@@ -154,7 +152,10 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
     , m_pacer(fps)
     , m_gridAt(-1)
     , m_refreshes(IDLE_REFRESHES)
-    , m_lastNative(false)
+    , m_pauseIdle(pauseIdle)
+    , m_idleReported(false)
+    , m_lastFrameAt(-1)
+    , m_display(nullptr)
 {
     m_streamClock.start();
     connect(m_socket, &QLocalSocket::disconnected, this, &MirrorStream::onClientGone);
@@ -236,6 +237,8 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
         connect(&m_pace, &QTimer::timeout, this, &MirrorStream::onPace);
         m_idle.setSingleShot(true);
         connect(&m_idle, &QTimer::timeout, this, &MirrorStream::onIdle);
+        m_display = new DisplayState(this);
+        connect(m_display, &DisplayState::changed, this, &MirrorStream::onDisplayChanged);
         connect(m_socket, &QLocalSocket::bytesWritten, this, &MirrorStream::onBytesWritten);
         QTimer::singleShot(0, this, &MirrorStream::pumpVideo);
         return;
@@ -412,10 +415,7 @@ QString MirrorStream::encodingName() const
 
 QString MirrorStream::captureName() const
 {
-    if (!m_pathKnown) {
-        return QString();
-    }
-    return m_pathNative ? QStringLiteral("native") : QStringLiteral("screenshot");
+    return m_recorder ? QStringLiteral("native") : QString();
 }
 
 void MirrorStream::onLeaseExpired()
@@ -762,7 +762,7 @@ void MirrorStream::tick()
     if (linkBusy) {
         ++m_linkSkips;
     }
-    if (m_capture || recorderBusy || linkBusy) {
+    if (recorderBusy || linkBusy) {
         if (recorderBusy && m_recorderStale) {
             m_recorder->repaint(); // still waiting, e.g. the screen is off: ask again
         }
@@ -771,48 +771,33 @@ void MirrorStream::tick()
         }
         return;
     }
-    if (ensureRecorder()) {
-        ++m_frame;
-        m_captureTs = QDateTime::currentMSecsSinceEpoch();
-        m_captureClock.start();
-        m_recorderStale = false;
-        if (m_recorder->requestFrame()) {
-            m_frameTimeout.start();
-        }
-        // Otherwise the connection failed: onRecorderFailed reported it, the next tick reopens
-        // or falls back.
+    if (!ensureRecorder()) {
         return;
     }
-    const QString ext = Paths::lipstickWritesJpeg() ? QStringLiteral("jpg") : QStringLiteral("png");
-    ++m_seq;
-    m_capturePath = Paths::screenshotStagingDir() + QStringLiteral("/mirror-%1.%2").arg(m_seq).arg(ext);
-    m_captureTs = QDateTime::currentMSecsSinceEpoch();
     ++m_frame;
+    m_captureTs = QDateTime::currentMSecsSinceEpoch();
     m_captureClock.start();
-    m_capture = new Capture(m_capturePath, CAPTURE_TIMEOUT_MS, this);
-    connect(m_capture, &Capture::finished, this, &MirrorStream::onCaptured);
-    m_capture->start();
+    m_recorderStale = false;
+    if (m_recorder->requestFrame()) {
+        m_frameTimeout.start();
+    }
+    // Otherwise the connection failed: onRecorderFailed reported it, the next tick reopens it.
 }
 
+// False when the stream was ended: the mirror uses only the native recorder, never screenshots. A
+// recorder that broke is reopened a few times, then the stream ends with the reason.
 bool MirrorStream::ensureRecorder()
 {
-    if (m_recorderOff) {
-        return false;
-    }
     if (m_recorder && !m_recorder->broken()) {
         return true;
     }
     if (m_recorder) {
-        // Broken: reopen only if it had worked, so a compositor that fails at once is not retried
-        // on every tick. deleteLater: this may run while the recorder is still on the stack.
-        const bool retry = m_recorderDelivered;
+        // deleteLater: this may run while the recorder is still on the stack.
         m_recorder->disconnect(this);
         m_recorder->deleteLater();
         m_recorder = nullptr;
-        if (!retry) {
-            m_recorderOff = true;
-            setCapturePath(false, m_recorderError.isEmpty() ? QStringLiteral("recorder failed")
-                                                            : QStringLiteral("recorder failed: ") + m_recorderError);
+        if (!m_recorderTries.take(m_streamClock.elapsed())) {
+            endWithoutRecorder(m_recorderError.isEmpty() ? QStringLiteral("recorder failed") : m_recorderError);
             return false;
         }
     }
@@ -821,51 +806,26 @@ bool MirrorStream::ensureRecorder()
     m_recorderDelivered = false;
     m_recorderStale = false;
     if (!m_recorder) {
-        m_recorderOff = true;
-        setCapturePath(false, QStringLiteral("recorder unavailable: ") + error);
+        endWithoutRecorder(error);
         return false;
     }
     connect(m_recorder, &Recorder::frameReady, this, &MirrorStream::onRecorderFrame);
     connect(m_recorder, &Recorder::failed, this, &MirrorStream::onRecorderFailed);
-    setCapturePath(true, QString());
+    emit stateChanged(); // the capture path is now known
     fprintf(stderr, "sailfish-devagent: mirror: native capture %dx%d\n", m_recorder->size().width(),
             m_recorder->size().height());
     return true;
 }
 
-// Records which path produces the frames and journals the first path and every switch. The reason
-// is plain text of at most 120 characters (it goes into "captureReason" of every screenshot frame).
-void MirrorStream::setCapturePath(bool native, const QString &reason)
+void MirrorStream::endWithoutRecorder(const QString &reason)
 {
-    QString text = reason.simplified();
-    text.remove(QLatin1Char('"'));
-    text.remove(QLatin1Char('\\'));
-    if (text.size() > 120) {
-        text = text.left(120);
-    }
-    if (m_pathKnown && m_pathNative == native && m_pathReason == text) {
-        return;
-    }
-    const bool pathChanged = !m_pathKnown || m_pathNative != native;
-    m_pathKnown = true;
-    m_pathNative = native;
-    m_pathReason = native ? QString() : text;
-    if (pathChanged) {
-        emit stateChanged();
-    }
-    if (native) {
-        fprintf(stderr, "sailfish-devagent: mirror: capture path native\n");
-    } else {
-        fprintf(stderr, "sailfish-devagent: mirror: capture path screenshot (%s)\n", qPrintable(m_pathReason));
-    }
+    fprintf(stderr, "sailfish-devagent: mirror: native screen capture unavailable: %s\n", qPrintable(reason));
+    finish(QStringLiteral("native screen capture unavailable: ") + reason);
 }
 
-QByteArray MirrorStream::captureFields(bool native) const
+QByteArray MirrorStream::captureFields()
 {
-    if (native) {
-        return QByteArray(",\"capture\":\"native\"");
-    }
-    return ",\"capture\":\"screenshot\",\"captureReason\":" + jsonString(m_pathReason);
+    return QByteArray(",\"capture\":\"native\"");
 }
 
 void MirrorStream::onRecorderTimeout()
@@ -920,7 +880,7 @@ void MirrorStream::onRecorderFrame(const QImage &view, bool yInverted)
         ++m_frame;
         m_captureTs = QDateTime::currentMSecsSinceEpoch();
         notePaceArrival(m_streamClock.elapsed());
-        videoFrame(view.constBits(), view.width(), view.height(), view.bytesPerLine(), yInverted, true);
+        videoFrame(view.constBits(), view.width(), view.height(), view.bytesPerLine(), yInverted);
         return;
     }
     if (m_recorderStale) {
@@ -961,7 +921,7 @@ void MirrorStream::onRecorderFrame(const QImage &view, bool yInverted)
         return;
     }
     sendFrame(hash, data, jpeg ? QByteArray("jpeg") : QByteArray("png"), view.size(), image.size(), captureMs,
-              agentClock, true);
+              agentClock);
 }
 
 void MirrorStream::softError(const QString &message)
@@ -974,107 +934,13 @@ void MirrorStream::softError(const QString &message)
     }
 }
 
-void MirrorStream::onCaptured(const QString &error)
-{
-    const qint64 captureMs = m_captureClock.isValid() ? m_captureClock.elapsed() : 0;
-    QElapsedTimer agentClock;
-    agentClock.start();
-    Capture *capture = m_capture;
-    m_capture = nullptr;
-    if (capture) {
-        capture->deleteLater();
-    }
-    if (m_cleaned) {
-        return;
-    }
-    if (!error.isEmpty()) {
-        softError(error);
-        if (isVideo()) {
-            m_pace.start(SLOW_INTERVAL_MS);
-        }
-        return;
-    }
-
-    QFile file(m_capturePath);
-    QByteArray bytes;
-    if (file.open(QIODevice::ReadOnly)) {
-        bytes = file.readAll();
-        file.close();
-    }
-    QFile::remove(m_capturePath);
-    QDir().rmdir(Paths::screenshotStagingDir()); // only if empty
-    m_capturePath.clear();
-    if (bytes.isEmpty()) {
-        softError(QStringLiteral("cannot decode frame"));
-        if (isVideo()) {
-            m_pace.start(SLOW_INTERVAL_MS);
-        }
-        return;
-    }
-    if (isVideo()) {
-        const QImage image = QImage::fromData(bytes).convertToFormat(QImage::Format_RGBX8888);
-        if (image.isNull()) {
-            softError(QStringLiteral("cannot decode frame"));
-            m_pace.start(SLOW_INTERVAL_MS);
-            return;
-        }
-        videoFrame(image.constBits(), image.width(), image.height(), image.bytesPerLine(), false, false);
-        return;
-    }
-    if (m_slow) {
-        m_slow = false;
-        m_timer.setInterval(1000 / m_fps);
-    }
-
-    const QByteArray hash = QCryptographicHash::hash(bytes, QCryptographicHash::Md5);
-    if (hash == m_lastHash) {
-        writeMessage("{\"frame\":" + QByteArray::number(m_frame) + ",\"ts\":" + QByteArray::number(m_captureTs)
-                     + ",\"same\":true}");
-        return;
-    }
-
-    QByteArray data;
-    QByteArray format;
-    QSize screen;
-    QSize size;
-    if (canWriteJpeg()) {
-        QImage image = QImage::fromData(bytes);
-        if (image.isNull()) {
-            softError(QStringLiteral("cannot decode frame"));
-            return;
-        }
-        screen = image.size();
-        if (m_width > 0 && m_width < image.width()) {
-            image = image.scaledToWidth(m_width, Qt::SmoothTransformation);
-        }
-        size = image.size();
-        QBuffer buffer(&data);
-        buffer.open(QIODevice::WriteOnly);
-        if (!image.save(&buffer, "JPEG", m_quality)) {
-            softError(QStringLiteral("cannot decode frame"));
-            return;
-        }
-        format = "jpeg";
-    } else {
-        // No JPEG writer on this device: send lipstick's file as it is.
-        QBuffer buffer(&bytes);
-        buffer.open(QIODevice::ReadOnly);
-        screen = QImageReader(&buffer).size();
-        size = screen;
-        data = bytes;
-        format = Paths::lipstickWritesJpeg() ? "jpeg" : "png";
-    }
-    sendFrame(hash, data, format, screen, size, captureMs, agentClock, false);
-}
-
 void MirrorStream::sendFrame(const QByteArray &hash, const QByteArray &data, const QByteArray &format,
-                             const QSize &screen, const QSize &size, qint64 captureMs, const QElapsedTimer &agentClock,
-                             bool native)
+                             const QSize &screen, const QSize &size, qint64 captureMs, const QElapsedTimer &agentClock)
 {
     if (m_input && m_input->available()) {
-        m_input->setScreen(screen, native);
+        m_input->setScreen(screen, true);
     }
-    if (native && m_touchOverlay) {
+    if (m_touchOverlay) {
         m_touchOverlay->setScreen(screen);
     }
     m_lastHash = hash;
@@ -1087,7 +953,7 @@ void MirrorStream::sendFrame(const QByteArray &hash, const QByteArray &data, con
             + QByteArray::number(screen.height()) + "],\"size\":[" + QByteArray::number(size.width()) + ","
             + QByteArray::number(size.height()) + "],\"format\":\"" + format + "\",\"bytes\":"
             + QByteArray::number(data.size()) + ",\"cms\":" + QByteArray::number(cms) + ",\"ems\":"
-            + QByteArray::number(ems) + captureFields(native);
+            + QByteArray::number(ems) + captureFields();
         QByteArray adapt;
         if (m_adapt) {
             // "q" only for JPEG: it is the quality the frame was encoded with.
@@ -1112,7 +978,7 @@ void MirrorStream::sendFrame(const QByteArray &hash, const QByteArray &data, con
         + ",\"screen\":[" + QByteArray::number(screen.width()) + "," + QByteArray::number(screen.height())
         + "],\"size\":[" + QByteArray::number(size.width()) + "," + QByteArray::number(size.height())
         + "],\"format\":\"" + format + "\",\"data\":\"" + data.toBase64() + "\""
-        + captureFields(native) + "}";
+        + captureFields() + "}";
     writeLine(line);
 }
 
@@ -1147,15 +1013,6 @@ void MirrorStream::cleanup()
         m_recorder->deleteLater(); // cleanup() may run inside one of its signals
         m_recorder = nullptr;
     }
-    if (m_capture) {
-        delete m_capture;
-        m_capture = nullptr;
-    }
-    if (!m_capturePath.isEmpty()) {
-        QFile::remove(m_capturePath);
-        m_capturePath.clear();
-    }
-    QDir().rmdir(Paths::screenshotStagingDir()); // only if empty
     if (m_stopReason.isEmpty()) {
         fprintf(stderr, "sailfish-devagent: mirror stopped\n");
     } else {
@@ -1214,7 +1071,7 @@ void MirrorStream::handleKeyRequest()
 // for a new level and after a capture was dropped. Requests keep to the fps cap.
 void MirrorStream::pumpVideo()
 {
-    if (m_cleaned || !m_video || m_socket->state() != QLocalSocket::ConnectedState || m_capture) {
+    if (m_cleaned || !m_video || m_socket->state() != QLocalSocket::ConnectedState) {
         return;
     }
     const int interval = qMax(1, qRound(paceInterval()));
@@ -1239,55 +1096,31 @@ void MirrorStream::pumpVideo()
         return;
     }
     const qint64 now = m_streamClock.elapsed();
-    const bool native = ensureRecorder();
-    if (native) {
-        // The next slot of the grid, a little early so the compositor's next frame lands on it.
-        const qint64 due = nextRequestAt();
-        if (now < due) {
-            m_pace.start(static_cast<int>(due - now));
-            return;
-        }
-    } else {
-        const int minGap = qMax(interval, SCREENSHOT_MIN_INTERVAL_MS);
-        if (m_lastRequestAt >= 0 && now - m_lastRequestAt < minGap) {
-            m_pace.start(static_cast<int>(minGap - (now - m_lastRequestAt)));
-            return;
-        }
+    if (!ensureRecorder()) {
+        return;
+    }
+    // The next slot of the grid, a little early so the compositor's next frame lands on it.
+    const qint64 due = nextRequestAt();
+    if (now < due) {
+        m_pace.start(static_cast<int>(due - now));
+        return;
     }
     m_lastRequestAt = now;
-    if (native) {
-        const bool repaint = m_needRepaint || m_dirty;
-        m_recorderStale = false;
-        m_repaintAsked = repaint;
-        m_needRepaint = false;
-        if (!m_recorder->requestFrame(repaint)) {
-            m_pace.start(SLOW_INTERVAL_MS); // the connection failed: reopen or fall back then
-            return;
-        }
-        if (repaint) {
-            m_captureClock.start();
-            m_frameTimeout.start();
-        }
+    const bool repaint = m_needRepaint || m_dirty;
+    m_recorderStale = false;
+    m_repaintAsked = repaint;
+    m_needRepaint = false;
+    if (!m_recorder->requestFrame(repaint)) {
+        m_pace.start(SLOW_INTERVAL_MS); // the connection failed: reopen then
         return;
     }
-    // The screenshot fallback: one capture at a time, and only while the link has room.
-    if (linkBusy()) {
-        m_dirty = true;
-        m_pace.start(interval);
-        return;
+    if (repaint) {
+        m_captureClock.start();
+        m_frameTimeout.start();
     }
-    const QString ext = Paths::lipstickWritesJpeg() ? QStringLiteral("jpg") : QStringLiteral("png");
-    ++m_seq;
-    m_capturePath = Paths::screenshotStagingDir() + QStringLiteral("/mirror-%1.%2").arg(m_seq).arg(ext);
-    m_captureTs = QDateTime::currentMSecsSinceEpoch();
-    ++m_frame;
-    m_captureClock.start();
-    m_capture = new Capture(m_capturePath, CAPTURE_TIMEOUT_MS, this);
-    connect(m_capture, &Capture::finished, this, &MirrorStream::onCaptured);
-    m_capture->start();
 }
 
-void MirrorStream::videoFrame(const uchar *rows, int width, int height, int bytesPerLine, bool yInverted, bool native)
+void MirrorStream::videoFrame(const uchar *rows, int width, int height, int bytesPerLine, bool yInverted)
 {
     ++m_ticks;
     if (linkBusy()) {
@@ -1306,9 +1139,9 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
     const qint64 now = m_streamClock.elapsed();
     const QSize screen(width, height);
     if (m_input && m_input->available()) {
-        m_input->setScreen(screen, native);
+        m_input->setScreen(screen, true);
     }
-    if (native && m_touchOverlay) {
+    if (m_touchOverlay) {
         m_touchOverlay->setScreen(screen);
     }
     const QSize out = VideoEncoder::outputSize(screen, m_width);
@@ -1337,6 +1170,7 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
         pumpVideo();
         return;
     }
+    wakeFromIdle(now);
     // The picture has been copied out of the shared buffer: ask for the next frame now, so the
     // compositor renders into the buffer while this one is encoded.
     m_dirty = false;
@@ -1371,17 +1205,16 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
     }
     m_lastScreen = screen;
     m_lastSize = out;
-    m_lastNative = native;
     m_refreshes = 0;
-    sendVideoFrame(data, isKey, pts, screen, out, frameMs, convertMs, native);
-    if (native) {
-        m_idle.start(IDLE_AFTER_MS);
-    }
+    m_idleReported = false;
+    m_lastFrameAt = now;
+    sendVideoFrame(data, isKey, pts, screen, out, frameMs, convertMs);
+    m_idle.start(IDLE_AFTER_MS);
     pumpVideo();
 }
 
 void MirrorStream::sendVideoFrame(const QByteArray &data, bool key, qint64 pts, const QSize &screen, const QSize &size,
-                                  qint64 encodeMs, qint64 convertMs, bool native, bool refresh)
+                                  qint64 encodeMs, qint64 convertMs, bool refresh)
 {
     QByteArray header = "{\"frame\":" + QByteArray::number(m_frame) + ",\"ts\":" + QByteArray::number(m_captureTs)
         + ",\"screen\":[" + QByteArray::number(screen.width()) + "," + QByteArray::number(screen.height())
@@ -1389,7 +1222,7 @@ void MirrorStream::sendVideoFrame(const QByteArray &data, bool key, qint64 pts, 
         + "],\"format\":\"vp8\",\"key\":" + (key ? "true" : "false") + ",\"pts\":" + QByteArray::number(pts)
         + ",\"bytes\":" + QByteArray::number(data.size()) + ",\"ems\":"
         + QByteArray::number(qBound<qint64>(0, encodeMs, TIMING_MAX_MS)) + ",\"cvms\":"
-        + QByteArray::number(qBound<qint64>(0, convertMs, TIMING_MAX_MS)) + captureFields(native)
+        + QByteArray::number(qBound<qint64>(0, convertMs, TIMING_MAX_MS)) + captureFields()
         + ",\"pace\":" + QByteArray::number(qRound(paceInterval()));
     if (refresh) {
         header += ",\"refresh\":true";
@@ -1450,13 +1283,45 @@ void MirrorStream::notePaceCost(double ms, qint64 now)
     }
 }
 
+// The first change after a still screen: the frame request is already pending, so it is captured
+// and encoded at once; the pace returns to the full rate instead of climbing back step by step.
+void MirrorStream::wakeFromIdle(qint64 now)
+{
+    if (m_lastFrameAt >= 0 && now - m_lastFrameAt >= WAKE_AFTER_MS && m_pacer.wake(now)) {
+        fprintf(stderr, "sailfish-devagent: mirror: pace %.1f fps (screen changed after idle)\n", 1000.0 / paceInterval());
+    }
+}
+
+void MirrorStream::onDisplayChanged()
+{
+    if (!m_display->off()) {
+        m_idle.start(IDLE_AFTER_MS);
+    }
+}
+
+void MirrorStream::sendSame()
+{
+    ++m_frame;
+    m_captureTs = QDateTime::currentMSecsSinceEpoch();
+    writeMessage("{\"frame\":" + QByteArray::number(m_frame) + ",\"ts\":" + QByteArray::number(m_captureTs)
+                 + ",\"same\":true}");
+}
+
 // The screen has not changed since the last encoded frame (the frame request is still pending):
 // sharpen the last picture by encoding it again, then tell the client once a second that the
-// screen is idle. Nothing here asks the compositor for a repaint.
+// screen is idle. With "idle":"pause" only one such message goes out, and nothing at all while the
+// display is blank. Nothing here asks the compositor for a repaint.
 void MirrorStream::onIdle()
 {
-    if (m_cleaned || !m_video || !m_video->isOpen() || m_capture || !m_recorder || !m_recorder->pending()
-        || m_repaintAsked || m_socket->state() != QLocalSocket::ConnectedState) {
+    if (m_cleaned || !m_video || !m_video->isOpen() || !m_recorder || !m_recorder->pending()
+        || m_repaintAsked || m_socket->state() != QLocalSocket::ConnectedState || m_display->off()) {
+        return;
+    }
+    if (m_pauseIdle) {
+        if (!m_idleReported) {
+            m_idleReported = true;
+            sendSame();
+        }
         return;
     }
     if (m_refreshes < IDLE_REFRESHES) {
@@ -1478,16 +1343,13 @@ void MirrorStream::onIdle()
             m_lastPts = pts;
             ++m_frame;
             m_captureTs = QDateTime::currentMSecsSinceEpoch();
-            sendVideoFrame(data, false, pts, m_lastScreen, m_lastSize, clock.elapsed(), 0, m_lastNative, true);
+            sendVideoFrame(data, false, pts, m_lastScreen, m_lastSize, clock.elapsed(), 0, true);
         } else {
             m_refreshes = IDLE_REFRESHES; // nothing to sharpen: heartbeats only
         }
         m_idle.start(m_refreshes < IDLE_REFRESHES ? IDLE_AFTER_MS : IDLE_HEARTBEAT_MS);
         return;
     }
-    ++m_frame;
-    m_captureTs = QDateTime::currentMSecsSinceEpoch();
-    writeMessage("{\"frame\":" + QByteArray::number(m_frame) + ",\"ts\":" + QByteArray::number(m_captureTs)
-                 + ",\"same\":true}");
+    sendSame();
     m_idle.start(IDLE_HEARTBEAT_MS);
 }

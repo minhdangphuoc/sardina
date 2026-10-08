@@ -689,10 +689,11 @@ void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
         const bool input = request.value(QStringLiteral("input")).toBool(false);
         // The "settings" message (agent 1.9.0) is opt-in, so older clients get the 1.8.1 stream.
         const bool phoneState = request.value(QStringLiteral("phoneState")).toBool(false);
+        const bool pauseIdle = request.value(QStringLiteral("idle")).toString() == QLatin1String("pause");
         m_mirrorClient = client;
         m_mirror = new MirrorStream(socket, fps, width, quality, encoding,
                                     video ? MIRROR_VIDEO_WINDOW : MIRROR_DEFAULT_WINDOW, lease, m_indicator, adapt,
-                                    bitrate, input, m_settings, phoneState);
+                                    bitrate, input, m_settings, phoneState, pauseIdle);
         connect(m_mirror.data(), &MirrorStream::stateChanged, this, &Agent::onSessionChanged);
         onSessionChanged();
         return;

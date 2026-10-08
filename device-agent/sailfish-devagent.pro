@@ -10,7 +10,7 @@ PKGCONFIG += wayland-client
 # VP8 video for the mirror (src/videoencoder.cpp): libvpx-devel from the target's repositories.
 PKGCONFIG += vpx
 
-AGENT_VERSION = 1.10.4
+AGENT_VERSION = 1.10.5
 DEFINES += AGENT_VERSION=\\\"$$AGENT_VERSION\\\"
 
 SOURCES += \
@@ -21,6 +21,7 @@ SOURCES += \
     src/logs.cpp \
     src/stats.cpp \
     src/capture.cpp \
+    src/displaystate.cpp \
     src/mirror.cpp \
     src/mirrorinput.cpp \
     src/touchoverlay.cpp \
@@ -40,8 +41,10 @@ HEADERS += \
     src/stats.h \
     src/statsmath.h \
     src/capture.h \
+    src/displaystate.h \
     src/mirror.h \
     src/pacer.h \
+    src/retrybudget.h \
     src/mirrorinput.h \
     src/touchoverlay.h \
     src/indicator.h \
