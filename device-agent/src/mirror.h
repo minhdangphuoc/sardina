@@ -27,34 +27,13 @@ class MirrorInput;
 // Text and Binary carry JPEG/PNG images; Vp8 (agent 1.6.0) uses the binary framing with VP8 video.
 enum class MirrorEncoding { Text, Binary, Vp8 };
 
-// Streams the device screen to one client until it disconnects: a timer at `fps` captures a frame
-// through Recorder (lipstick's Wayland recorder, agent 1.3.0) or, when that cannot bind (older
-// lipstick, no access), through Capture (lipstick's saveScreenshot, which posts a notice per
-// frame); then scales and JPEG-encodes it, and writes it. Text encoding: one JSON
-// line per frame with base64 data (agent 1.1.0). Binary encoding: length-prefixed records with
-// raw image bytes; the client acknowledges image records and a tick is skipped while `window`
-// are unacknowledged. A tick is also skipped while a capture is running or the socket still has
-// unsent bytes. With a lease (leaseSeconds > 0) the stream ends by itself when no keepalive line
-// arrived for that long. Adaptive quality (agent 1.4.0, binary only, when the request has
-// "adapt":true): image headers also report the JPEG quality, the ack round trip and the tick
-// counters the client needs to judge the link (q, rtt and rttFrame, ticks, skips), and an upstream
-// {"set":{"width":W,"quality":Q}}
-// line changes width and quality from the next frame on (clamped to the requested values). The
-// client decides; the agent only measures and applies. VP8 video (agent 1.6.0, "encoding":"vp8"):
-// the binary framing with one VP8 frame per image record. Capture follows the compositor's frame
-// events instead of the timer (a frame is requested without a repaint and arrives when the screen
-// changes), at most `fps` (up to 30) per second; frames are scaled, converted to I420 and encoded
-// in real time at a target bitrate. Key frames come first, on request ({"keyframe":true} upstream)
-// and after a size change (agents 1.6.0 and 1.7.0 also sent one every 10 s). Encoded frames are
-// never dropped: while the link is behind, raw captures are dropped instead and the screen is
-// captured again once it has room. Frame pacing (agent 1.8.0): requests keep to a steady grid of
-// frame slots anchored on the frames' arrival, half a slot ahead so the compositor's next frame
-// lands on it. The slot length is the requested interval, or 1.5, 2, 3 or 4 times it while the
-// phone's convert-and-encode time does not keep up, one step at a time (pacer.h, agent 1.8.1);
-// frame headers report it as "pace" (ms). When the screen stops changing,
-// the last picture is encoded again up to twice ("refresh":true, it sharpens) and then a "same"
-// message goes out once a second, so the client can tell an idle screen from a stalled stream.
-// Owned by the socket, like LogStream.
+// Streams the device screen until its socket disconnects. Native compositor capture is preferred;
+// the screenshot path is a slower fallback. Text frames carry base64, while binary JPEG and VP8
+// frames use acknowledged records so capture pauses before the client or socket queue is overrun.
+// VP8 drops raw captures under backpressure, never encoded frames, because later deltas depend on
+// earlier frames. Its pacer adapts when conversion cannot keep up, and idle messages distinguish a
+// still screen from a stalled stream. The client may lower adaptive JPEG quality or size within the
+// requested bounds. A keepalive lease ends abandoned streams. Owned by the socket, like LogStream.
 class MirrorStream : public QObject
 {
     Q_OBJECT
