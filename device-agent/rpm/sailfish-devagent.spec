@@ -1,6 +1,6 @@
 Name:       sailfish-devagent
 Summary:    Developer agent for VS Code: screen, logs, and a Settings page
-Version:    1.10.0
+Version:    1.10.1
 Release:    1
 License:    GPL-3.0-or-later
 URL:        https://github.com/minhdangphuoc/vscode-sailfish
@@ -51,19 +51,45 @@ systemctl enable --now sailfish-devagent.service >/dev/null 2>&1 || :
 if [ "$1" -ge 2 ]; then
     systemctl try-restart sailfish-devagent.service >/dev/null 2>&1 || :
 fi
+# A running Settings app does not see a new or changed entry and page: close it (only it, never
+# lipstick), so it reads them again when it is next opened.
+pkill -u defaultuser -x jolla-settings >/dev/null 2>&1 || :
 
 %preun
+# $1 is the number of versions left after this step: 0 on erase, 1 or more on an upgrade. An upgrade
+# keeps everything (the settings survive it, and %post restarts the new daemon).
 if [ "$1" = "0" ]; then
+    # The daemon closes its session entry and removes its socket directory on SIGTERM.
     systemctl disable --now sailfish-devagent.service >/dev/null 2>&1 || :
-    # Remove the "Developer agent is running" notification; the unit's user owns it.
+    # Remove the "Developer agent is running" notification and any stream entry; the unit's user owns
+    # them, and lipstick keeps them after the daemon is gone.
     runuser -u defaultuser -- /usr/bin/sailfish-devagent --remove-notifications >/dev/null 2>&1 || :
 fi
 
 %postun
 systemctl daemon-reload >/dev/null 2>&1 || :
 if [ "$1" = "0" ]; then
-    # Settings and any temporary file the agent left behind.
+    # Erase only: whatever the agent (or the extension's install) created outside %files.
+    rm -f /etc/systemd/system/multi-user.target.wants/sailfish-devagent.service
+    systemctl reset-failed sailfish-devagent.service >/dev/null 2>&1 || :
+    # Settings and the temporary file of an interrupted settings write.
     rm -rf /var/lib/sailfish-devagent
+    # The RPM copy of an install that never reached rpm (cancelled at the password prompt).
+    rm -f /tmp/sailfish-devagent.rpm
+    devagent_uid=$(id -u defaultuser 2>/dev/null) || devagent_uid=
+    devagent_home=$(getent passwd defaultuser 2>/dev/null | cut -d: -f6) || devagent_home=
+    # Socket and unfetched screenshots of a daemon that did not stop cleanly. rm does not follow a
+    # symlink given as the operand, so a link planted there removes only the link.
+    if [ -n "$devagent_uid" ]; then
+        rm -rf "/run/user/$devagent_uid/sailfish-devagent"
+    fi
+    # lipstick's screenshot staging folder: only the agent's own file names, then the folder if empty.
+    if [ -n "$devagent_home" ] && [ -d "$devagent_home/sailfish-devagent" ] && [ ! -L "$devagent_home/sailfish-devagent" ]; then
+        rm -f "$devagent_home"/sailfish-devagent/shot-*.png
+        rmdir "$devagent_home/sailfish-devagent" >/dev/null 2>&1 || :
+    fi
+    # The Settings app would keep showing the removed entry until it restarts.
+    pkill -u defaultuser -x jolla-settings >/dev/null 2>&1 || :
 fi
 
 %files

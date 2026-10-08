@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.0-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.1-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -111,8 +111,18 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
 - On every request, valid stream keepalive and input activation it checks that Developer Mode is on
   (`jolla-developer-mode` installed, `/usr/bin/devel-su` present). A failed renewal ends the stream.
 - Accepts a fixed set of commands with validated arguments. Nothing is passed to a shell.
-- Removable: `rpm -e sailfish-devagent` (or **Uninstall Device Agent** in VS Code) removes the
-  package, the unit and the socket.
+- Removable: `rpm -e sailfish-devagent` (or **Uninstall Device Agent** in VS Code) leaves nothing
+  behind. On erase (not on an upgrade, which keeps the settings) `%preun` stops and disables the
+  service, whose SIGTERM handler closes the stream entry and removes the socket directory and any
+  staged screenshot, then closes the agent's notifications as `defaultuser`; `%postun` removes
+  `/var/lib/sailfish-devagent`, the RPM copy in `/tmp`, a socket directory or staged screenshots a
+  crashed daemon left, the `multi-user.target.wants` link and the unit's failed state, and closes a
+  running Settings app (`pkill -u defaultuser -x jolla-settings`, never lipstick) so it drops the
+  entry. `%post` closes it too, so a new or changed page shows the next time Settings opens. VS
+  Code repeats the root steps for agents whose scriptlets predate them (1.10.0), then removes what
+  the device user may remove (`~/.cache/sailfish-tools` included), closes leftover notifications
+  over the session bus and checks read-only that nothing is left. The journal keeps the agent's past
+  log lines; they rotate out like any other service's.
 
 ## Protocol
 
@@ -122,7 +132,7 @@ added `mirror`; 1.2.0 added the binary mirror encoding, acks and the lease (see
 protocol; 1.4.0 adds opt-in adaptive quality to binary mirror streams; 1.5.0 adds the `capture` and
 `captureReason` fields; 1.6.0 adds VP8 video; 1.7.0 adds opt-in tap/swipe input; 1.8.0 paces VP8
 frames and reports an idle screen (optional header fields only); 1.8.1 corrects the pacing rule; 1.10.0 adds JSON log output with cursor resume and the `stats` stream
-(for the Device Monitor). All additions are
+(for the Device Monitor); 1.10.1 changes only the package's uninstall cleanup, not the protocol. All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |

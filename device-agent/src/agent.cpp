@@ -184,6 +184,15 @@ void Agent::stop()
         // Only our own files live here: the socket and screenshots not yet fetched.
         dir.removeRecursively();
     }
+    // lipstick's staging folder in the home directory: a capture cut short by this stop leaves its
+    // file there. Only the agent's own file names, then the folder if it is empty.
+    QDir staging(Paths::screenshotStagingDir());
+    if (staging.exists()) {
+        for (const QString &name : staging.entryList(QStringList() << QStringLiteral("shot-*.png"), QDir::Files)) {
+            staging.remove(name);
+        }
+        QDir().rmdir(Paths::screenshotStagingDir());
+    }
 }
 
 namespace {
