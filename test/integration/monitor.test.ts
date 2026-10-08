@@ -199,8 +199,11 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       await viewWhen((v) => v.state === 'connected' && v.line.includes('agent 1.10.0'), 10000);
       const page = await html();
       assert.ok(!/<button|act-/.test(page), 'no buttons in the page; the actions are in the editor title bar');
-      const menu = (vscode.extensions.getExtension('sailfish-tools-dev.sailfish-tools')?.packageJSON as { contributes?: { menus?: Record<string, { command: string }[]> } } | undefined)?.contributes?.menus?.['editor/title'];
-      assert.deepStrictEqual(menu?.map((m) => m.command), ['restartApp', 'stopApp', 'screenshot', 'mirror', 'showLogs'].map((c) => `sailfish.monitor.${c}`));
+      const menu = (vscode.extensions.getExtension('sailfish-tools-dev.sailfish-tools')?.packageJSON as { contributes?: { menus?: Record<string, { command: string; when?: string }[]> } } | undefined)?.contributes?.menus?.['editor/title'] ?? [];
+      // Every editor title button is scoped to one panel; the Device Monitor shows only its own.
+      assert.ok(menu.every((m) => /^activeWebviewPanelId == '[\w.]+'/.test(m.when ?? '')), JSON.stringify(menu));
+      const monitorMenu = menu.filter((m) => m.when?.startsWith("activeWebviewPanelId == 'sailfish.deviceMonitor'"));
+      assert.deepStrictEqual(monitorMenu.map((m) => m.command), ['restartApp', 'stopApp', 'screenshot', 'mirror', 'showLogs'].map((c) => `sailfish.monitor.${c}`));
       assert.ok(!/log-grid|sessions-list|<section id="sec-/.test(page), 'no log viewer and no sessions list in the page');
       // The agent never serves a journal stream to the monitor itself.
       await new Promise((r) => setTimeout(r, 1000));
