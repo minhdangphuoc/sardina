@@ -4,9 +4,11 @@
 // The frame pacing decision of the VP8 mirror, free of Qt so it can be tested on the build host
 // (device-agent/tools/pacer-test.cpp).
 //
-// The slot is 1, 1.5, 2, 3 or 4 frame intervals (whole 60 Hz display frames at 30 fps). The cost is
-// the median convert + encode time of the latest delta frames; the next frame is captured while this
-// one is encoded, so a cost up to the slot keeps up. The slot moves one step at a time and only after
+// The slot is one of the steps 60, 45, 30, 20, 15, 10 and 7.5 fps, starting at the stream's frame
+// rate (at most 60, the phone's "Frame rate limit"); a rate above 30 that is not in the table is its
+// own first step. At 30 fps the steps are 1, 1.5, 2, 3 and 4 frame intervals as before agent 1.10.7.
+// The cost is the median convert + encode time of the latest delta frames; the next frame is captured
+// while this one is encoded, so a cost up to the slot keeps up. The slot moves one step at a time and only after
 // a condition held for HOLD_MS, so a burst of load does not drop the pace at once. Samples are
 // forgotten at every change because a longer slot has larger frame changes, which cost more to
 // encode; the periodic probe keeps such an inflated cost from trapping the pace.
@@ -17,7 +19,8 @@
 class Pacer
 {
 public:
-    static const int STEPS = 5;
+    static const int MAX_STEPS = 8;
+    static const int MAX_FPS = 60;
     static constexpr double SLOWER_FIT = 1.1;  // a longer slot once the cost passes this share of the slot
     static constexpr double FASTER_FIT = 0.85; // a shorter slot once the cost is under this share of it
     static constexpr double PROBE_FIT = 1.25;  // ... or, every PROBE_MS, once it is under this share
@@ -26,16 +29,61 @@ public:
     static const long long WARMUP_MS = 1000;   // costs right after the encoder opens (cold caches) do not count
     static const int MIN_SAMPLES = 8;          // samples before a decision
     static const int WINDOW = 15;              // the median is over at most this many delta frames
+    // Capture lead (agent 1.10.7): a frame request goes out this long before its slot. The compositor
+    // fills it at its next render (up to one display frame later) and then reads the screen back;
+    // the lead is that display frame plus the median readback, at least half and at most a whole
+    // slot. At a whole slot the next frame is requested as soon as the last one arrived.
+    static constexpr double DISPLAY_FRAME_MS = 1000.0 / 60.0;
+    static const int READBACK_WINDOW = 15;
 
     explicit Pacer(int fps = 30)
-        : m_fps(fps > 0 ? fps : 30)
     {
+        const int f = fps <= 0 ? 30 : fps > MAX_FPS ? int(MAX_FPS) : fps;
+        // Above 30: the rate, then 45 (if below it), then the 30 fps steps.
+        if (f > 30) {
+            m_fps[m_steps++] = f;
+            if (f > 45) {
+                m_fps[m_steps++] = 45;
+            }
+        }
+        const double base = std::min(f, 30);
+        static const int HALF_INTERVALS[] = { 2, 3, 4, 6, 8 };
+        for (int h : HALF_INTERVALS) {
+            m_fps[m_steps++] = 2.0 * base / h;
+        }
     }
 
     int step() const { return m_step; }
-    // The slot of a step in ms.
-    double slotMs(int step) const { return 1000.0 * halfIntervals(step) / (2.0 * m_fps); }
+    int steps() const { return m_steps; }
+    // The frame rate and the slot of a step in ms.
+    double stepFps(int step) const { return m_fps[std::max(0, std::min(m_steps - 1, step))]; }
+    double slotMs(int step) const { return 1000.0 / stepFps(step); }
     double intervalMs() const { return slotMs(m_step); }
+
+    // The compositor's readback of a frame: from its render (the recorder's frame time) to the
+    // agent's receipt, ms. Negative or absurd values (another clock) are ignored.
+    void addReadback(double ms)
+    {
+        if (ms < 0 || ms > 5000) {
+            return;
+        }
+        m_readbacks.push_back(ms);
+        if (static_cast<int>(m_readbacks.size()) > READBACK_WINDOW) {
+            m_readbacks.erase(m_readbacks.begin());
+        }
+        std::vector<double> sorted = m_readbacks;
+        std::sort(sorted.begin(), sorted.end());
+        m_readback = sorted[sorted.size() / 2];
+    }
+    // The median readback, -1 before the first.
+    double readbackMs() const { return m_readback; }
+    // How long before its slot the next frame is requested.
+    double leadMs() const
+    {
+        const double slot = intervalMs();
+        const double lead = DISPLAY_FRAME_MS + std::max(0.0, m_readback);
+        return std::max(slot / 2, std::min(slot, lead));
+    }
     // The median cost in ms, -1 before enough samples since the last change.
     double costMs() const { return m_cost; }
     // The median that caused the last change of slot.
@@ -77,7 +125,7 @@ public:
         std::sort(sorted.begin(), sorted.end());
         m_cost = sorted[sorted.size() / 2];
 
-        const bool slower = m_step + 1 < STEPS && m_cost > SLOWER_FIT * slotMs(m_step);
+        const bool slower = m_step + 1 < m_steps && m_cost > SLOWER_FIT * slotMs(m_step);
         const bool faster = m_step > 0 && m_cost < FASTER_FIT * slotMs(m_step - 1);
         if (slower) {
             m_fastSince = -1;
@@ -107,12 +155,6 @@ public:
     }
 
 private:
-    static int halfIntervals(int step)
-    {
-        static const int HALF_INTERVALS[STEPS] = { 2, 3, 4, 6, 8 };
-        return HALF_INTERVALS[std::max(0, std::min(STEPS - 1, step))];
-    }
-
     bool change(int step, long long now)
     {
         m_step = step;
@@ -130,8 +172,11 @@ private:
         m_fastSince = -1;
     }
 
-    int m_fps;
+    double m_fps[MAX_STEPS] = {};
+    int m_steps = 0;
     int m_step = 0;
+    std::vector<double> m_readbacks;
+    double m_readback = -1;
     double m_cost = -1;
     double m_changeCost = -1;
     std::vector<double> m_costs;

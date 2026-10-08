@@ -157,6 +157,35 @@ Result simulate(long long durationMs, const std::function<double(long long, doub
 
 const char *FPS[] = { "30", "20", "15", "10", "7.5" };
 
+// The capture loop (agent mirror.cpp pumpVideo / notePaceArrival) against a compositor that renders
+// on every 60 Hz vsync while the screen changes: a request is filled at the next vsync after it and
+// arrives `readbackMs` later (glReadPixels in lipstick's render thread, then its GUI thread sends
+// the frame). `lead` gives how long before the slot the next request goes out. Returns the frame
+// rate over 20 s.
+double captureLoop(int fps, double readbackMs, const std::function<double(const Pacer &)> &lead)
+{
+    Pacer pacer(fps);
+    const double vsync = 1000.0 / 60.0;
+    double grid = -1;
+    double arrival = 0;
+    int frames = 0;
+    while (arrival < 20000) {
+        const double interval = pacer.intervalMs();
+        const double due = grid < 0 ? arrival : std::ceil(grid + interval - lead(pacer));
+        const double request = std::max(arrival, due);
+        const double render = std::ceil(request / vsync + 1e-9) * vsync;
+        arrival = render + readbackMs;
+        pacer.addReadback(readbackMs);
+        const double slot = grid + interval;
+        grid = (grid < 0 || arrival > slot + interval / 2 || arrival < slot - interval) ? arrival : slot;
+        ++frames;
+    }
+    return frames / 20.0;
+}
+
+double oldLead(const Pacer &p) { return p.intervalMs() * 0.5; } // agent 1.8.0 to 1.10.6
+double newLead(const Pacer &p) { return p.leadMs(); }            // agent 1.10.7
+
 void report(const char *name, const Result &now, const Result &old, long long from, long long to)
 {
     std::printf("     %s: 1.8.1 %.1f fps (ends at %s fps, %d changes, largest jump %d); 1.8.0 %.1f fps (ends at %s fps, largest jump %d)\n",
@@ -265,6 +294,84 @@ int main()
         }
         std::printf("     wake: back at 30 fps after 0 ms with wake(), %lld ms without\n", t - wakeAt);
         check(t - wakeAt >= 4 * Pacer::HOLD_MS, "wake", "without wake() the climb takes one hold per step");
+    }
+    // 10. The step table (agent 1.10.7): 30 fps as before, 60 adds 45 and 30 above the 30 fps steps,
+    //     anything above 60 is 60.
+    {
+        Pacer p30(30);
+        Pacer p60(60);
+        Pacer p45(45);
+        Pacer p90(90);
+        check(p30.steps() == 5 && p30.stepFps(0) == 30 && p30.stepFps(1) == 20 && p30.stepFps(4) == 7.5, "steps",
+              "30: 30, 20, 15, 10, 7.5");
+        check(p60.steps() == 7 && p60.stepFps(0) == 60 && p60.stepFps(1) == 45 && p60.stepFps(2) == 30
+                  && p60.stepFps(3) == 20 && p60.stepFps(6) == 7.5,
+              "steps", "60: 60, 45, 30, 20, 15, 10, 7.5");
+        check(p45.steps() == 6 && p45.stepFps(0) == 45 && p45.stepFps(1) == 30, "steps", "45: 45, 30, ...");
+        check(p90.stepFps(0) == 60, "steps", "above 60 is 60");
+        check(std::fabs(p60.intervalMs() - 1000.0 / 60) < 1e-9, "steps", "60 fps slot is 16.7 ms");
+    }
+    // 11. 60 fps: 12 ms per frame keeps 60; 25 ms settles at 30 or 45, never slower than 30.
+    {
+        Pacer fast(60);
+        Pacer slow(60);
+        fast.encoderOpened(0);
+        slow.encoderOpened(0);
+        double tf = 0;
+        double ts = 0;
+        int slowest = 0;
+        while (tf < 60000) {
+            tf += std::max(fast.intervalMs(), 12.0);
+            fast.addCost(12.0, static_cast<long long>(tf));
+        }
+        while (ts < 60000) {
+            ts += std::max(slow.intervalMs(), 25.0);
+            slow.addCost(25.0, static_cast<long long>(ts));
+            if (ts > 5000) {
+                slowest = std::max(slowest, slow.step());
+            }
+        }
+        check(fast.step() == 0, "60 fps", "12 ms per frame keeps 60 fps");
+        check(slowest <= 2 && slow.step() >= 1, "60 fps", "25 ms per frame: 45 or 30 fps, never slower");
+    }
+    // 12. The capture lead: half a slot without readback samples (as before), the display frame plus
+    //     the median readback, at most a whole slot (the request then goes out at the arrival).
+    {
+        Pacer p(30);
+        check(std::fabs(p.leadMs() - 1000.0 / 60) < 1e-9, "lead", "no samples: half a slot at 30 fps");
+        p.addReadback(5);
+        check(std::fabs(p.leadMs() - (1000.0 / 60 + 5)) < 1e-9, "lead", "5 ms readback: 21.7 ms");
+        for (int i = 0; i < 15; ++i) {
+            p.addReadback(40);
+        }
+        check(std::fabs(p.leadMs() - p.intervalMs()) < 1e-9, "lead", "40 ms readback: the whole slot");
+        p.addReadback(-3);
+        p.addReadback(1e9);
+        check(p.readbackMs() == 40, "lead", "negative and absurd readbacks are ignored");
+        Pacer q(60);
+        check(std::fabs(q.leadMs() - q.intervalMs()) < 1e-9, "lead", "60 fps: the whole slot");
+    }
+    // 13. The capture loop. With the half-slot lead a frame that takes longer than half a slot to
+    //     come back resets the grid, so every frame waits half a slot more than it needs: 35 to 65 ms
+    //     of readback gives 12 to 15 fps (the Jolla Phone's 13.5 fps reading), the new lead 15 to
+    //     20 fps. Only one request is in flight, so above one slot of readback the compositor sets
+    //     the rate. A fast readback reaches the full rate at 30 and at 60 fps.
+    {
+        const double r45old = captureLoop(30, 45, oldLead);
+        const double r45new = captureLoop(30, 45, newLead);
+        const double r10new = captureLoop(30, 10, newLead);
+        const double r5new60 = captureLoop(60, 5, newLead);
+        const double r5old60 = captureLoop(60, 5, oldLead);
+        const double r25new60 = captureLoop(60, 25, newLead);
+        std::printf("     capture loop: readback 45 ms at 30 fps: %.1f fps before, %.1f now; 10 ms: %.1f; "
+                    "60 fps, 5 ms: %.1f before, %.1f now; 25 ms: %.1f\n",
+                    r45old, r45new, r10new, r5old60, r5new60, r25new60);
+        check(r45old < 16 && captureLoop(30, 55, oldLead) < 13, "capture loop",
+              "half-slot lead, 45 to 55 ms readback: 12 to 15 fps (as measured)");
+        check(r45new > r45old + 2, "capture loop", "the new lead is faster with a slow readback");
+        check(r10new > 29.5, "capture loop", "10 ms readback: 30 fps");
+        check(r5new60 > 59, "capture loop", "60 fps with a 5 ms readback");
+        check(r25new60 >= 29.5, "capture loop", "60 fps limit, 25 ms readback: at least 30 fps");
     }
     std::printf("%s\n", failures == 0 ? "all passed" : "FAILED");
     return failures == 0 ? 0 : 1;
