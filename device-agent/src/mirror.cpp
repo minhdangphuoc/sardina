@@ -38,11 +38,11 @@ const qint64 TIMING_MAX_MS = 60000;
 const int ADAPT_MIN_WIDTH = 90;  // as the request's minimum width
 const int ADAPT_MAX_WIDTH = 2160; // as the request's maximum width (used when the request is native)
 const int VIDEO_MIN_BITRATE = 100; // kbit/s, as the request's minimum
-// Frame pacing (agent 1.8.0; the slot decision is in pacer.h since 1.8.1). A request goes out half a
-// slot before the slot: the compositor delivers the next frame it renders, which on a busy phone or
-// emulator is not every display frame. An early frame keeps the grid, so the average stays at the
-// slot rate.
-const double PACE_LEAD_SHARE = 0.5;
+// Frame pacing (agent 1.8.0; the slot decision is in pacer.h since 1.8.1). A request goes out before
+// the slot by Pacer::leadMs (half a slot before agent 1.10.7; now the display frame plus the
+// compositor's measured readback, up to a whole slot): the compositor delivers the next frame it
+// renders, which on a busy phone or emulator is not every display frame. An early frame keeps the
+// grid, so the average stays at the slot rate.
 // The idle screen (agent 1.8.0): after this long without a new frame the last picture is encoded
 // again (it sharpens), at most IDLE_REFRESHES times, then a "same" message goes out every
 // IDLE_HEARTBEAT_MS. Neither asks the compositor for a repaint.
@@ -156,6 +156,8 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
     , m_idleReported(false)
     , m_lastFrameAt(-1)
     , m_display(nullptr)
+    , m_lastArrival(0)
+    , m_lastSendMs(-1)
 {
     m_streamClock.start();
     connect(m_socket, &QLocalSocket::disconnected, this, &MirrorStream::onClientGone);
@@ -334,7 +336,8 @@ void MirrorStream::sendPhoneSettings(const QByteArray &fields)
     const bool touch = m_settings ? m_settings->touchIndicator() : false;
     writeMessage(QByteArray("{\"settings\":{\"control\":") + (control ? "true" : "false") + ",\"touchIndicator\":"
                  + (touch ? "true" : "false") + ",\"touchIndicatorPath\":\"" + touchIndicatorPath()
-                 + "\",\"idleMode\":" + (idleModeOn() ? "true" : "false") + "}" + fields
+                 + "\",\"idleMode\":" + (idleModeOn() ? "true" : "false") + ",\"maxFps\":"
+                 + QByteArray::number(m_settings ? m_settings->maxFps() : 30) + "}" + fields
                  + "}");
 }
 
@@ -885,6 +888,24 @@ void MirrorStream::onRecorderFrame(const QImage &view, bool yInverted)
         m_repaintAsked = false;
         ++m_frame;
         m_captureTs = QDateTime::currentMSecsSinceEpoch();
+        // Stage times, read before the next request replaces the recorder's request time.
+        m_stages = Stages();
+        const qint64 requested = m_recorder ? m_recorder->requestedAt() : 0;
+        const qint64 rendered = m_recorder ? m_recorder->renderedAt() : 0;
+        if (requested > 0) {
+            if (m_lastArrival > 0 && requested >= m_lastArrival) {
+                m_stages.hold = qMin<qint64>(requested - m_lastArrival, TIMING_MAX_MS);
+            }
+            if (rendered >= requested && rendered <= m_captureTs) {
+                m_stages.wait = qMin<qint64>(rendered - requested, TIMING_MAX_MS);
+                m_stages.readback = qMin<qint64>(m_captureTs - rendered, TIMING_MAX_MS);
+                m_pacer.addReadback(static_cast<double>(m_stages.readback));
+            } else {
+                // The compositor's clock does not match: the whole wait, readback included.
+                m_stages.wait = qBound<qint64>(0, m_captureTs - requested, TIMING_MAX_MS);
+            }
+        }
+        m_lastArrival = m_captureTs;
         notePaceArrival(m_streamClock.elapsed());
         videoFrame(view.constBits(), view.width(), view.height(), view.bytesPerLine(), yInverted);
         return;
@@ -1167,6 +1188,14 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
         m_pacer.encoderOpened(now); // a new size has costs of its own
         key = true;
     }
+    // Double buffering (agent 1.10.7): the next frame goes into the recorder's other buffer, so it is
+    // requested before this one is converted and the compositor renders and reads it back meanwhile.
+    // Not after a long pause: the first change may wake the pace (below) and the request then keeps
+    // to the faster slot.
+    m_dirty = false;
+    if (m_lastFrameAt < 0 || now - m_lastFrameAt < WAKE_AFTER_MS) {
+        pumpVideo();
+    }
     m_video->convert(rows, width, height, bytesPerLine, yInverted);
     const qint64 convertMs = agentClock.elapsed();
     if (!key && m_video->sameAsLast()) {
@@ -1177,8 +1206,8 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
         return;
     }
     wakeFromIdle(now);
-    // The picture has been copied out of the shared buffer: ask for the next frame now, so the
-    // compositor renders into the buffer while this one is encoded.
+    // Unless it went out above: ask for the next frame now, so the compositor renders while this one
+    // is encoded.
     m_dirty = false;
     pumpVideo();
     qint64 pts = now;
@@ -1214,13 +1243,15 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
     m_refreshes = 0;
     m_idleReported = false;
     m_lastFrameAt = now;
-    sendVideoFrame(data, isKey, pts, screen, out, frameMs, convertMs);
+    m_stages.convert = qBound<qint64>(0, convertMs, TIMING_MAX_MS);
+    m_stages.encode = qBound<qint64>(0, frameMs - convertMs, TIMING_MAX_MS);
+    sendVideoFrame(data, isKey, pts, screen, out, frameMs, convertMs, false, true);
     m_idle.start(idleModeOn() ? IDLE_AFTER_MS : paceInterval());
     pumpVideo();
 }
 
 void MirrorStream::sendVideoFrame(const QByteArray &data, bool key, qint64 pts, const QSize &screen, const QSize &size,
-                                  qint64 encodeMs, qint64 convertMs, bool refresh)
+                                  qint64 encodeMs, qint64 convertMs, bool refresh, bool captured)
 {
     QByteArray header = "{\"frame\":" + QByteArray::number(m_frame) + ",\"ts\":" + QByteArray::number(m_captureTs)
         + ",\"screen\":[" + QByteArray::number(screen.width()) + "," + QByteArray::number(screen.height())
@@ -1233,6 +1264,20 @@ void MirrorStream::sendVideoFrame(const QByteArray &data, bool key, qint64 pts, 
     if (refresh) {
         header += ",\"refresh\":true";
     }
+    if (captured) {
+        // Stage times (agent 1.10.7): hold, wait for the render, readback, convert, encode (ms of this
+        // frame) and the socket write of the previous frame. Unknown ones are left out.
+        const struct {
+            const char *key;
+            qint64 ms;
+        } stages[] = { { "hms", m_stages.hold },       { "wms", m_stages.wait },   { "rbms", m_stages.readback },
+                       { "cnms", m_stages.convert },   { "enms", m_stages.encode }, { "sdms", m_lastSendMs } };
+        for (const auto &st : stages) {
+            if (st.ms >= 0) {
+                header += QByteArray(",\"") + st.key + "\":" + QByteArray::number(st.ms);
+            }
+        }
+    }
     if (m_adapt) {
         header += ",\"kbps\":" + QByteArray::number(m_bitrate) + ",\"ticks\":" + QByteArray::number(m_ticks)
             + ",\"skips\":" + QByteArray::number(m_linkSkips);
@@ -1240,7 +1285,10 @@ void MirrorStream::sendVideoFrame(const QByteArray &data, bool key, qint64 pts, 
             header += ",\"rtt\":" + QByteArray::number(m_rttMs) + ",\"rttFrame\":" + QByteArray::number(m_rttFrame);
         }
     }
+    QElapsedTimer sendClock;
+    sendClock.start();
     writeRecord(header + "}", data);
+    m_lastSendMs = qBound<qint64>(0, sendClock.elapsed(), TIMING_MAX_MS);
     m_lastImageFrame = m_frame;
     m_pendingAcks.append(m_frame);
     if (m_adapt) {
@@ -1256,14 +1304,14 @@ double MirrorStream::paceInterval() const
 }
 
 // m_streamClock ms at which the next frame may be requested: its slot less a lead, so the frame the
-// compositor renders next (at most one display frame later) arrives on the slot. 0 without a grid.
+// compositor renders next (at most one display frame later) and reads back arrives on the slot. 0
+// without a grid.
 qint64 MirrorStream::nextRequestAt() const
 {
     if (m_gridAt < 0) {
         return 0;
     }
-    const double interval = paceInterval();
-    return static_cast<qint64>(std::ceil(m_gridAt + interval * (1 - PACE_LEAD_SHARE)));
+    return static_cast<qint64>(std::ceil(m_gridAt + paceInterval() - m_pacer.leadMs()));
 }
 
 // A frame arrived at `at`. Near its slot (early, or late by less than half a slot) the grid keeps

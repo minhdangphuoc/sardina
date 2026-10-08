@@ -17,7 +17,8 @@ class QSocketNotifier;
 
 // Native screen capture for the mirror through lipstick's private Wayland interface
 // `lipstick_recorder` (protocol/lipstick-recorder.xml): one Wayland connection, one recorder and
-// one shm buffer per mirror stream. The compositor copies each frame into the buffer; there is no
+// two shm buffers per mirror stream (agent 1.10.7; one before). Requests alternate between the
+// buffers, so the next frame can be requested while the last one is still being read. The compositor copies each frame into the buffer; there is no
 // file, no D-Bus call and no "Screenshot captured." notice. Binding needs the primary group
 // `privileged` (the unit's Group=). Events are read on a QSocketNotifier for the display fd, so
 // nothing blocks after open().
@@ -49,9 +50,16 @@ public:
     static void onFailed(void *data, lipstick_recorder *recorder, int result, wl_buffer *buffer);
     static void onCancelled(void *data, lipstick_recorder *recorder, wl_buffer *buffer);
 
+    // Wall-clock ms (QDateTime::currentMSecsSinceEpoch) when the pending or the last frame was
+    // requested, and the compositor's render time of the last frame (lipstick takes it just before
+    // it reads the screen back; the low 32 bits of the same clock, extended here).
+    qint64 requestedAt() const { return m_requestedAt; }
+    qint64 renderedAt() const { return m_renderedAt; }
+
 signals:
-    // `view` wraps the shared buffer without a copy and is valid only during the call. Rows are
-    // stored bottom-up when yInverted is true.
+    // `view` wraps a shared buffer without a copy. It stays valid until the frame after the next one
+    // is requested (the next request uses the other buffer), so it may be read after asking for the
+    // next frame within the same call. Rows are stored bottom-up when yInverted is true.
     void frameReady(const QImage &view, bool yInverted);
     // fatal: the connection or the recorder is unusable; reopen or fall back.
     void failed(const QString &error, bool fatal);
@@ -61,8 +69,8 @@ private slots:
 
 private:
     explicit Recorder(QObject *parent);
-    bool createBuffer(QString *error);
-    void destroyBuffer();
+    bool createBuffers(QString *error);
+    void destroyBuffers();
     void fatal(const QString &error);
 
     wl_display *m_display;
@@ -71,9 +79,12 @@ private:
     wl_output *m_output;
     lipstick_recorder_manager *m_manager;
     lipstick_recorder *m_recorder;
-    wl_buffer *m_buffer;
+    static const int BUFFERS = 2;
+    wl_buffer *m_buffers[BUFFERS];
+    uchar *m_data[BUFFERS];
+    int m_next;     // the buffer the next request uses
+    int m_inFlight; // the buffer of the pending request, -1 without one
     QSocketNotifier *m_notifier;
-    uchar *m_data;
     size_t m_dataSize;
     int m_width;
     int m_height;
@@ -81,6 +92,8 @@ private:
     int m_format; // as sent in `setup` (a wl_shm format or a DRM fourcc)
     bool m_pending;
     bool m_broken;
+    qint64 m_requestedAt;
+    qint64 m_renderedAt;
 };
 
 #endif

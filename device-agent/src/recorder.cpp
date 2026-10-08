@@ -4,6 +4,7 @@
 
 #include "lipstick-recorder-client-protocol.h"
 
+#include <QDateTime>
 #include <QSocketNotifier>
 #include <wayland-client.h>
 
@@ -59,9 +60,11 @@ Recorder::Recorder(QObject *parent)
     , m_output(nullptr)
     , m_manager(nullptr)
     , m_recorder(nullptr)
-    , m_buffer(nullptr)
+    , m_buffers{ nullptr, nullptr }
+    , m_data{ nullptr, nullptr }
+    , m_next(0)
+    , m_inFlight(-1)
     , m_notifier(nullptr)
-    , m_data(nullptr)
     , m_dataSize(0)
     , m_width(0)
     , m_height(0)
@@ -69,6 +72,8 @@ Recorder::Recorder(QObject *parent)
     , m_format(-1)
     , m_pending(false)
     , m_broken(false)
+    , m_requestedAt(0)
+    , m_renderedAt(0)
 {
 }
 
@@ -103,7 +108,7 @@ Recorder *Recorder::open(QString *error, QObject *parent)
         delete r;
         return nullptr;
     }
-    if (!r->createBuffer(error)) {
+    if (!r->createBuffers(error)) {
         delete r;
         return nullptr;
     }
@@ -119,7 +124,7 @@ Recorder::~Recorder()
     if (m_recorder) {
         lipstick_recorder_destroy(m_recorder);
     }
-    destroyBuffer();
+    destroyBuffers();
     if (m_manager) {
         wl_proxy_destroy(reinterpret_cast<wl_proxy *>(m_manager));
     }
@@ -138,7 +143,7 @@ Recorder::~Recorder()
     }
 }
 
-bool Recorder::createBuffer(QString *error)
+bool Recorder::createBuffers(QString *error)
 {
     QImage::Format imageFormat;
     if (!mapFormat(m_format, &imageFormat)) {
@@ -150,7 +155,8 @@ bool Recorder::createBuffer(QString *error)
         return false;
     }
     const size_t size = static_cast<size_t>(m_stride) * static_cast<size_t>(m_height);
-    // An unlinked file in the agent's private runtime directory (tmpfs) backs the shared buffer.
+    const size_t total = size * BUFFERS;
+    // An unlinked file in the agent's private runtime directory (tmpfs) backs the shared buffers.
     QByteArray tmpl = (Paths::agentRuntimeDir() + QStringLiteral("/recorder-XXXXXX")).toLocal8Bit();
     const int fd = mkostemp(tmpl.data(), O_CLOEXEC);
     if (fd < 0) {
@@ -158,47 +164,60 @@ bool Recorder::createBuffer(QString *error)
         return false;
     }
     unlink(tmpl.constData());
-    if (ftruncate(fd, static_cast<off_t>(size)) != 0) {
+    if (ftruncate(fd, static_cast<off_t>(total)) != 0) {
         *error = QStringLiteral("cannot size the frame buffer: ") + QString::fromLocal8Bit(strerror(errno));
         close(fd);
         return false;
     }
-    void *data = mmap(nullptr, size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    void *data = mmap(nullptr, total, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
     if (data == MAP_FAILED) {
         *error = QStringLiteral("cannot map the frame buffer: ") + QString::fromLocal8Bit(strerror(errno));
         close(fd);
         return false;
     }
-    wl_shm_pool *pool = wl_shm_create_pool(m_shm, fd, static_cast<int32_t>(size));
-    m_buffer = wl_shm_pool_create_buffer(pool, 0, m_width, m_height, m_stride, WL_SHM_FORMAT_ARGB8888);
+    wl_shm_pool *pool = wl_shm_create_pool(m_shm, fd, static_cast<int32_t>(total));
+    for (int i = 0; i < BUFFERS; ++i) {
+        m_buffers[i] = wl_shm_pool_create_buffer(pool, static_cast<int32_t>(size * i), m_width, m_height, m_stride,
+                                                 WL_SHM_FORMAT_ARGB8888);
+        m_data[i] = static_cast<uchar *>(data) + size * i;
+    }
     wl_shm_pool_destroy(pool);
     close(fd); // the compositor holds its own copy of the fd
-    m_data = static_cast<uchar *>(data);
-    m_dataSize = size;
+    m_dataSize = total;
+    m_next = 0;
+    m_inFlight = -1;
     wl_display_flush(m_display);
     return true;
 }
 
-void Recorder::destroyBuffer()
+void Recorder::destroyBuffers()
 {
-    if (m_buffer) {
-        wl_buffer_destroy(m_buffer);
-        m_buffer = nullptr;
+    for (int i = 0; i < BUFFERS; ++i) {
+        if (m_buffers[i]) {
+            wl_buffer_destroy(m_buffers[i]);
+            m_buffers[i] = nullptr;
+        }
     }
-    if (m_data) {
-        munmap(m_data, m_dataSize);
-        m_data = nullptr;
-        m_dataSize = 0;
+    if (m_data[0]) {
+        munmap(m_data[0], m_dataSize);
     }
+    for (int i = 0; i < BUFFERS; ++i) {
+        m_data[i] = nullptr;
+    }
+    m_dataSize = 0;
+    m_inFlight = -1;
 }
 
 bool Recorder::requestFrame(bool repaint)
 {
-    if (m_broken || m_pending || !m_buffer) {
+    if (m_broken || m_pending || !m_buffers[m_next]) {
         return false;
     }
     m_pending = true;
-    lipstick_recorder_record_frame(m_recorder, m_buffer);
+    m_inFlight = m_next;
+    m_next = (m_next + 1) % BUFFERS;
+    m_requestedAt = QDateTime::currentMSecsSinceEpoch();
+    lipstick_recorder_record_frame(m_recorder, m_buffers[m_inFlight]);
     if (repaint) {
         lipstick_recorder_repaint(m_recorder);
     }
@@ -275,30 +294,36 @@ void Recorder::onSetup(void *data, lipstick_recorder *, int width, int height, i
     r->m_height = height;
     r->m_stride = stride;
     r->m_format = format;
-    if (!r->m_buffer || !changed) {
-        return; // first setup: open() creates the buffer
+    if (!r->m_buffers[0] || !changed) {
+        return; // first setup: open() creates the buffers
     }
-    // A later setup cancels pending frames (e.g. the output changed): new buffer, new request.
-    r->destroyBuffer();
+    // A later setup cancels pending frames (e.g. the output changed): new buffers, new request.
+    r->destroyBuffers();
     r->m_pending = false;
     QString error;
-    if (!r->createBuffer(&error)) {
+    if (!r->createBuffers(&error)) {
         r->fatal(error);
         return;
     }
     emit r->failed(QStringLiteral("the screen size changed"), false);
 }
 
-void Recorder::onFrame(void *data, lipstick_recorder *, wl_buffer *buffer, uint32_t, int transform)
+void Recorder::onFrame(void *data, lipstick_recorder *, wl_buffer *buffer, uint32_t time, int transform)
 {
     Recorder *r = static_cast<Recorder *>(data);
-    if (buffer != r->m_buffer || !r->m_pending) {
+    if (!r->m_pending || r->m_inFlight < 0 || buffer != r->m_buffers[r->m_inFlight]) {
         return;
     }
+    const int index = r->m_inFlight;
     r->m_pending = false;
+    r->m_inFlight = -1;
+    // lipstick sends gettimeofday() in ms truncated to 32 bits: put the high bits of now back.
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    const qint64 diff = static_cast<qint32>(static_cast<quint32>(now) - time); // now - time, wrapped
+    r->m_renderedAt = now - diff;
     QImage::Format imageFormat = QImage::Format_RGBX8888;
     mapFormat(r->m_format, &imageFormat);
-    const QImage view(r->m_data, r->m_width, r->m_height, r->m_stride, imageFormat);
+    const QImage view(r->m_data[index], r->m_width, r->m_height, r->m_stride, imageFormat);
     emit r->frameReady(view, transform == LIPSTICK_RECORDER_TRANSFORM_Y_INVERTED);
 }
 
@@ -312,5 +337,6 @@ void Recorder::onCancelled(void *data, lipstick_recorder *, wl_buffer *)
 {
     Recorder *r = static_cast<Recorder *>(data);
     r->m_pending = false;
+    r->m_inFlight = -1;
     emit r->failed(QStringLiteral("the recorder cancelled the frame"), false);
 }

@@ -124,8 +124,10 @@ private:
     void handleKeyRequest();
     // Encodes one captured frame and sends it, or drops it while the link is behind.
     void videoFrame(const uchar *rows, int width, int height, int bytesPerLine, bool yInverted);
+    // `captured`: a frame from the recorder (not a re-encode of the last picture): its stage times
+    // (m_stages) go into the header.
     void sendVideoFrame(const QByteArray &data, bool key, qint64 pts, const QSize &screen, const QSize &size,
-                        qint64 encodeMs, qint64 convertMs, bool refresh = false);
+                        qint64 encodeMs, qint64 convertMs, bool refresh = false, bool captured = false);
     // Frame pacing (agent 1.8.0).
     double paceInterval() const;
     qint64 nextRequestAt() const;
@@ -212,6 +214,18 @@ private:
     DisplayState *m_display; // blank display: nothing is sent while the screen is still
     QSize m_lastScreen;   // the last encoded frame's screen and output sizes, for refresh frames
     QSize m_lastSize;
+    // Per-frame stage times (agent 1.10.7), ms, -1 when unknown: how long the request was held for
+    // the pace or the link after the previous frame arrived, the wait for the compositor's render,
+    // its readback and delivery, convert, encode, and the socket write of the previous frame.
+    struct Stages {
+        qint64 hold = -1;
+        qint64 wait = -1;
+        qint64 readback = -1;
+        qint64 convert = -1;
+        qint64 encode = -1;
+    } m_stages;
+    qint64 m_lastArrival; // wall ms of the last recorder frame, 0 before the first
+    qint64 m_lastSendMs;  // the socket write of the last video frame, -1 before the first
 };
 
 #endif
