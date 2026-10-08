@@ -602,7 +602,9 @@ suite('screen mirror over the SSH forward (F6)', () => {
       await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === false), 3000);
       const hiddenAt = inputs().length;
       await sleep(1500);
-      assert.strictEqual(inputs().length, hiddenAt, 'the active lease must not renew while hidden');
+      // Only renewals count: the hide grace and the stream end each send another safety-off (active:false).
+      const after = inputs().slice(hiddenAt).map((e) => e.input);
+      assert.ok(after.every((i) => i?.type === 'active' && i.active === false), `the active lease must not renew while hidden: ${JSON.stringify(after)}`);
     });
   });
 
