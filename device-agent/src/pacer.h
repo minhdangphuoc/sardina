@@ -1,26 +1,15 @@
 #ifndef PACER_H
 #define PACER_H
 
-// The frame pacing decision of the VP8 mirror (agent 1.8.1), kept free of Qt and of the stream so
-// it can be tested on the build host (device-agent/tools/pacer-test.cpp).
+// The frame pacing decision of the VP8 mirror, free of Qt so it can be tested on the build host
+// (device-agent/tools/pacer-test.cpp).
 //
-// The slot is 1, 1.5, 2, 3 or 4 frame intervals (30, 20, 15, 10, 7.5 fps at 30 fps: whole 60 Hz
-// display frames). The cost is the median convert + encode time of the latest delta frames. The
-// next frame is requested right after the conversion, so the compositor captures it while this one
-// is encoded: a cost up to the slot itself keeps up with the slot.
-//
-// Agent 1.8.0 lengthened the slot when the median passed 85 % of it and jumped straight to the
-// longest slot that fitted, from as few as one sample; it shortened only below 60 % of the shorter
-// slot. On the Jolla Phone (about 30 ms per frame at 720 wide) that meant 20 fps at best, a burst of
-// load (the agent had just been installed) sent it to 7.5 fps at once, and from there it could not
-// come back above 15 fps. Agent 1.8.1:
-// - lengthens by one step only, when the median of at least MIN_SAMPLES frames stays over SLOWER_FIT
-//   of the slot (it does not keep up) for HOLD_MS;
-// - shortens by one step when the median stays under FASTER_FIT of the shorter slot for HOLD_MS;
-// - forgets the samples at every change, so each step is judged on frames encoded at that pace (a
-//   longer slot has larger frame-to-frame changes, which cost more to encode);
-// - tries the shorter slot again every PROBE_MS while the median is under PROBE_FIT of it, so a cost
-//   inflated by the longer slot (or by a slower CPU clock at a lower load) cannot trap the pace.
+// The slot is 1, 1.5, 2, 3 or 4 frame intervals (whole 60 Hz display frames at 30 fps). The cost is
+// the median convert + encode time of the latest delta frames; the next frame is captured while this
+// one is encoded, so a cost up to the slot keeps up. The slot moves one step at a time and only after
+// a condition held for HOLD_MS, so a burst of load does not drop the pace at once. Samples are
+// forgotten at every change because a longer slot has larger frame changes, which cost more to
+// encode; the periodic probe keeps such an inflated cost from trapping the pace.
 
 #include <algorithm>
 #include <vector>
