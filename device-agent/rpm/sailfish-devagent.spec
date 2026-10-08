@@ -1,6 +1,6 @@
 Name:       sailfish-devagent
 Summary:    Developer agent for VS Code: screen, logs, and a Settings page
-Version:    1.10.3
+Version:    1.10.4
 Release:    1
 License:    GPL-3.0-or-later
 URL:        https://github.com/minhdangphuoc/vscode-sailfish

@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.3-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.4-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -138,7 +138,8 @@ protocol; 1.4.0 adds opt-in adaptive quality to binary mirror streams; 1.5.0 add
 frames and reports an idle screen (optional header fields only); 1.8.1 corrects the pacing rule; 1.10.0 adds JSON log output with cursor resume and the `stats` stream
 (for the Device Monitor); 1.10.1 changes only the package's uninstall cleanup, not the protocol; 1.10.2 makes
 an explicit `"lease":0` mean no lease for text mirror streams and ends log and stats streams when
-Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts the `key` input. All additions are
+Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts the `key` input; 1.10.4 adds
+`touchIndicatorPath` to the phone-settings message and the `contact` record (below). All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -258,6 +259,15 @@ coordinate-independent, including lease expiry and cleanup. The rolling input li
 attempts per second, with immediate `active:false` as an unlimited safety-off. This path is built and
 unit/integration-fixture tested, but injection and rotation still require confirmation on a real
 phone; the emulator follows the host pointer and is not conclusive.
+
+Touch indicator (1.10.4): the phone's `touchIndicator` switch draws a marker where VS Code touches.
+The agent binds the compositor's `alien_manager` v2, or v1 when only that exists, for an overlay on
+the phone. A stream that asked for `phoneState` gets `"touchIndicatorPath":"phone"|"mirror"|"off"`
+in its `settings` message, sent again when control, the switch or the input lease changes. It is
+`off` unless the switch is on, control is allowed and the input lease is active. When no overlay
+is usable it is `mirror`, and every accepted injected contact is sent as
+`{"contact":{"x":X,"y":Y,"down":true|false}}` in native screen coordinates so the VS Code mirror
+draws the marker itself. Only the agent's own injected contacts are reported, never a real finger.
 
 From 1.3.0, mirror frames come from
 Lipstick's private Wayland recorder interface (`lipstick_recorder`, protocol file in `protocol/`,
