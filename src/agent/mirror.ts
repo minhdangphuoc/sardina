@@ -61,7 +61,7 @@ import { cachedSocketPath, privateDir, readPinnedKeys, resolveDeviceEndpoint, sw
 import { forwardEligibility, hostKeyAlias } from './sshForwardCore';
 import { scaledHeight, type AdaptCause, type AdaptDecision } from './mirrorAdapt';
 import { LogRateLimiter, parseDecodingSize, sanitizeLogText } from './mirrorLog';
-import { InputFocusSchedule, InputRateLimiter, captureAllowsInput, mapGesture, parseWebviewFocus, parseWebviewGesture, parseWebviewKey, phoneInputAccepted, supportsLiveContacts } from './mirrorInput';
+import { InputFocusSchedule, InputRateLimiter, captureAllowsInput, mapGesture, parseWebviewFocus, parseWebviewGesture, parseWebviewKey, phoneInputAccepted, supportsKeypad, supportsLiveContacts } from './mirrorInput';
 import { KeypadLayouts } from './keypadLayout';
 import type { KeypadInfo, KeypadLayout } from './keypadLayoutCore';
 
@@ -337,7 +337,8 @@ export class MirrorSession {
   }
 
   keypadInfo(): KeypadInfo | undefined {
-    return this.opts.probe.keypad;
+    // The keypad is shown only with the `key` capability, so an agent without the key path never gets presses.
+    return supportsKeypad(this.opts.probe.mirrorInput) ? this.opts.probe.keypad : undefined;
   }
 
   async refreshKeypad(): Promise<void> {
