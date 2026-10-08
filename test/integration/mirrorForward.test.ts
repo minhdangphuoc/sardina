@@ -30,7 +30,7 @@ interface LogEntry {
   line?: string;
   seq?: number;
   frame?: number;
-  input?: { type: string; active?: boolean; x?: number; y?: number };
+  input?: { type: string; active?: boolean; x?: number; y?: number; key?: string; pressed?: boolean };
 }
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
@@ -625,6 +625,44 @@ suite('screen mirror over the SSH forward (F6)', () => {
         { type: 'down', x: 180, y: 320 },
         { type: 'move', x: 539, y: 1279 },
         { type: 'up' },
+      ]);
+    });
+  });
+
+  test('I27 keypad: agent 1.10.3 reports a keypad, the panel gets its layout and a pointer key press reaches the phone', async function () {
+    this.timeout(30000);
+    const posted: unknown[] = [];
+    const createPanel = vscode.window.createWebviewPanel.bind(vscode.window);
+    sandbox.stub(vscode.window, 'createWebviewPanel').callsFake((...args: Parameters<typeof vscode.window.createWebviewPanel>) => {
+      const panel = createPanel(...args);
+      const post = panel.webview.postMessage.bind(panel.webview);
+      sandbox.stub(panel.webview, 'postMessage').callsFake((message: unknown) => {
+        posted.push(message);
+        return post(message);
+      });
+      return panel;
+    });
+    await withScenario('agent-forward-keypad', async () => {
+      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await waitLive();
+      type Posted = { type?: string; layout?: { model: string; rows: Array<Array<{ key: string; style?: string } | null>> } | null };
+      const keypadPosts = (): Posted[] => (posted as Posted[]).filter((m) => m?.type === 'keypad');
+      await waitFor(() => keypadPosts().some((m) => m.layout), 8000);
+      const layout = keypadPosts().filter((m) => m.layout).at(-1)?.layout;
+      assert.strictEqual(layout?.model, 'Commodore Callback');
+      const keys = (layout?.rows ?? []).flat().filter((c) => c !== null).map((c) => c.key);
+      for (const key of ['5', 'OK', 'CALL', 'MENU', 'F21']) assert.ok(keys.includes(key), JSON.stringify(keys));
+      assert.ok(!keys.includes('F23'), 'a key the phone does not have is dropped from the bundled layout');
+      await setTestFocus(true);
+      await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
+      await sendTestInput({ type: 'input', action: 'key', key: 'F23', pressed: true });
+      await sendTestInput({ type: 'input', action: 'key', key: '5', pressed: true });
+      await sendTestInput({ type: 'input', action: 'key', key: '5', pressed: false });
+      await waitFor(() => inputs().some((e) => e.input?.type === 'key' && e.input.pressed === false), 3000);
+      const keyEvents = inputs().filter((e) => e.input?.type === 'key').map((e) => e.input);
+      assert.deepStrictEqual(keyEvents, [
+        { type: 'key', key: '5', pressed: true },
+        { type: 'key', key: '5', pressed: false },
       ]);
     });
   });
