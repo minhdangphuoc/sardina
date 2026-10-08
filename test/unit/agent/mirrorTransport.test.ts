@@ -59,6 +59,7 @@ interface Events {
   fatals: string[];
   corrupt: number;
   pongs: [number, number][];
+  contacts: { x: number; y: number; down: boolean }[];
   sink: MirrorSink;
 }
 
@@ -69,6 +70,7 @@ function makeSink(): Events {
     fatals: [],
     corrupt: 0,
     pongs: [],
+    contacts: [],
     sink: {
       status: () => e.names.push('status'),
       frame: (f) => {
@@ -80,6 +82,10 @@ function makeSink(): Events {
       pong: (seq, ts) => {
         e.names.push('pong');
         e.pongs.push([seq, ts]);
+      },
+      contact: (contact) => {
+        e.names.push('contact');
+        e.contacts.push(contact);
       },
       fatal: (error) => {
         e.names.push('fatal');
@@ -116,15 +122,17 @@ describe('SfdkExecTransport', () => {
       '{"frame":3,"ts":7,"error":"capture failed"}',
       'not json',
       '{"pong":4,"ts":99}',
+      '{"contact":{"x":100,"y":200,"down":true}}',
       '{"ok":false,"error":"replaced"}',
     ];
     const seen: { opts?: Record<string, unknown> } = {};
     const e = makeSink();
     const end = await new SfdkExecTransport(services(lines, seen), 'Xperia').run(e.sink, makeToken().token);
-    assert.deepStrictEqual(e.names, ['status', 'frame', 'same', 'softError', 'pong', 'fatal']);
+    assert.deepStrictEqual(e.names, ['status', 'frame', 'same', 'softError', 'pong', 'contact', 'fatal']);
     assert.deepStrictEqual([...e.frames[0].payload], [0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
     assert.strictEqual(e.corrupt, 1);
     assert.deepStrictEqual(e.pongs, [[4, 99]]);
+    assert.deepStrictEqual(e.contacts, [{ kind: 'contact', x: 100, y: 200, down: true }]);
     assert.deepStrictEqual(e.fatals, ['replaced']);
     assert.deepStrictEqual(end, { cancelled: false, reason: 'some stderr' });
     assert.strictEqual(seen.opts?.device, 'Xperia');

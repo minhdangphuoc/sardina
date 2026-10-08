@@ -79,6 +79,7 @@ private slots:
     void onPace();
     void onBytesWritten();
     void onIdle();
+    void onContactChanged(const QPoint &point, bool pressed);
 
 private:
     // S6: enforce the phone's "Allow control" in the input path (allowed=false: setInputActive(false),
@@ -92,6 +93,7 @@ private:
     QByteArray inputFields() const;
     // The "settings" message (only when the request asked for "phoneState").
     void sendPhoneSettings(const QByteArray &inputFields);
+    QByteArray touchIndicatorPath() const;
 
     void writeLine(const QByteArray &line);
     void writeRecord(const QByteArray &headerJson, const QByteArray &payload);

@@ -159,9 +159,19 @@ export interface PhoneSettingsLine {
   kind: 'settings';
   control?: boolean;
   touchIndicator?: boolean;
+  touchIndicatorPath?: TouchIndicatorPath;
   input?: boolean;
   inputLease?: number;
   inputError?: string;
+}
+
+export type TouchIndicatorPath = 'phone' | 'mirror' | 'off';
+
+export interface ContactLine {
+  kind: 'contact';
+  x: number;
+  y: number;
+  down: boolean;
 }
 
 export type MirrorLine =
@@ -187,6 +197,7 @@ export type MirrorLine =
     }
   | { kind: 'fatal'; error: string }
   | PhoneSettingsLine
+  | ContactLine
   | {
       kind: 'frame';
       frame: number;
@@ -316,6 +327,9 @@ function parseSettings(o: Record<string, unknown>): PhoneSettingsLine | undefine
   const m: PhoneSettingsLine = { kind: 'settings' };
   if (typeof v.control === 'boolean') m.control = v.control;
   if (typeof v.touchIndicator === 'boolean') m.touchIndicator = v.touchIndicator;
+  if (v.touchIndicatorPath === 'phone' || v.touchIndicatorPath === 'mirror' || v.touchIndicatorPath === 'off') {
+    m.touchIndicatorPath = v.touchIndicatorPath;
+  }
   if (o.input === true) {
     // Input on needs a valid lease; without one it stays off (fail closed).
     const ok = isNum(o.inputLease) && Number.isInteger(o.inputLease) && o.inputLease >= 1 && o.inputLease <= 30;
@@ -326,6 +340,17 @@ function parseSettings(o: Record<string, unknown>): PhoneSettingsLine | undefine
     if (typeof o.inputError === 'string') m.inputError = truncate(o.inputError.replace(/[\u0000-\u001f\u007f]/g, ' '));
   }
   return m;
+}
+
+function parseContact(o: Record<string, unknown>): ContactLine | undefined {
+  const inner = o.contact;
+  if (typeof inner !== 'object' || inner === null || Array.isArray(inner)) return undefined;
+  const v = inner as Record<string, unknown>;
+  if (!isNum(v.x) || !Number.isInteger(v.x) || !isNum(v.y) || !Number.isInteger(v.y) || typeof v.down !== 'boolean') return undefined;
+  const x = v.x;
+  const y = v.y;
+  if (x < 0 || y < 0 || x > MAX_DIMENSION || y > MAX_DIMENSION) return undefined;
+  return { kind: 'contact', x, y, down: v.down };
 }
 
 /**
@@ -365,6 +390,7 @@ export function parseMirrorHeader(
     return undefined;
   }
   if ('settings' in o) return parseSettings(o);
+  if ('contact' in o) return parseContact(o);
   if (isNum(o.pong)) {
     if (!Number.isInteger(o.pong) || o.pong < 0 || !isNum(o.ts)) return undefined;
     return { kind: 'pong', seq: o.pong, ts: o.ts };
@@ -425,7 +451,7 @@ export function parseMirrorLine(line: string): MirrorLine | undefined {
     return undefined;
   }
   // Like every header, a settings message is at most 4 KiB (only frames are large).
-  if ('settings' in o && text.length > 4096) return undefined;
+  if (('settings' in o || 'contact' in o) && text.length > 4096) return undefined;
   return parseMirrorHeader(o, 'line');
 }
 
@@ -542,6 +568,7 @@ export interface MirrorStatus {
   idle?: boolean;
   /** The phone has turned control off (Settings page); shown as a part of the live strip. */
   controlOffReason?: string;
+  touchIndicatorPath?: TouchIndicatorPath;
   /** The frame rate the stream asked for (the status line's `fps`): the pace in the details. */
   paceFps?: number;
   /** A frame the phone could not produce (its error text); shown in the details. */
@@ -749,6 +776,10 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   if (s.dropped !== undefined) rows.push({ label: 'Dropped', value: String(s.dropped) });
   const control = controlState(s, inputActive);
   rows.push({ label: 'Control', value: control === 'off' ? `off (${s.controlOffReason})` : control === 'active' ? 'on' : 'view only' });
+  rows.push({
+    label: 'Touch indicator',
+    value: s.touchIndicatorPath === 'phone' ? 'on phone' : s.touchIndicatorPath === 'mirror' ? 'in mirror' : 'off',
+  });
   if (s.softError) rows.push({ label: 'Phone error', value: s.softError });
   return rows;
 }
@@ -1023,8 +1054,9 @@ export function mirrorHtml(nonce: string, device: string): string {
   #details .grid .k { color: var(--vscode-descriptionForeground); }
   #details .grid .v { font-variant-numeric: tabular-nums; overflow-wrap: anywhere; }
   #details .foot { display: flex; justify-content: flex-end; }
-  #stage { flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
+  #stage { position: relative; flex: 1; min-height: 0; display: flex; align-items: center; justify-content: center; overflow: hidden; }
   #screen, #video { display: block; max-width: 100%; max-height: 100%; object-fit: contain; user-select: none; -webkit-user-drag: none; }
+  #touch { position: absolute; z-index: 1; box-sizing: border-box; border-style: solid; border-color: rgba(255, 255, 255, 0.9); border-radius: 50%; background: rgba(255, 70, 45, 0.57); pointer-events: none; transform: translate(-50%, -50%); }
   #stage.control { cursor: crosshair; touch-action: none; }
   #screen.hidden, #video.hidden { display: none; }
   #keypad { flex: none; width: min(420px, calc(100% - 16px)); margin: 0 auto; padding: 8px 0; display: flex; flex-direction: column; gap: 5px; }
@@ -1038,7 +1070,7 @@ export function mirrorHtml(nonce: string, device: string): string {
 </style>
 </head>
 <body>
-<div id="stage"><img id="screen" alt="Device screen" draggable="false"><canvas id="video" class="hidden" aria-label="Device screen"></canvas></div>
+<div id="stage"><img id="screen" alt="Device screen" draggable="false"><canvas id="video" class="hidden" aria-label="Device screen"></canvas><span id="touch" hidden></span></div>
 <div id="keypad" aria-label="Device keypad" hidden></div>
 <div id="strip" role="status" aria-live="polite" title="">
   <span id="dot"></span>
@@ -1063,6 +1095,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   var img = document.getElementById('screen');
   var canvas = document.getElementById('video');
   var stage = document.getElementById('stage');
+  var touchEl = document.getElementById('touch');
   var keypadEl = document.getElementById('keypad');
   var paint = canvas.getContext('2d');
   var stripEl = document.getElementById('strip');
@@ -1092,6 +1125,9 @@ export function mirrorHtml(nonce: string, device: string): string {
   var liveContacts = false;
   var pointer = null;
   var keypadHeld = null;
+  var touchPath = 'off';
+  var lastContact = null;
+  var touchTimer = null;
   var shownUrl = null;
   var loadingUrl = null;
   var decoder = null;
@@ -1286,6 +1322,31 @@ export function mirrorHtml(nonce: string, device: string): string {
     return out;
   }
   function surface() { return canvas.classList.contains('hidden') ? img : canvas; }
+  function hideTouch() {
+    if (touchTimer) clearTimeout(touchTimer);
+    touchTimer = null;
+    lastContact = null;
+    touchEl.hidden = true;
+    touchEl.style.opacity = '0';
+  }
+  function renderTouch() {
+    if (touchPath !== 'mirror' || !control || !lastContact || !displayedScreen) { hideTouch(); return; }
+    var rect = surface().getBoundingClientRect();
+    var stageRect = stage.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0 || displayedScreen[0] < 2 || displayedScreen[1] < 2) { hideTouch(); return; }
+    var radius = Math.max(12, Math.min(rect.width, rect.height) / 36);
+    var outline = Math.max(2, radius / 7);
+    touchEl.style.width = (radius * 2) + 'px';
+    touchEl.style.height = (radius * 2) + 'px';
+    touchEl.style.borderWidth = outline + 'px';
+    touchEl.style.left = (rect.left - stageRect.left + lastContact.x * (rect.width - 1) / (displayedScreen[0] - 1)) + 'px';
+    touchEl.style.top = (rect.top - stageRect.top + lastContact.y * (rect.height - 1) / (displayedScreen[1] - 1)) + 'px';
+    touchEl.style.background = lastContact.down ? 'rgba(255, 70, 45, 0.57)' : 'rgba(255, 70, 45, 0.31)';
+    touchEl.style.transition = lastContact.down ? 'none' : 'opacity 400ms linear';
+    touchEl.style.opacity = lastContact.down ? '1' : '0';
+    touchEl.hidden = false;
+    if (!lastContact.down) touchTimer = setTimeout(function () { touchEl.hidden = true; touchTimer = null; }, 400);
+  }
   function point(event, rect) {
     if (rect.width <= 0 || rect.height <= 0) return null;
     var x = (event.clientX - rect.left) / rect.width;
@@ -1426,16 +1487,29 @@ export function mirrorHtml(nonce: string, device: string): string {
       closeDecoder(true);
       cancelPointer();
       cancelKey();
+      hideTouch();
     } else if (m.type === 'control') {
       control = m.enabled === true;
       liveContacts = m.liveContacts === true;
-      if (!control) { cancelPointer(); cancelKey(); }
+      if (!control) { cancelPointer(); cancelKey(); hideTouch(); }
       stage.classList.toggle('control', control);
       Array.prototype.forEach.call(keypadEl.querySelectorAll('button'), function (keyButton) { keyButton.disabled = !control; });
       renderControl();
     } else if (m.type === 'keypad') {
       cancelKey();
       renderKeypad(m.layout);
+    } else if (m.type === 'touchIndicator') {
+      touchPath = m.path === 'mirror' ? 'mirror' : m.path === 'phone' ? 'phone' : 'off';
+      if (touchPath !== 'mirror') hideTouch();
+    } else if (m.type === 'contact') {
+      if (touchPath === 'mirror' && control && Array.isArray(m.screen) && m.screen.length === 2 &&
+          displayedScreen && m.screen[0] === displayedScreen[0] && m.screen[1] === displayedScreen[1] &&
+          Number.isInteger(m.x) && Number.isInteger(m.y) && typeof m.down === 'boolean') {
+        if (touchTimer) clearTimeout(touchTimer);
+        touchTimer = null;
+        lastContact = { x: m.x, y: m.y, down: m.down };
+        renderTouch();
+      }
     } else if (m.type === 'state') {
       var s = m.strip;
       if (s && typeof s === 'object' && typeof s.label === 'string') {
@@ -1443,8 +1517,10 @@ export function mirrorHtml(nonce: string, device: string): string {
       } else {
         renderStrip({ dot: 'wait', label: typeof m.text === 'string' ? m.text : String(m.state) }, [], 'none', typeof m.text === 'string' ? m.text : '');
       }
+      if (m.state !== 'live') hideTouch();
     }
   });
+  window.addEventListener('resize', function () { if (lastContact) renderTouch(); });
   codecs().then(function (list) { vscode.postMessage({ type: 'ready', codecs: list, focused: document.hasFocus() }); });
 })();
 </script>

@@ -81,6 +81,7 @@ export interface MirrorSink {
   same(f: { frame: number; ts: number }): void;
   softError(f: { frame: number; ts: number; error: string }): void;
   pong(seq: number, deviceTs: number): void;
+  contact?(contact: { x: number; y: number; down: boolean }): void;
   /** The agent ended the stream (`replaced`, `lease expired`, `developer mode is off`, ...) or the framing is broken. */
   fatal(error: string): void;
   /** One unparseable line of the text stream (the session counts them). */
@@ -214,6 +215,9 @@ export class SfdkExecTransport implements MirrorTransport {
         return;
       case 'pong':
         sink.pong(parsed.seq, parsed.ts);
+        return;
+      case 'contact':
+        sink.contact?.(parsed);
         return;
       case 'frame': {
         const { data, ...rest } = parsed;
@@ -651,6 +655,9 @@ export class ForwardTransport implements MirrorTransport {
             return;
           case 'pong':
             sink.pong(ev.seq, ev.ts);
+            return;
+          case 'contact':
+            sink.contact?.(ev);
             return;
           case 'settings':
             // Order matters: `input:false` reaches the session first (it writes `active:false`), then writes stop.

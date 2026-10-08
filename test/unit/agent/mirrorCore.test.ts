@@ -282,7 +282,7 @@ describe('mirrorCore detailRows', () => {
 
   it('lists every field of a live VP8 stream', () => {
     assert.deepStrictEqual(
-      rows({ state: 'live', transport: 'ssh', codec: 'vp8', fps: 29.84, paceFps: 30, kbps: 25.4, latencyMs: 24.6, frameMs: 19.2, dropped: 0, capture: 'native', video: { width: 720, height: 1584, targetKbps: 2000 } }, true),
+      rows({ state: 'live', transport: 'ssh', codec: 'vp8', fps: 29.84, paceFps: 30, kbps: 25.4, latencyMs: 24.6, frameMs: 19.2, dropped: 0, capture: 'native', touchIndicatorPath: 'phone', video: { width: 720, height: 1584, targetKbps: 2000 } }, true),
       {
         Transport: 'SSH forward',
         Video: 'VP8 · 720×1584 · 2000 kbit/s',
@@ -293,6 +293,7 @@ describe('mirrorCore detailRows', () => {
         Capture: 'native recorder',
         Dropped: '0',
         Control: 'on',
+        'Touch indicator': 'on phone',
       },
     );
   });
@@ -309,6 +310,7 @@ describe('mirrorCore detailRows', () => {
     assert.strictEqual(r.Capture, 'screenshot (recorder unavailable: busy)');
     assert.strictEqual(r.Dropped, '2');
     assert.strictEqual(r.Control, 'off (disabled on the phone)');
+    assert.strictEqual(r['Touch indicator'], 'off');
     assert.strictEqual(r['Phone error'], 'frame failed');
     assert.strictEqual(rows({ state: 'live', video: { width: 540, height: 1200, targetKbps: 800, reduced: true, reducedFor: ['cpu'] } }).Video, 'VP8 · 540×1200 · 800 kbit/s (reduced for the phone CPU)');
   });
@@ -717,7 +719,7 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
     send(message: object): void;
     window(name: string, event: PageEvent): void;
   } {
-    const elements = Object.fromEntries(['screen', 'video', 'stage', 'keypad', 'strip', 'dot', 'label', 'fps', 'fpsSep', 'warning', 'warningText', 'warnSep', 'reconnect', 'update', 'control', 'info', 'details', 'detailsGrid', 'detailsClose', 'copyDetails'].map((id) => [id, new FakeElement()])) as Record<string, FakeElement>;
+    const elements = Object.fromEntries(['screen', 'video', 'stage', 'touch', 'keypad', 'strip', 'dot', 'label', 'fps', 'fpsSep', 'warning', 'warningText', 'warnSep', 'reconnect', 'update', 'control', 'info', 'details', 'detailsGrid', 'detailsClose', 'copyDetails'].map((id) => [id, new FakeElement()])) as Record<string, FakeElement>;
     elements.video.classes.add('hidden');
     elements.details.hidden = true;
     const messages: Record<string, unknown>[] = [];
@@ -815,6 +817,23 @@ describe('mirrorCore.mirrorHtml (blob frames)', () => {
     // The only physical key handler closes the details popover on Escape and posts nothing.
     assert.strictEqual(html.match(/keydown/g)?.length, 1);
     assert.ok(html.includes("window.addEventListener('keydown', function (event) {\n    if (event.key === 'Escape' && detailsOpen()) setDetails(false, true);"));
+  });
+
+  it('draws fallback contacts over the displayed screen and hides them with the control gate', () => {
+    const p = page();
+    p.send({ type: 'control', enabled: true });
+    p.send({ type: 'frame', frame: 2, format: 'jpeg', screen: [720, 1600], bytes: new Uint8Array([2]) });
+    p.elements.screen.dispatch('load');
+    p.send({ type: 'touchIndicator', path: 'mirror' });
+    p.send({ type: 'contact', x: 360, y: 800, down: true, screen: [720, 1600] });
+    assert.strictEqual(p.elements.touch.hidden, false);
+    assert.strictEqual(p.elements.touch.style.opacity, '1');
+    assert.ok(Number.parseFloat(p.elements.touch.style.left) > 49);
+    assert.ok(Number.parseFloat(p.elements.touch.style.top) > 99);
+    p.send({ type: 'contact', x: 360, y: 800, down: false, screen: [720, 1600] });
+    assert.strictEqual(p.elements.touch.style.opacity, '0');
+    p.send({ type: 'control', enabled: false });
+    assert.strictEqual(p.elements.touch.hidden, true);
   });
 
   describe('status strip and details popover', () => {
@@ -998,8 +1017,8 @@ describe('phone settings (agent 1.9.0)', () => {
   const status = Buffer.from('{"ok":true,"stream":"mirror","fps":4,"width":360,"quality":60,"encoding":"binary"}\n');
 
   it('parses a settings line without and with the input fields', () => {
-    assert.deepStrictEqual(parseMirrorLine('{"settings":{"control":false,"touchIndicator":true}}'), {
-      kind: 'settings', control: false, touchIndicator: true,
+    assert.deepStrictEqual(parseMirrorLine('{"settings":{"control":false,"touchIndicator":true,"touchIndicatorPath":"mirror"}}'), {
+      kind: 'settings', control: false, touchIndicator: true, touchIndicatorPath: 'mirror',
     });
     assert.deepStrictEqual(
       parseMirrorLine('{"settings":{"control":false},"input":false,"inputError":"control disabled on the phone"}'),
@@ -1008,6 +1027,19 @@ describe('phone settings (agent 1.9.0)', () => {
     assert.deepStrictEqual(parseMirrorLine('{"settings":{"control":true},"input":true,"inputLease":3}'), {
       kind: 'settings', control: true, input: true, inputLease: 3,
     });
+  });
+
+  it('parses bounded fallback contacts and rejects malformed ones', () => {
+    assert.deepStrictEqual(parseMirrorLine('{"contact":{"x":719,"y":1599,"down":true}}'), {
+      kind: 'contact', x: 719, y: 1599, down: true,
+    });
+    for (const bad of [
+      '{"contact":{"x":-1,"y":0,"down":true}}',
+      '{"contact":{"x":1.5,"y":0,"down":true}}',
+      '{"contact":{"x":0,"y":0,"down":"yes"}}',
+      '{"contact":[]}',
+    ]) assert.strictEqual(parseMirrorLine(bad), undefined, bad);
+    assert.deepStrictEqual(parseMirrorHeader({ settings: { touchIndicatorPath: 'elsewhere' } }, 'record'), { kind: 'settings' });
   });
 
   it('keeps input off without a valid lease, drops wrong types and sanitizes the reason', () => {
@@ -1021,8 +1053,12 @@ describe('phone settings (agent 1.9.0)', () => {
 
   it('delivers a settings record after the status and rejects an oversized object', () => {
     const p = new MirrorRecordParser();
-    const events = p.push(Buffer.concat([status, record({ settings: { control: false }, input: false, inputError: 'control disabled on the phone' })]));
-    assert.deepStrictEqual(events.map((e) => e.kind), ['status', 'settings']);
+    const events = p.push(Buffer.concat([
+      status,
+      record({ settings: { control: false }, input: false, inputError: 'control disabled on the phone' }),
+      record({ contact: { x: 4, y: 5, down: false } }),
+    ]));
+    assert.deepStrictEqual(events.map((e) => e.kind), ['status', 'settings', 'contact']);
     const big = new MirrorRecordParser();
     big.push(Buffer.concat([status, record({ settings: { control: false }, pad: 'x'.repeat(5000) })]));
     assert.ok(big.failed);

@@ -44,6 +44,7 @@ TouchOverlay::TouchOverlay(QObject *parent)
     , m_client(nullptr)
     , m_role(nullptr)
     , m_surface(nullptr)
+    , m_managerVersion(0)
     , m_notifier(nullptr)
     , m_data(nullptr)
     , m_dataSize(0)
@@ -152,7 +153,7 @@ bool TouchOverlay::initialize()
         return false;
     }
     if (!m_compositor || !m_shm || !m_manager) {
-        fail(!m_manager ? QStringLiteral("the compositor has no alien_manager v2")
+        fail(!m_manager ? QStringLiteral("the compositor has no alien_manager")
                         : QStringLiteral("the compositor has no wl_compositor or wl_shm"));
         return false;
     }
@@ -163,7 +164,9 @@ bool TouchOverlay::initialize()
     m_role = alien_client_get_alien_surface(m_client, m_surface);
     alien_surface_add_listener(m_role, &surfaceListener, this);
     alien_surface_set_title(m_role, "Remote touch indicator");
-    alien_surface_set_category(m_role, "overlay");
+    if (m_managerVersion >= 2) {
+        alien_surface_set_category(m_role, "overlay");
+    }
 
     // Empty (not null) means no point is part of the input region. The marker can therefore never
     // consume a physical touch or interfere with the event stream it visualizes.
@@ -367,8 +370,10 @@ void TouchOverlay::onGlobal(void *data, wl_registry *registry, uint32_t name, co
             wl_registry_bind(registry, name, &wl_compositor_interface, qMin(version, uint32_t(3))));
     } else if (std::strcmp(interface, "wl_shm") == 0 && !overlay->m_shm) {
         overlay->m_shm = static_cast<wl_shm *>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
-    } else if (std::strcmp(interface, "alien_manager") == 0 && version >= 2 && !overlay->m_manager) {
-        overlay->m_manager = static_cast<alien_manager *>(wl_registry_bind(registry, name, &alien_manager_interface, 2));
+    } else if (std::strcmp(interface, "alien_manager") == 0 && version >= 1 && !overlay->m_manager) {
+        overlay->m_managerVersion = qMin(version, uint32_t(2));
+        overlay->m_manager = static_cast<alien_manager *>(
+            wl_registry_bind(registry, name, &alien_manager_interface, overlay->m_managerVersion));
     }
 }
 

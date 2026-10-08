@@ -219,7 +219,7 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
             });
         }
         if (m_touchOverlay) {
-            connect(m_input, &MirrorInput::contactChanged, m_touchOverlay, &TouchOverlay::setContact);
+            connect(m_input, &MirrorInput::contactChanged, this, &MirrorStream::onContactChanged);
         }
     }
     if (m_leaseSeconds > 0) {
@@ -330,7 +330,19 @@ void MirrorStream::sendPhoneSettings(const QByteArray &fields)
     const bool control = m_settings ? m_settings->control() : true;
     const bool touch = m_settings ? m_settings->touchIndicator() : false;
     writeMessage(QByteArray("{\"settings\":{\"control\":") + (control ? "true" : "false") + ",\"touchIndicator\":"
-                 + (touch ? "true" : "false") + "}" + fields + "}");
+                 + (touch ? "true" : "false") + ",\"touchIndicatorPath\":\"" + touchIndicatorPath() + "\"}" + fields
+                 + "}");
+}
+
+QByteArray MirrorStream::touchIndicatorPath() const
+{
+    if (!m_touchOverlay || !m_settings || !m_settings->touchIndicator() || !m_controlAllowed || !m_inputActive) {
+        return QByteArrayLiteral("off");
+    }
+    if (m_touchOverlay->showingOnPhone()) {
+        return QByteArrayLiteral("phone");
+    }
+    return m_phoneState ? QByteArrayLiteral("mirror") : QByteArrayLiteral("off");
 }
 
 void MirrorStream::applySetting(const QString &key)
@@ -370,6 +382,18 @@ void MirrorStream::applyTouchIndicatorSetting(bool on)
 {
     if (m_touchOverlay) {
         m_touchOverlay->setEnabled(on && m_controlAllowed && m_inputActive);
+    }
+}
+
+void MirrorStream::onContactChanged(const QPoint &point, bool pressed)
+{
+    if (!m_touchOverlay) {
+        return;
+    }
+    m_touchOverlay->setContact(point, pressed);
+    if (touchIndicatorPath() == QByteArrayLiteral("mirror")) {
+        writeMessage(QByteArray("{\"contact\":{\"x\":") + QByteArray::number(point.x()) + ",\"y\":"
+                     + QByteArray::number(point.y()) + ",\"down\":" + (pressed ? "true" : "false") + "}}");
     }
 }
 
@@ -517,6 +541,7 @@ void MirrorStream::setInputActive(bool active)
         }
         m_inputActive = false;
         m_input->cancel();
+        sendPhoneSettings(inputFields());
         fprintf(stderr, "sailfish-devagent: mirror input inactive\n");
         return;
     }
@@ -535,6 +560,7 @@ void MirrorStream::setInputActive(bool active)
     m_inputActive = active;
     m_inputLease.start();
     applyTouchIndicatorSetting(m_settings && m_settings->touchIndicator());
+    sendPhoneSettings(inputFields());
     fprintf(stderr, "sailfish-devagent: mirror input active\n");
 }
 

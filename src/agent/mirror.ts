@@ -39,6 +39,7 @@ import {
   VIDEO_CODEC,
   type MirrorFormat,
   type MirrorStatus,
+  type TouchIndicatorPath,
 } from './mirrorCore';
 import {
   FORWARD_FIRST_BYTE_MS,
@@ -205,6 +206,10 @@ export class MirrorSession {
   private inputCaptureSafe = false;
   private webviewFocused = false;
   private controlPosted: boolean | undefined;
+  private phoneTouchIndicator = false;
+  private touchIndicatorPath: TouchIndicatorPath = 'off';
+  private touchIndicatorPathReported = false;
+  private touchIndicatorPosted: TouchIndicatorPath | undefined;
   private keypadLayout: KeypadLayout | undefined;
   /** An agent install is running (see agentInstalling). */
   private agentUpdating = false;
@@ -396,6 +401,7 @@ export class MirrorSession {
     const type = (m as { type?: unknown }).type;
     if (type === 'ready') {
       this.controlPosted = undefined; // a reloaded page has not received the previous control state
+      this.touchIndicatorPosted = undefined;
       const readyFocused = (m as { focused?: unknown }).focused === true;
       this.webviewFocused = readyFocused && this.inputFocusRate.allow(Date.now());
       const first = this.codecs === undefined;
@@ -530,6 +536,9 @@ export class MirrorSession {
     this.leaseActive = false;
     this.inputAccepted = false;
     this.inputCaptureSafe = false;
+    this.phoneTouchIndicator = false;
+    this.touchIndicatorPath = 'off';
+    this.touchIndicatorPathReported = false;
     this.inputFocus.update(false);
     this.postControl(false);
     this.frameMs = undefined;
@@ -691,7 +700,22 @@ export class MirrorSession {
         if ((this.controlOffReason !== undefined) !== before) {
           this.services.output.log('info', `mirror "${this.device}": control ${off ? 'turned off on the phone' : 'turned on again on the phone'}`);
         }
+        if (s.touchIndicator !== undefined) this.phoneTouchIndicator = s.touchIndicator;
+        if (s.touchIndicatorPath !== undefined) {
+          this.touchIndicatorPath = s.touchIndicatorPath;
+          this.touchIndicatorPathReported = true;
+        }
         this.onPhoneSettings(s);
+        this.postTouchIndicator();
+        this.postState();
+      },
+      contact: (contact) => {
+        if (!live() || !this.inputOn() || !this.screen) return;
+        if (contact.x >= this.screen[0] || contact.y >= this.screen[1]) return;
+        this.touchIndicatorPath = 'mirror';
+        this.touchIndicatorPathReported = true;
+        this.postTouchIndicator();
+        this.send({ type: 'contact', ...contact, screen: this.screen });
         this.postState();
       },
       frame: (f) => {
@@ -920,12 +944,26 @@ export class MirrorSession {
     const on = this.inputOn();
     this.inputFocus.update(on);
     this.postControl(on);
+    this.postTouchIndicator();
   }
 
   private postControl(enabled: boolean): void {
     if (this.controlPosted === enabled) return;
     this.controlPosted = enabled;
     this.send({ type: 'control', enabled, liveContacts: supportsLiveContacts(this.opts.probe.mirrorInput) });
+  }
+
+  private effectiveTouchIndicatorPath(): TouchIndicatorPath {
+    if (this.state !== 'live' || this.controlPosted !== true) return 'off';
+    if (this.touchIndicatorPathReported) return this.touchIndicatorPath;
+    return this.phoneTouchIndicator ? 'phone' : 'off';
+  }
+
+  private postTouchIndicator(): void {
+    const path = this.effectiveTouchIndicatorPath();
+    if (this.touchIndicatorPosted === path) return;
+    this.touchIndicatorPosted = path;
+    this.send({ type: 'touchIndicator', path });
   }
 
   private postKeypad(): void {
@@ -950,6 +988,7 @@ export class MirrorSession {
       captureReason: live ? this.captureReason : undefined,
       reason: this.reason,
       controlOffReason: live ? this.controlOffReason : undefined,
+      touchIndicatorPath: live ? this.effectiveTouchIndicatorPath() : 'off',
       paceFps: live ? this.statusFps : undefined,
       softError: live ? this.softError : undefined,
       fps: live ? this.meter.rate(now) : undefined,

@@ -37,6 +37,7 @@ public:
     void setEnabled(bool enabled);
     void setScreen(const QSize &screen);
     bool available() const { return m_display && !m_broken; }
+    bool showingOnPhone() const { return m_enabled && available(); }
     QString error() const { return m_error; }
 
     // Wayland listener callbacks (C function pointers); not for other callers.
@@ -82,6 +83,7 @@ private:
     alien_client *m_client;
     alien_surface *m_role;
     wl_surface *m_surface;
+    uint32_t m_managerVersion;
     QSocketNotifier *m_notifier;
     Buffer m_buffers[2];
     uchar *m_data;
