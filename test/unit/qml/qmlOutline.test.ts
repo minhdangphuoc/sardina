@@ -292,12 +292,15 @@ Trailing {`,
     );
     assert.deepStrictEqual(toComponentOutline(o), {
       rootType: "Q.Item",
-      imports: [{ module: "QtQuick", version: "2.0" }, { path: "d" }],
+      imports: [
+        { kind: "module", target: "QtQuick", version: "2.0" },
+        { kind: "dir", target: "d" },
+      ],
       members: [
         { kind: "property", name: "n", type: "int" },
         { kind: "alias", name: "a" },
-        { kind: "signal", name: "s", params: ["v"] },
-        { kind: "method", name: "f", params: ["p"] },
+        { kind: "signal", name: "s" },
+        { kind: "method", name: "f" },
       ],
     });
     assert.deepStrictEqual(toComponentOutline(parseQmlOutline("")), {

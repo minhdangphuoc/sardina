@@ -1,12 +1,8 @@
 /**
  * Tolerant one-pass outline of a `.qml` file: imports, object tree, members, ids.
  * Pure and never throws; broken input yields a partial outline with `clean === false`.
- *
- * Adapter shape (`toComponentOutline`), to be reconciled with `QmlComponentOutline`:
- *   { rootType: string,
- *     imports: { module?, version?, qualifier?, path? }[],
- *     members: { kind: 'property' | 'alias' | 'signal' | 'method', name, type?, params? }[] }
  */
+import type { OutlineImport, QmlComponentOutline } from "./types";
 
 export interface Pos {
   offset: number;
@@ -81,22 +77,6 @@ export type QmlContext =
   | { kind: "top" }
   | { kind: "none" };
 
-export interface ComponentOutline {
-  rootType: string;
-  imports: {
-    module?: string;
-    version?: string;
-    qualifier?: string;
-    path?: string;
-  }[];
-  members: {
-    kind: "property" | "alias" | "signal" | "method";
-    name: string;
-    type?: string;
-    params?: string[];
-  }[];
-}
-
 interface Tok {
   k: "id" | "num" | "str" | "p";
   s: number;
@@ -148,24 +128,23 @@ export function parseQmlOutline(text: string): QmlOutline {
   }
 }
 
-export function toComponentOutline(outline: QmlOutline): ComponentOutline {
-  const members: ComponentOutline["members"] = [];
+export function toComponentOutline(outline: QmlOutline): QmlComponentOutline {
+  const members: QmlComponentOutline["members"] = [];
   for (const m of outline.root?.members ?? []) {
     if (m.kind === "binding") continue;
-    members.push({
-      kind: m.kind,
-      name: m.name,
-      ...(m.type ? { type: m.type } : {}),
-      ...(m.params ? { params: m.params } : {}),
-    });
+    members.push({ kind: m.kind, name: m.name, ...(m.type ? { type: m.type } : {}) });
   }
-  const imports = outline.imports.map((i) => ({
-    ...(i.module !== undefined ? { module: i.module } : {}),
-    ...(i.version !== undefined ? { version: i.version } : {}),
-    ...(i.qualifier !== undefined ? { qualifier: i.qualifier } : {}),
-    ...(i.path !== undefined ? { path: i.path } : {}),
-  }));
+  const imports = outline.imports.map(toOutlineImport);
   return { rootType: outline.root?.typeName ?? "", imports, members };
+}
+
+export function toOutlineImport(i: QmlImport): OutlineImport {
+  return {
+    kind: i.kind,
+    target: (i.kind === "module" ? i.module : i.path) ?? "",
+    ...(i.version !== undefined ? { version: i.version } : {}),
+    ...(i.qualifier !== undefined ? { as: i.qualifier } : {}),
+  };
 }
 
 /** Innermost object whose body contains the offset. */
