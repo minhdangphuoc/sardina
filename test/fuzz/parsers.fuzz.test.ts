@@ -6,6 +6,8 @@ import type { ParseResult } from '../../src/core/types';
 import { formatEntryLine, parseJournalJsonLine, parseShortPreciseLine } from '../../src/monitor/logModel';
 import { parseAppStatsOutput, parseProcStat, parseStatsStreamLine } from '../../src/monitor/appStats';
 import { validatePageMessage } from '../../src/monitor/protocol';
+import { parseQmldir } from '../../src/qml/qmldir';
+import { parseQmltypes } from '../../src/qml/qmltypes';
 import { classifyConnection, parseIpAddrOutput, parseOsRelease } from '../../src/monitor/overview';
 
 /**
@@ -226,6 +228,9 @@ const monitorSeeds: Record<string, string[]> = {
   net: ['192.168.2.1 51234 192.168.2.15 22\n5: rndis0    inet 192.168.2.15/24 brd 192.168.2.255 scope global rndis0\n7: wlan0    inet 10.0.2.15/24 scope global wlan0'],
 };
 
+const qmlRoot = path.resolve(__dirname, '..', '..', '..', 'test', 'fixtures', 'qmltypes', 'root');
+const qmlSeed = (rel: string): string => fs.readFileSync(path.join(qmlRoot, rel), 'utf8');
+
 const monitorTargets: { name: string; seeds: string[]; run: (input: string) => unknown }[] = [
   { name: 'parseJournalJsonLine', seeds: monitorSeeds.json, run: (s) => parseJournalJsonLine(s, 0) },
   { name: 'parseShortPreciseLine', seeds: monitorSeeds.text, run: (s) => parseShortPreciseLine(s, 0) },
@@ -246,6 +251,8 @@ const monitorTargets: { name: string; seeds: string[]; run: (input: string) => u
       return validatePageMessage(raw);
     },
   },
+  { name: 'parseQmltypes', seeds: ['QtQuick.2/plugins.qmltypes', 'Fixture/Widgets/plugins.qmltypes'].map(qmlSeed), run: parseQmltypes },
+  { name: 'parseQmldir', seeds: ['Fixture/Widgets/qmldir', 'QtQuick.2/qmldir'].map(qmlSeed), run: parseQmldir },
   { name: 'parseOsRelease', seeds: monitorSeeds.os, run: (s) => parseOsRelease(s) },
   { name: 'classifyConnection', seeds: monitorSeeds.net, run: (s) => classifyConnection(s.split('\n')[0], s) && parseIpAddrOutput(s) },
 ];
