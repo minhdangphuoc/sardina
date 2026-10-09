@@ -16,9 +16,9 @@ test: $(BUILD)/pacer-test $(BUILD)/stats-test $(BUILD)/firstline-test $(BUILD)/r
 	$(BUILD)/idleplan-test
 	$(BUILD)/yuvrows-test
 
-$(BUILD)/%-test: %-test.cpp ../src/pacer.h ../src/statsmath.h ../src/firstline.h ../src/retrybudget.h ../src/idleplan.h ../src/yuvrows.h
+$(BUILD)/%-test: %-test.cpp ../mirror/pacer.h ../stats/statsmath.h ../common/firstline.h ../mirror/retrybudget.h ../common/idleplan.h ../mirror/yuvrows.h
 	mkdir -p $(BUILD)
-	$(CXX) $(CXXFLAGS) -I ../src $< -o $@
+	$(CXX) $(CXXFLAGS) -I ../common -I ../stats -I ../mirror $< -o $@
 
 clean:
 	rm -rf $(BUILD)

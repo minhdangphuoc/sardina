@@ -91,9 +91,11 @@ build_sdk() {
     sfdk="${SFDK:-$HOME/SailfishOS/bin/sfdk}"
 
     clean() {
-        rm -rf "$here/RPMS" "$here/Makefile" "$here/sailfish-devagent" \
-            "$here/documentation.list"
-        rm -f "$here"/*.o "$here"/moc_* "$here"/*-protocol.c "$here"/*-client-protocol.h
+        rm -rf "$here/RPMS" "$here/documentation.list"
+        # Build leftovers of every subproject (objects, moc, generated protocol code, binaries).
+        find "$here" \( -name '*.o' -o -name 'moc_*' -o -name '*-protocol.c' -o -name '*-client-protocol.h' \
+            -o -name Makefile -o -name .qmake.stash -o -name 'sailfish-devagent' -o -name 'sailfish-devagent-*' \) \
+            -type f ! -path "$here/docker/*" ! -path "$here/tools/*" -exec rm -f {} +
     }
 
     # .sfdk is only removed at the very end: sfdk fails with "Unable to open .sfdk/spec" when it
@@ -202,9 +204,10 @@ are in the docker group (sudo usermod -aG docker \$USER, then log in again)."
 
         # Sources only, no build leftovers; the container's copy never touches the worktree.
         tar -C "$here" -cf - \
-            --exclude=./RPMS --exclude=./.sfdk --exclude=./Makefile --exclude=./sailfish-devagent \
+            --exclude=./RPMS --exclude=./.sfdk --exclude=Makefile --exclude=.qmake.stash \
+            --exclude=sailfish-devagent --exclude='sailfish-devagent-*' \
             --exclude=./documentation.list --exclude=./docker \
-            --exclude='*.o' --exclude='./moc_*' --exclude='*-protocol.c' \
+            --exclude='*.o' --exclude='moc_*' --exclude='*-protocol.c' \
             --exclude='*-client-protocol.h' . | tar -C "$work/src" -xf -
 
         # The container script lives next to the sources so no shell quoting crosses docker run.

@@ -1,0 +1,10 @@
+# Shared by the daemon and its module executables. Plain Qt only (Qt 5.6 on the phone): no Silica.
+AGENT_VERSION = 1.10.8
+DEFINES += AGENT_VERSION=\\\"$$AGENT_VERSION\\\"
+
+CONFIG += c++11 console link_pkgconfig
+CONFIG -= app_bundle
+
+INCLUDEPATH += $$PWD
+HEADERS += $$PWD/paths.h
+SOURCES += $$PWD/paths.cpp
