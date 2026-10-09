@@ -647,45 +647,48 @@ suite('screen mirror over the SSH forward (F6)', () => {
       });
       return panel;
     });
-    await withScenario('agent-forward-keypad', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
-      await waitLive();
-      type Posted = { type?: string; strip?: { action?: string }; layout?: { model: string; rows: Array<Array<{ key: string; label: string; style?: string } | null>> } | null };
-      const keypadPosts = (): Posted[] => (posted as Posted[]).filter((m) => m?.type === 'keypad');
-      await waitFor(() => (posted as Posted[]).some((m) => m.type === 'state' && m.strip?.action === 'keypad'), 8000);
-      assert.strictEqual(keypadPosts().some((m) => m.layout), false, 'no layout is applied by default');
-      await vscode.commands.executeCommand('sailfish.agent.editKeypadLayout');
-      assert.strictEqual(saveDialog.callCount, 1);
-      const saveOptions = saveDialog.firstCall.args[0] as vscode.SaveDialogOptions;
-      assert.ok(saveOptions.defaultUri?.fsPath.endsWith(path.join('.sailfish', 'keypads', 'commodore-callback.json')));
-      assert.ok(fs.existsSync(layoutPath), 'the starter layout was written to the chosen location');
-      await waitFor(() => keypadPosts().some((m) => m.layout), 8000);
+    try {
+      await withScenario('agent-forward-keypad', async () => {
+        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await waitLive();
+        type Posted = { type?: string; strip?: { action?: string }; layout?: { model: string; rows: Array<Array<{ key: string; label: string; style?: string } | null>> } | null };
+        const keypadPosts = (): Posted[] => (posted as Posted[]).filter((m) => m?.type === 'keypad');
+        await waitFor(() => (posted as Posted[]).some((m) => m.type === 'state' && m.strip?.action === 'keypad'), 8000);
+        assert.strictEqual(keypadPosts().some((m) => m.layout), false, 'no layout is applied by default');
+        await vscode.commands.executeCommand('sailfish.agent.editKeypadLayout');
+        assert.strictEqual(saveDialog.callCount, 1);
+        const saveOptions = saveDialog.firstCall.args[0] as vscode.SaveDialogOptions;
+        assert.ok(saveOptions.defaultUri?.fsPath.endsWith(path.join('.sailfish', 'keypads', 'commodore-callback.json')));
+        assert.ok(fs.existsSync(layoutPath), 'the starter layout was written to the chosen location');
+        await waitFor(() => keypadPosts().some((m) => m.layout), 8000);
 
-      const changed = JSON.parse(fs.readFileSync(layoutPath, 'utf8')) as { rows: Array<Array<{ key?: string; label?: string } | string | null>> };
-      changed.rows = [[{ key: '5', label: 'Five' }]];
-      await vscode.workspace.fs.writeFile(vscode.Uri.file(layoutPath), Buffer.from(`${JSON.stringify(changed, null, 2)}\n`));
-      await waitFor(() => keypadPosts().some((m) => m.layout?.rows.flat().some((cell) => cell?.label === 'Five')), 8000);
-      const layout = keypadPosts().filter((m) => m.layout).at(-1)?.layout;
-      assert.strictEqual(layout?.model, 'Commodore Callback');
-      const keys = (layout?.rows ?? []).flat().filter((c) => c !== null).map((c) => c.key);
-      assert.deepStrictEqual(keys, ['5']);
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
-      await setTestFocus(true);
-      await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
-      await sendTestInput({ type: 'input', action: 'key', key: 'F23', pressed: true });
-      await sendTestInput({ type: 'input', action: 'key', key: '5', pressed: true });
-      await sendTestInput({ type: 'input', action: 'key', key: '5', pressed: false });
-      await waitFor(() => inputs().some((e) => e.input?.type === 'key' && e.input.pressed === false), 3000);
-      const keyEvents = inputs().filter((e) => e.input?.type === 'key').map((e) => e.input);
-      assert.deepStrictEqual(keyEvents, [
-        { type: 'key', key: '5', pressed: true },
-        { type: 'key', key: '5', pressed: false },
-      ]);
-      await vscode.commands.executeCommand('sailfish.agent.resetKeypadLayout');
-      await waitFor(() => keypadPosts().at(-1)?.layout === null, 8000);
-      assert.ok(fs.existsSync(layoutPath), 'reset forgets the layout without deleting it');
-    });
-    fs.rmSync(layoutDir, { recursive: true, force: true });
+        const changed = JSON.parse(fs.readFileSync(layoutPath, 'utf8')) as { rows: Array<Array<{ key?: string; label?: string } | string | null>> };
+        changed.rows = [[{ key: '5', label: 'Five' }]];
+        await vscode.workspace.fs.writeFile(vscode.Uri.file(layoutPath), Buffer.from(`${JSON.stringify(changed, null, 2)}\n`));
+        await waitFor(() => keypadPosts().some((m) => m.layout?.rows.flat().some((cell) => cell?.label === 'Five')), 8000);
+        const layout = keypadPosts().filter((m) => m.layout).at(-1)?.layout;
+        assert.strictEqual(layout?.model, 'Commodore Callback');
+        const keys = (layout?.rows ?? []).flat().filter((c) => c !== null).map((c) => c.key);
+        assert.deepStrictEqual(keys, ['5']);
+        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await setTestFocus(true);
+        await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
+        await sendTestInput({ type: 'input', action: 'key', key: 'F23', pressed: true });
+        await sendTestInput({ type: 'input', action: 'key', key: '5', pressed: true });
+        await sendTestInput({ type: 'input', action: 'key', key: '5', pressed: false });
+        await waitFor(() => inputs().some((e) => e.input?.type === 'key' && e.input.pressed === false), 3000);
+        const keyEvents = inputs().filter((e) => e.input?.type === 'key').map((e) => e.input);
+        assert.deepStrictEqual(keyEvents, [
+          { type: 'key', key: '5', pressed: true },
+          { type: 'key', key: '5', pressed: false },
+        ]);
+        await vscode.commands.executeCommand('sailfish.agent.resetKeypadLayout');
+        await waitFor(() => keypadPosts().at(-1)?.layout === null, 8000);
+        assert.ok(fs.existsSync(layoutPath), 'reset forgets the layout without deleting it');
+      });
+    } finally {
+      fs.rmSync(layoutDir, { recursive: true, force: true });
+    }
   });
 
   test('I28 touch indicator fallback: agent 1.10.4 reports the mirror path, a contact record draws the marker, details say in mirror', async function () {

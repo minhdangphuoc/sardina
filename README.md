@@ -695,8 +695,11 @@ emulator. This extension includes agent **1.10.7**.
    **Create layout**: it saves a starter layout built from the phone's keys
    (default `.sailfish/keypads/<model>.json`) and opens it. The keypad then
    appears under the picture; click its buttons to press the phone's keys (your
-   PC keyboard is not forwarded). Saving the file reloads the keypad.
-   **Sailfish: Edit Keypad Layout** opens the file again, **Sailfish: Reset
+   PC keyboard is not forwarded). Saving the file reloads the keypad; a broken
+   edit shows one error and keeps the last good layout. Picking an existing
+   valid layout file uses it as is. If the file goes missing the strip says
+   `Keypad layout missing` with **Edit**. The strip hint goes away once you use
+   it. **Sailfish: Edit Keypad Layout** opens the file again, **Sailfish: Reset
    Keypad Layout** forgets it (the file is kept).
    With **Show touch indicator** on in the phone's Developer agent settings, a
    circle marks where you touch: on the phone itself, or (agent 1.10.4, when
