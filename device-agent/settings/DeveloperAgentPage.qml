@@ -305,6 +305,16 @@ Page {
                 onClicked: page.setBool("muteNotifications", !checked)
             }
 
+            TextSwitch {
+                visible: page.has("input")
+                automaticCheck: false
+                enabled: page.available && page.st.control === true
+                checked: page.st.touchCursor === true
+                text: "Show remote touches as a cursor"
+                description: "Moves the mouse pointer to where VS Code touches the screen while control is active. Normally off."
+                onClicked: page.setBool("touchCursor", !checked)
+            }
+
             SectionHeader {
                 text: "Status"
             }

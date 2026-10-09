@@ -16,6 +16,7 @@ public:
     bool screenView() const { return flag("screenView", true); }
     bool control() const { return flag("control", true); }
     bool logs() const { return flag("logs", true); }
+    bool touchCursor() const { return flag("touchCursor", false); }
     bool idleMode() const { return flag("idleMode", true); }
     int maxFps() const { return m_values.value(QStringLiteral("maxFps")).toInt(30) == 60 ? 60 : 30; }
 

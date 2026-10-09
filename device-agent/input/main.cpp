@@ -1,5 +1,6 @@
 #include "mirrorinput.h"
 #include "modulehost.h"
+#include "virtualpointer.h"
 
 #include <QCoreApplication>
 #include <QJsonArray>
@@ -37,6 +38,7 @@ public:
         : m_host(host)
     {
         connect(&m_input, &MirrorInput::contactChanged, this, [this](const QPoint &p, bool down) {
+            followWithCursor(p, down);
             m_host->sendEvent(QJsonObject{ { QStringLiteral("contact"),
                                              QJsonObject{ { QStringLiteral("x"), p.x() },
                                                           { QStringLiteral("y"), p.y() },
@@ -53,7 +55,10 @@ public:
     {
         if (line.contains(QStringLiteral("screen"))) {
             const QJsonArray size = line.value(QStringLiteral("screen")).toArray();
-            m_input.setScreen(QSize(size.at(0).toInt(), size.at(1).toInt()), true);
+            m_screen = QSize(size.at(0).toInt(), size.at(1).toInt());
+            m_input.setScreen(m_screen, true);
+        } else if (line.contains(QStringLiteral("cursor"))) {
+            setCursor(line.value(QStringLiteral("cursor")).toBool());
         } else if (line.contains(QStringLiteral("tap"))) {
             m_input.tap(point(line.value(QStringLiteral("tap"))));
         } else if (line.contains(QStringLiteral("swipe"))) {
@@ -75,9 +80,34 @@ public:
         sendState(); // also after a refused command, so the mirror's guess is corrected
     }
 
-    void release() { m_input.cancel(); }
+    void release()
+    {
+        m_input.cancel();
+        m_pointer.close();
+    }
 
 private:
+    void setCursor(bool on)
+    {
+        if (on) {
+            m_pointer.open(); // without /dev/uinput access there is simply no cursor
+        } else {
+            m_pointer.close();
+        }
+    }
+
+    // The contact signal repeats while down; a release ends the touch.
+    void followWithCursor(const QPoint &p, bool down)
+    {
+        if (down && !m_touching) {
+            m_pointer.touchStarted();
+        }
+        m_touching = down;
+        if (down) {
+            m_pointer.moveTo(p, m_screen);
+        }
+    }
+
     void sendState()
     {
         m_host->sendEvent(QJsonObject{ { QStringLiteral("state"),
@@ -87,6 +117,9 @@ private:
 
     ModuleHost *m_host;
     MirrorInput m_input;
+    VirtualPointer m_pointer;
+    QSize m_screen;
+    bool m_touching = false;
 };
 
 }

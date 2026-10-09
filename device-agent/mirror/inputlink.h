@@ -37,6 +37,9 @@ public:
     void keyUp(const QString &key);
     void cancel();
 
+    // The phone's own cursor follows the agent's touches (module-side virtual pointer).
+    void setCursorEnabled(bool enabled);
+
 signals:
     void contactChanged(const QPoint &point, bool pressed);
 
@@ -53,6 +56,7 @@ private:
     QString m_error;
     bool m_busy;
     bool m_live;
+    bool m_cursor = false;
 };
 
 #endif
