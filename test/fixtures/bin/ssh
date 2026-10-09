@@ -2,7 +2,8 @@
 'use strict';
 /*
  * Fake ssh for the mirror-forward integration tests (device-agent/PLAN-mirror-forward.md, O12).
- * It honours only the forward argv shape the extension builds (`-N` and one `-L <local>:<remote>`);
+ * It honours only the forward argv shape the extension builds (`-N` and one `-L <local>:<remote>`, or the loopback
+ * TCP form `-L 127.0.0.1:P:127.0.0.1:P`, which listens on that port; a busy port fails like ssh with a bind error);
  * anything else gets `fake ssh: unrecognized`, exit 255 and a line in test/fixtures/sfdk/unrecorded.log.
  * Behaviour comes from the scenario file `ssh_forward.mode` (same lookup as the fake sfdk):
  *   serve (default), auth-fail, hostkey-changed, hostkey-changed-once, remote-refused, never-listen.
@@ -48,7 +49,7 @@ const HOSTKEY_CHANGED = [
   '',
 ].join('\n');
 
-/** @returns {{local: string, remote: string} | null} null when argv is not the forward shape */
+/** @returns {{local: string, remote: string} | {port: number} | null} null when argv is not the forward shape */
 function parseForwardArgv(argv) {
   let noCommand = false;
   let spec = null;
@@ -66,6 +67,8 @@ function parseForwardArgv(argv) {
     else return null;
   }
   if (!noCommand || lCount !== 1 || typeof spec !== 'string') return null;
+  const tcp = /^127\.0\.0\.1:(\d+):127\.0\.0\.1:\1$/.exec(spec);
+  if (tcp) return { port: Number(tcp[1]) };
   const colon = spec.indexOf(':');
   if (colon <= 0 || colon === spec.length - 1) return null;
   return { local: spec.slice(0, colon), remote: spec.slice(colon + 1) };
@@ -149,7 +152,7 @@ function countRequests(logPath) {
   }
 }
 
-function serve(scenario, logPath, local, onFirstConnect) {
+function serve(scenario, logPath, fwd, onFirstConnect) {
   const allFrames = loadFrames(scenario);
   const sockets = new Set();
   process.umask(0o177);
@@ -209,16 +212,26 @@ function serve(scenario, logPath, local, onFirstConnect) {
       }
     });
   });
-  try {
-    fs.unlinkSync(local);
-  } catch {
-    // StreamLocalBindUnlink
+  const local = fwd.local;
+  if (local === undefined) {
+    server.on('error', (err) => {
+      process.stderr.write(`bind [127.0.0.1]:${fwd.port}: ${err.code === 'EADDRINUSE' ? 'Address already in use' : err.message}\nCould not request local forwarding.\n`);
+      process.exit(255);
+    });
+    server.listen(fwd.port, '127.0.0.1');
+  } else {
+    try {
+      fs.unlinkSync(local);
+    } catch {
+      // StreamLocalBindUnlink
+    }
+    server.listen(local);
   }
-  server.listen(local);
   return {
     stop() {
       for (const s of sockets) s.destroy();
       server.close();
+      if (local === undefined) return;
       try {
         fs.unlinkSync(local);
       } catch {
@@ -276,12 +289,12 @@ async function main(argv) {
         fail(HOSTKEY_CHANGED);
         return;
       }
-      stop = serve(scenario, logPath, fwd.local).stop;
+      stop = serve(scenario, logPath, fwd).stop;
       return;
     }
     case 'remote-refused': {
       let told = false;
-      stop = serve(scenario, logPath, fwd.local, (socket) => {
+      stop = serve(scenario, logPath, fwd, (socket) => {
         if (!told) {
           told = true;
           process.stderr.write('channel 2: open failed: connect failed: No such file or directory\n');
@@ -294,7 +307,7 @@ async function main(argv) {
     case 'never-listen':
       return; // stays alive without listening until signalled
     default:
-      stop = serve(scenario, logPath, fwd.local).stop;
+      stop = serve(scenario, logPath, fwd).stop;
   }
 }
 

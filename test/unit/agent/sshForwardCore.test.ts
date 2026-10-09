@@ -39,8 +39,7 @@ describe('sshForwardCore', () => {
       port: 2223,
       user: 'u',
       privateKey: '/k',
-      localSocket: '/run/user/1/sailfish-tools/mirror-1-abc/agent.sock',
-      remoteSocket: SOCK,
+      forward: { kind: 'unix', local: '/run/user/1/sailfish-tools/mirror-1-abc/agent.sock', remote: SOCK },
       knownHostsFile: '/g/ssh/known_hosts',
       hostKeyAlias: 'sailfish-x',
     });
@@ -63,9 +62,20 @@ describe('sshForwardCore', () => {
     ]);
   });
 
+  it('buildForwardArgs gives the loopback TCP forward for a port', () => {
+    const args = buildForwardArgs({
+      host: 'h', port: 2223, user: 'u', privateKey: '/k', forward: { kind: 'tcp', port: 3768 },
+      knownHostsFile: '/g/ssh/known_hosts', hostKeyAlias: 'sailfish-x',
+    });
+    assert.deepStrictEqual(args.slice(args.indexOf('-i')), [
+      '-i', '/k', '-p', '2223', '-L', '127.0.0.1:3768:127.0.0.1:3768', '--', 'u@h',
+    ]);
+    assert.ok(args.includes('ExitOnForwardFailure=yes') && args.includes('StrictHostKeyChecking=yes'));
+  });
+
   it('buildForwardArgs quotes a known-hosts path with spaces and rejects a double quote', () => {
     const base = {
-      host: 'h', port: 22, user: 'u', privateKey: '/k', localSocket: '/t/agent.sock', remoteSocket: SOCK,
+      host: 'h', port: 22, user: 'u', privateKey: '/k', forward: { kind: 'unix' as const, local: '/t/agent.sock', remote: SOCK },
       hostKeyAlias: 'sailfish-x',
     };
     const args = buildForwardArgs({ ...base, knownHostsFile: '/Users/me/Library/Application Support/x/ssh/known_hosts' });
@@ -155,6 +165,10 @@ describe('sshForwardCore', () => {
       [
         'local-bind',
         lines('unix_listener: cannot bind to path /tmp/f0/ro/a.sock: Permission denied', 'Could not request local forwarding.'),
+      ],
+      [
+        'local-bind',
+        lines('bind [127.0.0.1]:3768: Address already in use', 'channel_setup_fwd_listener_tcpip: cannot listen to port: 3768', 'Could not request local forwarding.'),
       ],
       ['local-bind', "Bad local forwarding specification '/tmp/f0/" + 'x'.repeat(100) + ".sock:/run/user/100000/sailfish-devagent/agent.sock'\n"],
       ['remote-refused', lines('channel 1: open failed: connect failed: open failed')],
