@@ -30,7 +30,7 @@ suite('project detection', () => {
     services = extensionApi().__test.getServices() as unknown as Services;
     extraDir = copyFixtureWorkspace('not-sailfish', 'sf-extra-');
     extraFolder = await addWorkspaceFolder(extraDir);
-    await waitForContext('sailfish.projectCount', 1, 8000);
+    await waitForContext('sardina.projectCount', 1, 8000);
   });
 
   suiteTeardown(() => {
@@ -38,8 +38,8 @@ suite('project detection', () => {
   });
 
   test('isProject=true, projectCount=1, descriptor matches harbour-demo (AC-1.1)', async () => {
-    await waitForContext('sailfish.isProject', true, 5000);
-    await waitForContext('sailfish.projectCount', 1, 5000);
+    await waitForContext('sardina.isProject', true, 5000);
+    await waitForContext('sardina.projectCount', 1, 5000);
 
     const projects = services.projects.projects();
     assert.strictEqual(projects.length, 1);
@@ -56,7 +56,7 @@ suite('project detection', () => {
     const originalContent = fs.readFileSync(specPath, 'utf8');
 
     try {
-      await waitForContext('sailfish.projectCount', 2, 8000);
+      await waitForContext('sardina.projectCount', 2, 8000);
       await waitFor(() => services.projects.forFolder(extraFolder) !== undefined, 8000);
 
       fs.unlinkSync(specPath);
@@ -66,7 +66,7 @@ suite('project detection', () => {
       await waitFor(() => services.projects.forFolder(extraFolder) !== undefined, 8000);
     } finally {
       replaceDirContents(extraDir, 'not-sailfish');
-      await waitForContext('sailfish.projectCount', 1, 8000);
+      await waitForContext('sardina.projectCount', 1, 8000);
     }
   });
 
@@ -91,7 +91,7 @@ suite('project detection', () => {
     // import here would resolve to a separate compiled copy and the real showQuickPick would hang.
     const originalShowQuickPick = services.prompts.showQuickPick;
     try {
-      await waitForContext('sailfish.projectCount', 2, 8000);
+      await waitForContext('sardina.projectCount', 2, 8000);
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
 
       const cmakeProject = services.projects.forFolder(extraFolder);
@@ -126,29 +126,29 @@ suite('project detection', () => {
       services.prompts.showQuickPick = originalShowQuickPick;
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       replaceDirContents(extraDir, 'not-sailfish');
-      await waitForContext('sailfish.projectCount', 1, 8000);
+      await waitForContext('sardina.projectCount', 1, 8000);
     }
   });
 
-  test('hasTarget/hasDevice reflect sailfish.target/sailfish.device and refresh on change (FR-2.3)', async function () {
+  test('hasTarget/hasDevice reflect sardina.target/sardina.device and refresh on change (FR-2.3)', async function () {
     this.timeout(15000);
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'expected the qml-app root workspace folder');
     // Global scope: never writes into the shared qml-app fixture's .vscode/settings.json.
-    const config = vscode.workspace.getConfiguration('sailfish', folder.uri);
+    const config = vscode.workspace.getConfiguration('sardina', folder.uri);
 
     try {
       await config.update('target', 'SailfishOS-4.4.0.58-aarch64', vscode.ConfigurationTarget.Global);
-      await waitForContext('sailfish.hasTarget', true, 8000);
+      await waitForContext('sardina.hasTarget', true, 8000);
 
       await config.update('target', undefined, vscode.ConfigurationTarget.Global);
-      await waitForContext('sailfish.hasTarget', false, 8000);
+      await waitForContext('sardina.hasTarget', false, 8000);
 
       await config.update('device', 'MyDevice', vscode.ConfigurationTarget.Global);
-      await waitForContext('sailfish.hasDevice', true, 8000);
+      await waitForContext('sardina.hasDevice', true, 8000);
 
       await config.update('device', undefined, vscode.ConfigurationTarget.Global);
-      await waitForContext('sailfish.hasDevice', false, 8000);
+      await waitForContext('sardina.hasDevice', false, 8000);
     } finally {
       await config.update('target', undefined, vscode.ConfigurationTarget.Global);
       await config.update('device', undefined, vscode.ConfigurationTarget.Global);
@@ -168,7 +168,7 @@ suite('project detection', () => {
     ];
 
     // Global scope: this test is about per-key dispatch, not scope.
-    const globalConfig = vscode.workspace.getConfiguration('sailfish');
+    const globalConfig = vscode.workspace.getConfiguration('sardina');
 
     try {
       await globalConfig.update('sdkPath', '/tmp/fake-sdk', vscode.ConfigurationTarget.Global);
@@ -187,7 +187,7 @@ suite('project detection', () => {
     }
   });
 
-  test('R1-fixture-mutation: this suite leaves no sailfish.* keys behind in the shared qml-app fixture', async function () {
+  test('R1-fixture-mutation: this suite leaves no sardina.* keys behind in the shared qml-app fixture', async function () {
     this.timeout(10000);
     const settingsPath = path.join(fixturesRoot(), 'workspaces', 'qml-app', '.vscode', 'settings.json');
     await waitFor(() => {
@@ -195,7 +195,7 @@ suite('project detection', () => {
         return true;
       }
       const content = fs.readFileSync(settingsPath, 'utf8');
-      return !/"sailfish\./.test(content);
+      return !/"sardina\./.test(content);
     }, 8000);
   });
 });

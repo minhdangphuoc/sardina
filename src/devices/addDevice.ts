@@ -39,7 +39,7 @@ function engineKeyDir(sharedConfigDir: string): string {
 }
 
 const QT_CREATOR_RUNNING_MESSAGE =
-  'Sailfish: close Qt Creator first. While it runs it keeps its own copy of the SDK device list and rewrites the file, ' +
+  'Sardina: close Qt Creator first. While it runs it keeps its own copy of the SDK device list and rewrites the file, ' +
   'which would undo this change. Then run the command again.';
 
 async function generateKey(dir: string, deviceName: string): Promise<string | null> {
@@ -130,7 +130,7 @@ async function pushKeyInApp(
     if (password === undefined) return false;
 
     const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Sailfish: installing SSH key on ${host}…` },
+      { location: vscode.ProgressLocation.Notification, title: `Sardina: installing SSH key on ${host}…` },
       () => runKeyPush(invocation, password),
     );
     if (result.ok) {
@@ -146,13 +146,13 @@ async function pushKeyInApp(
     }
     if (failure === 'unreachable') {
       void services.prompts.showErrorMessage(
-        `Sailfish: cannot reach ${host}:${port}. Check the USB/WLAN connection and that Developer Mode is on.`,
+        `Sardina: cannot reach ${host}:${port}. Check the USB/WLAN connection and that Developer Mode is on.`,
       );
       return false;
     }
-    return pushKeyInTerminal(services, keyPath, host, port, user, `Sailfish: installing the SSH key failed: ${result.stderr.trim().split(/\r?\n/).pop() ?? ''}`);
+    return pushKeyInTerminal(services, keyPath, host, port, user, `Sardina: installing the SSH key failed: ${result.stderr.trim().split(/\r?\n/).pop() ?? ''}`);
   }
-  void services.prompts.showErrorMessage(`Sailfish: wrong password ${MAX_PASSWORD_ATTEMPTS} times; the device was not added.`);
+  void services.prompts.showErrorMessage(`Sardina: wrong password ${MAX_PASSWORD_ATTEMPTS} times; the device was not added.`);
   return false;
 }
 
@@ -191,7 +191,7 @@ async function verifyDeviceRegistered(services: Services, deviceName: string): P
 function showFallbackDialog(services: Services, attemptedXml: string): void {
   void services.prompts
     .showWarningMessage(
-      'Sailfish: the device did not appear in `sfdk device list` after writing devices.xml. Register it in Qt Creator instead (Tools → Options → Devices → Add → Sailfish OS Device).',
+      'Sardina: the device did not appear in `sfdk device list` after writing devices.xml. Register it in Qt Creator instead (Tools → Options → Devices → Add → SFOS Device).',
       OPEN_QTC_INSTEAD,
       REVEAL_XML,
     )
@@ -217,7 +217,7 @@ async function pickArchitecture(services: Services): Promise<SfdkArch | undefine
   return choice?.label as SfdkArch | undefined;
 }
 
-/** "Sailfish: Add Device" (FR-7.1). */
+/** "Sardina: Add Device" (FR-7.1). */
 export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
   return async (): Promise<void> => {
     if (await qtCreatorRunning()) {
@@ -228,7 +228,7 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
     const sharedConfig = findSharedConfigDir(path.dirname(resolved.path), services.sdk.current()?.root);
     if (!sharedConfig) {
       void services.prompts.showErrorMessage(
-        "Sailfish: could not find the build engine's shared folder (SharedConfig in buildengines.xml, usually ~/SailfishOS/vmshare). Is the SDK installed?",
+        "Sardina: could not find the build engine's shared folder (SharedConfig in buildengines.xml, usually ~/SailfishOS/vmshare). Is the SDK installed?",
       );
       return;
     }
@@ -250,7 +250,7 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
     });
     if (!portStr) return;
     const user = await services.prompts.showInputBox({
-      prompt: "Username (defaultuser on Sailfish OS >= 3.4.0; hint: use 'nemo' on older releases)",
+      prompt: "Username (defaultuser on SFOS >= 3.4.0; hint: use 'nemo' on older releases)",
       value: 'defaultuser',
     });
     if (!user) return;
@@ -265,12 +265,12 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
       const missing = await missingTools(['ssh-keygen', 'ssh-copy-id']);
       if (missing.length > 0) {
         const hints = missing.map((tool) => `• ${installHint(tool, process.platform)}`).join('\n');
-        void services.prompts.showErrorMessage(`Sailfish: missing required tool(s):\n${hints}`);
+        void services.prompts.showErrorMessage(`Sardina: missing required tool(s):\n${hints}`);
         return;
       }
       privateKeyFile = await generateKey(engineKeyDir(sharedConfig), name);
       if (!privateKeyFile) {
-        void services.prompts.showErrorMessage('Sailfish: ssh-keygen failed unexpectedly.');
+        void services.prompts.showErrorMessage('Sardina: ssh-keygen failed unexpectedly.');
         return;
       }
       if (!(await pushKeyInApp(services, ctx, privateKeyFile, host, Number(portStr), user))) return;
@@ -287,7 +287,7 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
 
     if (!resolved.confirmed) {
       const confirm = await services.prompts.showWarningMessage(
-        `Sailfish: no existing SDK devices.xml found. Create one at ${resolved.path}?`,
+        `Sardina: no existing SDK devices.xml found. Create one at ${resolved.path}?`,
         CONFIRM_CREATE,
         CANCEL,
       );
@@ -300,7 +300,7 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
     }
     if (await sfdkRunning()) {
       const choice = await services.prompts.showWarningMessage(
-        'Sailfish: an sfdk command is running and may rewrite the SDK device list.',
+        'Sardina: an sfdk command is running and may rewrite the SDK device list.',
         WRITE_ANYWAY,
         CANCEL,
       );
@@ -338,26 +338,26 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
 
     if (!engineHasDevice(sharedConfig, name)) {
       void services.prompts.showWarningMessage(
-        `Sailfish: "${name}" could not be added to the build engine's device list (${path.join(sharedConfig, 'devices.xml')}), so deploying to it may fail with "not a known device".`,
+        `Sardina: "${name}" could not be added to the build engine's device list (${path.join(sharedConfig, 'devices.xml')}), so deploying to it may fail with "not a known device".`,
       );
     }
     void services.prompts.showInformationMessage(
       verified === true
-        ? `Sailfish: "${name}" registered and confirmed via \`sfdk device list\`.`
-        : `Sailfish: "${name}" written to ${resolved.path} (no SDK available here to confirm via \`sfdk device list\`).`,
+        ? `Sardina: "${name}" registered and confirmed via \`sfdk device list\`.`
+        : `Sardina: "${name}" written to ${resolved.path} (no SDK available here to confirm via \`sfdk device list\`).`,
     );
-    void vscode.commands.executeCommand('sailfish.devices.refresh');
+    void vscode.commands.executeCommand('sardina.devices.refresh');
   };
 }
 
-/** "Sailfish: Remove Device" (FR-7.9) — refuses autodetected (emulator) entries. */
+/** "Sardina: Remove Device" (FR-7.9) — refuses autodetected (emulator) entries. */
 export function removeDevice(services: Services) {
   return async (): Promise<void> => {
     const resolved = resolveDevicesXmlPath(services.settings.get('devicesXmlPath'));
     const doc = readDevicesXmlFile(resolved.path);
     const hardware = doc.devices.filter((d) => !d.autodetected);
     if (hardware.length === 0) {
-      void services.prompts.showInformationMessage('Sailfish: no registered hardware devices to remove.');
+      void services.prompts.showInformationMessage('Sardina: no registered hardware devices to remove.');
       return;
     }
     const picked = await services.prompts.showQuickPick(
@@ -365,7 +365,7 @@ export function removeDevice(services: Services) {
       { placeHolder: 'Remove which device?' },
     );
     if (!picked) return;
-    const confirm = await services.prompts.showWarningMessage(`Sailfish: remove "${picked.label}"?`, 'Remove', CANCEL);
+    const confirm = await services.prompts.showWarningMessage(`Sardina: remove "${picked.label}"?`, 'Remove', CANCEL);
     if (confirm !== 'Remove') return;
 
     if (await qtCreatorRunning()) {
@@ -374,7 +374,7 @@ export function removeDevice(services: Services) {
     }
     if (await sfdkRunning()) {
       const choice = await services.prompts.showWarningMessage(
-        'Sailfish: an sfdk command is running and may rewrite the SDK device list.',
+        'Sardina: an sfdk command is running and may rewrite the SDK device list.',
         WRITE_ANYWAY,
         CANCEL,
       );
@@ -387,7 +387,7 @@ export function removeDevice(services: Services) {
     if (sharedConfig) {
       editEngineDevicesFile(sharedConfig, (xml) => removeEngineDevice(xml, picked.label));
     }
-    void services.prompts.showInformationMessage(`Sailfish: removed "${picked.label}".`);
-    void vscode.commands.executeCommand('sailfish.devices.refresh');
+    void services.prompts.showInformationMessage(`Sardina: removed "${picked.label}".`);
+    void vscode.commands.executeCommand('sardina.devices.refresh');
   };
 }

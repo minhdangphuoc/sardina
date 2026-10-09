@@ -11,7 +11,7 @@ function services(): Services {
 
 async function sfdkReady(): Promise<boolean> {
   try {
-    await waitForContext('sailfish.sdkAvailable', true, 5000);
+    await waitForContext('sardina.sdkAvailable', true, 5000);
   } catch {
     return false;
   }

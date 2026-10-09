@@ -3,7 +3,7 @@
 
 ## SDK and build targets
 
-- Finds the Sailfish SDK on its own (`sailfish.sdkPath`, `SAILFISH_SDK_ROOT`,
+- Finds the SFOS SDK on its own (`sardina.sdkPath`, `SAILFISH_SDK_ROOT`,
   `~/SailfishOS`, then `sfdk` on `PATH`). **Set SDK Path**, **Download SDK**
   and **Install SDK** help when it is missing.
 - An **SDK** view: SDK version and location, the `sfdk` path, the build engine
@@ -26,10 +26,10 @@
   Debug builds are unoptimised (`-O0 -g`), **Restart** (Ctrl+Shift+F5) starts
   `gdbserver` again without building, and Debug opens the Device Monitor beside
   the editor.
-- Run, Debug and Deploy stream their build log live into the **Sailfish OS
+- Run, Debug and Deploy stream their build log live into the **SFOS
   Build** channel, and a running app, log stream or mirror shows in the status
   bar and the Devices view; changing the device stops what ran on the old one.
-- VS Code tasks of type `sailfish` (build, build (debug), deploy, run,
+- VS Code tasks of type `sardina` (build, build (debug), deploy, run,
   package, check, clean) with problem matchers for gcc, qmake, rpmbuild and the
   Harbour validator.
 
@@ -41,7 +41,7 @@
 
 ## Build view
 
-- The **Build** view at the top of the Sailfish sidebar shows the project's
+- The **Build** view at the top of the SFOS sidebar shows the project's
   target, device (connected or offline), build type, deploy method, signing and
   the last build (running with its stage and time, or succeeded / failed). Click a
   row to change it; the title bar has Build (Stop while a build runs) and the
@@ -66,7 +66,7 @@
 ## Device agent: screenshots, logs, screen mirror and control
 
 - **Take Device Screenshot** saves a PNG where you choose and opens it.
-- **Show Device Logs** streams the phone's system log into the **Sailfish
+- **Show Device Logs** streams the phone's system log into the **Sardina
   Device Log** output channel (also reachable from the Device Monitor).
 - A **Device Monitor** tab per device: connection, live app stats and actions
   ([Device Monitor](device-monitor.md)).
@@ -85,14 +85,14 @@
 
 - 21 Silica QML snippets (`sfpage`, `sfdialog`, `sflistview`, `sfpulldown`,
   `sfcover` and more).
-- Completion, hover and error checks for QML in Sailfish projects, read from
-  the selected build target (`sailfish.target`; without one, the first
+- Completion, hover and error checks for QML in SFOS projects, read from
+  the selected build target (`sardina.target`; without one, the first
   installed target): types, properties, `on...` handlers, `id.`, singletons
   such as `Theme.`, enum values, attached properties and `import` lines.
   An unknown type or property is an error, but only when the file parses
   cleanly and every `import` resolves; otherwise there is nothing to report.
-  Turn it off with `sailfish.qml.languageFeatures`.
-- Turns off the Qt QML extension's `qmlls` language server in Sailfish
+  Turn it off with `sardina.qml.languageFeatures`.
+- Turns off the Qt QML extension's `qmlls` language server in SFOS
   projects, where it only reports false errors (see
   [What this is not (yet)](troubleshooting.md#what-this-is-not-yet)).
 

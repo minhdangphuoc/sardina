@@ -69,20 +69,20 @@ for (const cmd of declaredCommands) {
   }
 }
 for (const cmd of registeredCommands) {
-  if (cmd.startsWith('sailfish._test.')) continue;
+  if (cmd.startsWith('sardina._test.')) continue;
   if (!declaredCommands.has(cmd)) {
     problems.push(`command registered in src/** but not declared in package.json: ${cmd}`);
   }
 }
 
-// 5. Every configuration key starts with sailfish. and is read in src/** (get('<suffix>' or a constants table entry).
+// 5. Every configuration key starts with sardina. and is read in src/** (get('<suffix>' or a constants table entry).
 const configProps = pkg.contributes?.configuration?.properties ?? {};
 for (const key of Object.keys(configProps)) {
-  if (!key.startsWith('sailfish.')) {
-    problems.push(`configuration key does not start with "sailfish.": ${key}`);
+  if (!key.startsWith('sardina.')) {
+    problems.push(`configuration key does not start with "sardina.": ${key}`);
     continue;
   }
-  const suffix = key.slice('sailfish.'.length);
+  const suffix = key.slice('sardina.'.length);
   if (!srcText.includes(suffix)) {
     problems.push(`configuration key not read anywhere in src/**: ${key} (expected literal "${suffix}")`);
   }

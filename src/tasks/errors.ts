@@ -42,14 +42,14 @@ export function mapBuildError(stderr: string): MappedError | undefined {
   if (/Failed to import GPG key from file|Failed to share GnuPG key/i.test(stderr) && !/passphrase/i.test(stderr)) {
     return {
       message:
-        'sfdk could not hand the signing key to the build engine. This usually means several keys match the configured name. Run "Sailfish: Set Up Package Signing" to select the key by its fingerprint',
+        'sfdk could not hand the signing key to the build engine. This usually means several keys match the configured name. Run "Sardina: Set Up Package Signing" to select the key by its fingerprint',
       actionLabel: 'Set up signing',
     };
   }
   if (/passphrase protected and no passphrase was specified/i.test(stderr)) {
     return {
       message:
-        'The signing key is protected by a passphrase, but none is set. Run "Sailfish: Set Up Package Signing" and enter it, or turn off sailfish.build.sign',
+        'The signing key is protected by a passphrase, but none is set. Run "Sardina: Set Up Package Signing" and enter it, or turn off sardina.build.sign',
       actionLabel: 'Set up signing',
     };
   }

@@ -25,8 +25,8 @@ process.on('uncaughtException', (err) => {
 });
 
 /**
- * R1-fixture-mutation: several suites write `sailfish.target`/`sailfish.device`/
- * `sailfish.deploy.method` to the shared `qml-app` fixture's WorkspaceFolder
+ * R1-fixture-mutation: several suites write `sardina.target`/`sardina.device`/
+ * `sardina.deploy.method` to the shared `qml-app` fixture's WorkspaceFolder
  * scope (it is the extension host's actual open folder, not a per-test
  * copy). Cleaning up here — before AND after the whole run — guarantees the
  * committed fixture never accumulates test state even if an individual

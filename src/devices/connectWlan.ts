@@ -17,7 +17,7 @@ export function isValidPort(port: string): boolean {
 }
 
 /**
- * Pure argv builder for "Sailfish: Connect to Device (WLAN)": `ssh -p <port> -- <user>@<host>`.
+ * Pure argv builder for "Sardina: Connect to Device (WLAN)": `ssh -p <port> -- <user>@<host>`.
  * No password handling anywhere — the user types it into the opened terminal themselves.
  * Returns null on an option-like host/user (R25) or an out-of-range port.
  */

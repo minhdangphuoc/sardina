@@ -15,7 +15,7 @@ const SDK_DOCS_URL = 'https://sailfishos.org/develop/';
 function notifyError(services: Services, message: string): void {
   void services.prompts.showErrorMessage(message, SHOW_OUTPUT_ACTION).then((choice) => {
     if (choice === SHOW_OUTPUT_ACTION) {
-      void vscode.commands.executeCommand('sailfish.showOutput');
+      void vscode.commands.executeCommand('sardina.showOutput');
     }
   });
 }
@@ -23,7 +23,7 @@ function notifyError(services: Services, message: string): void {
 function notifyWarning(services: Services, message: string): void {
   void services.prompts.showWarningMessage(message, SHOW_OUTPUT_ACTION).then((choice) => {
     if (choice === SHOW_OUTPUT_ACTION) {
-      void vscode.commands.executeCommand('sailfish.showOutput');
+      void vscode.commands.executeCommand('sardina.showOutput');
     }
   });
 }
@@ -48,7 +48,7 @@ async function fetch(services: Services, args: string[], token?: vscode.Cancella
 /** R33: cancellable progress around the list fetch. */
 async function fetchTargetsWithProgress(services: Services): Promise<SfdkResult> {
   return vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Sailfish: listing targets…', cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: 'Sardina: listing targets…', cancellable: true },
     (_progress, token) => fetch(services, ['tools', 'target', 'list'], token),
   );
 }
@@ -97,22 +97,22 @@ async function currentFolder(services: Services): Promise<vscode.WorkspaceFolder
   return active?.folder ?? vscode.workspace.workspaceFolders?.[0];
 }
 
-/** FR-4.2/FR-4.3: populate a QuickPick from `sfdk tools target list`, persist the pick to sailfish.target. */
+/** FR-4.2/FR-4.3: populate a QuickPick from `sfdk tools target list`, persist the pick to sardina.target. */
 async function selectTarget(services: Services, statusBar: TargetStatusBar | undefined): Promise<void> {
   const outcome = await loadTargets(services);
   if (outcome.fetchFailed) {
-    notifyWarning(services, 'Sailfish: could not list sfdk targets');
+    notifyWarning(services, 'Sardina: could not list sfdk targets');
     return;
   }
   if (outcome.parseFailed || !outcome.targets) {
-    notifyWarning(services, 'Sailfish: could not parse target list');
+    notifyWarning(services, 'Sardina: could not parse target list');
     return;
   }
 
   const shown = visibleTargets(services, outcome.targets);
   if (shown.length === 0) {
     const choice = await services.prompts.showInformationMessage(
-      'Sailfish: no Sailfish targets found. Install one via the Sailfish SDK Maintenance Tool.',
+      'Sardina: no SFOS targets found. Install one via the SFOS SDK Maintenance Tool.',
       OPEN_DOCS_ACTION,
     );
     if (choice === OPEN_DOCS_ACTION) {
@@ -122,7 +122,7 @@ async function selectTarget(services: Services, statusBar: TargetStatusBar | und
   }
 
   const picked = await services.prompts.showQuickPick(shown.map(toQuickPickItem), {
-    placeHolder: 'Select a Sailfish build target',
+    placeHolder: 'Select an SFOS build target',
   });
   if (!picked) {
     return;
@@ -130,12 +130,12 @@ async function selectTarget(services: Services, statusBar: TargetStatusBar | und
 
   const folder = await currentFolder(services);
   if (!folder) {
-    notifyWarning(services, 'Sailfish: no workspace folder to save the selected target to');
+    notifyWarning(services, 'Sardina: no workspace folder to save the selected target to');
     return;
   }
-  const config = vscode.workspace.getConfiguration('sailfish', folder.uri);
+  const config = vscode.workspace.getConfiguration('sardina', folder.uri);
   await config.update('target', picked.target.name, vscode.ConfigurationTarget.WorkspaceFolder);
-  await services.contextKeys.set('sailfish.hasTarget', true);
+  await services.contextKeys.set('sardina.hasTarget', true);
   statusBar?.refresh();
   void offerCleanOnTargetChange(services, folder, picked.target.name);
 }
@@ -144,17 +144,17 @@ async function selectTarget(services: Services, statusBar: TargetStatusBar | und
 async function setSfdkDefaultTarget(services: Services): Promise<void> {
   const outcome = await loadTargets(services);
   if (outcome.fetchFailed) {
-    notifyWarning(services, 'Sailfish: could not list sfdk targets');
+    notifyWarning(services, 'Sardina: could not list sfdk targets');
     return;
   }
   if (outcome.parseFailed || !outcome.targets) {
-    notifyWarning(services, 'Sailfish: could not parse target list');
+    notifyWarning(services, 'Sardina: could not parse target list');
     return;
   }
   const shown = visibleTargets(services, outcome.targets);
   if (shown.length === 0) {
     const choice = await services.prompts.showInformationMessage(
-      'Sailfish: no Sailfish targets found. Install one via the Sailfish SDK Maintenance Tool.',
+      'Sardina: no SFOS targets found. Install one via the SFOS SDK Maintenance Tool.',
       OPEN_DOCS_ACTION,
     );
     if (choice === OPEN_DOCS_ACTION) {
@@ -171,12 +171,12 @@ async function setSfdkDefaultTarget(services: Services): Promise<void> {
   }
 
   const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: 'Sailfish: setting default target…', cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: 'Sardina: setting default target…', cancellable: true },
     (_progress, token) => fetch(services, ['config', '--global', `target=${picked.target.name}`], token),
   );
   if (result.exitCode !== 0 && !result.cancelled) {
     const firstLine = (result.stderr.trim() || result.stdout.trim() || `exit ${result.exitCode}`).split(/\r?\n/)[0];
-    notifyError(services, `Sailfish: setting the sfdk default target failed: ${firstLine}`);
+    notifyError(services, `Sardina: setting the sfdk default target failed: ${firstLine}`);
   }
 }
 
@@ -186,8 +186,8 @@ export function activateTargets(ctx: vscode.ExtensionContext, services: Services
   ctx.subscriptions.push(statusBar);
 
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.selectTarget', () => selectTarget(services, statusBar)),
-    vscode.commands.registerCommand('sailfish.setSfdkDefaultTarget', () => setSfdkDefaultTarget(services)),
+    vscode.commands.registerCommand('sardina.selectTarget', () => selectTarget(services, statusBar)),
+    vscode.commands.registerCommand('sardina.setSfdkDefaultTarget', () => setSfdkDefaultTarget(services)),
     services.projects.onDidChange(() => statusBar.refresh()),
     services.sdk.onDidChange(() => statusBar.refetch()),
     services.settings.onDidChange('target', () => statusBar.refetch()),

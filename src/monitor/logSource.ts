@@ -53,7 +53,7 @@ export function chooseLogFormat(logFormats: readonly string[] | undefined): LogF
   return logFormats?.includes('json') ? 'json' : 'text';
 }
 
-/** The `sailfish.monitor.logLines` value as the agent's 1..10000 range; non-numbers give the default. */
+/** The `sardina.monitor.logLines` value as the agent's 1..10000 range; non-numbers give the default. */
 export function clampLogLines(n: unknown): number {
   if (typeof n !== 'number' || !Number.isFinite(n)) return LOG_LINES_DEFAULT;
   return Math.min(LOG_LINES_MAX, Math.max(LOG_LINES_MIN, Math.floor(n)));
@@ -130,7 +130,7 @@ export interface LogSourceOptions {
   device: string;
   /** From the probe (`chooseLogFormat`). */
   format: LogFormat;
-  /** `sailfish.monitor.logLines`: the initial tail (read by the panel in M-8). */
+  /** `sardina.monitor.logLines`: the initial tail (read by the panel in M-8). */
   logLines: number;
   /** `['--client', name]` words; empty when the host name is unusable. */
   clientArgs?: readonly string[];

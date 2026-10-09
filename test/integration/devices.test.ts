@@ -32,7 +32,7 @@ function services(): Services {
 
 async function sfdkReady(): Promise<boolean> {
   try {
-    await waitForContext('sailfish.sdkAvailable', true, 5000);
+    await waitForContext('sardina.sdkAvailable', true, 5000);
   } catch {
     return false;
   }
@@ -93,7 +93,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
     // Safety net: setDefault tests restore this themselves, but guarantee it never leaks past the suite.
     this.timeout(15000);
     const folder = vscode.workspace.workspaceFolders?.[0];
-    await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   test('FR-6.7: a list failure never yields an empty root (holds even against the current SfdkRunner stub)', async () => {
@@ -159,7 +159,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       assert.ok(emulatorChildren);
       const installed = emulatorChildren.filter((c) => deviceOf(c));
       assert.strictEqual(installed.length, 2, 'the "available" superset entry must not appear at the top level');
-      // The default fixture carries no `default` flag and sailfish.device is unset, so no "✓ default" yet.
+      // The default fixture carries no `default` flag and sardina.device is unset, so no "✓ default" yet.
       // The state marker depends on whether anything answers on the emulator's SSH port, so it is optional.
       assert.strictEqual(installed[0].label, '"Sailfish OS Emulator 4.4.0.58"');
       assert.match(
@@ -188,7 +188,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
     });
   });
 
-  test('AC-1.8: "✓ default" appears in the description once sailfish.device matches the emulator name', async function () {
+  test('AC-1.8: "✓ default" appears in the description once sardina.device matches the emulator name', async function () {
     if (!ready) {
       this.skip();
       return;
@@ -196,7 +196,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     // FR-2.3-fixture-mutation: Global scope, so this test never writes into
     // the shared qml-app fixture's .vscode/settings.json.
-    const config = vscode.workspace.getConfiguration('sailfish', folder?.uri);
+    const config = vscode.workspace.getConfiguration('sardina', folder?.uri);
     await withScenario('default', async () => {
       await config.update('device', 'Sailfish OS Emulator 4.4.0.58', vscode.ConfigurationTarget.Global);
       try {
@@ -226,7 +226,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       await refreshAndWait(p);
       const emulatorChildren = await p.getChildren((await p.getChildren())![0]);
       const target = emulatorChildren!.find((c) => deviceOf(c))!;
-      // The fake emulator's endpoint is 127.0.0.1:2223, the real Sailfish emulator's SSH port. When that
+      // The fake emulator's endpoint is 127.0.0.1:2223, the real SFOS emulator's SSH port. When that
       // emulator runs on this machine, the reachability probe marks the fake one running and start is
       // (correctly) skipped as "already running". Drop the endpoint so this checks argv and refresh only.
       const startItem = { device: { ...deviceOf(target)!, host: undefined, port: undefined } };
@@ -236,7 +236,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         changeFired = true;
       });
 
-      await vscode.commands.executeCommand('sailfish.emulator.start', startItem);
+      await vscode.commands.executeCommand('sardina.emulator.start', startItem);
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'emulator_start'), 5000);
 
       const afterStart = readFakeLog();
@@ -392,7 +392,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         fakeDevice({ name: 'Sailfish OS Emulator 4.4.0.58', kind: 'emulator', origin: 'autodetected' }),
         false,
       );
-      await vscode.commands.executeCommand('sailfish.emulator.start', item);
+      await vscode.commands.executeCommand('sardina.emulator.start', item);
       await waitFor(() => messages.calls.some((c) => c.kind === 'error'), 5000);
       const error = messages.calls.find((c) => c.kind === 'error');
       assert.ok(error, 'expected an error notification for the failed start');
@@ -417,7 +417,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         return items.find((n) => n === 'Sailfish OS Emulator 4.5.0.24');
       });
 
-      await vscode.commands.executeCommand('sailfish.emulator.installAvailable');
+      await vscode.commands.executeCommand('sardina.emulator.installAvailable');
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'emulator_install'), 5000);
       assert.ok(picks[0]?.includes('Sailfish OS Emulator 4.5.0.24'), 'the picker lists the available emulators');
       const install = readFakeLog().invocations.find((i) => i.key === 'emulator_install');
@@ -437,7 +437,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
     await withScenario('emulator-vbox-missing', async () => {
       const messages = stubMessages();
       const item = new DeviceTreeItem(fakeDevice({ name: 'Sailfish OS Emulator 4.5.0.24', kind: 'emulator', origin: 'autodetected' }), false);
-      await vscode.commands.executeCommand('sailfish.emulator.installAvailable', item);
+      await vscode.commands.executeCommand('sardina.emulator.installAvailable', item);
       await waitFor(() => messages.calls.some((c) => c.kind === 'error'), 5000);
       const error = messages.calls.find((c) => c.kind === 'error');
       assert.ok(error);
@@ -453,8 +453,8 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       for (const name of corpus) {
         clearFakeLog();
         const item = new DeviceTreeItem(fakeDevice({ name }), false);
-        await vscode.commands.executeCommand('sailfish.device.setDefault', item);
-        const configured = vscode.workspace.getConfiguration('sailfish', folder?.uri).get<string>('device');
+        await vscode.commands.executeCommand('sardina.device.setDefault', item);
+        const configured = vscode.workspace.getConfiguration('sardina', folder?.uri).get<string>('device');
         assert.strictEqual(configured, name, `expected verbatim device name for corpus entry ${JSON.stringify(name)}`);
         const { invocations } = readFakeLog();
         assert.strictEqual(
@@ -462,10 +462,10 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
           0,
           'device.setDefault must never call sfdk config',
         );
-        await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+        await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
       }
     } finally {
-      await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+      await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
     }
   });
 
@@ -491,7 +491,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         restoreAllStubs();
         const messages = stubMessages();
         const item = new DeviceTreeItem(fakeDevice({ name, kind: 'emulator', origin: 'autodetected' }), false);
-        await vscode.commands.executeCommand('sailfish.emulator.start', item);
+        await vscode.commands.executeCommand('sardina.emulator.start', item);
 
         if (name.startsWith('-')) {
           await waitFor(() => messages.calls.some((c) => c.kind === 'error'), 5000);
@@ -540,7 +540,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         for (const name of corpus) {
           clearFakeLog();
           const item = new DeviceTreeItem(fakeDevice({ name, kind: 'emulator', origin: 'autodetected' }), false);
-          await vscode.commands.executeCommand('sailfish.device.setSfdkDefault', item);
+          await vscode.commands.executeCommand('sardina.device.setSfdkDefault', item);
           await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'config_set_global'), 5000);
           // Filters out the tree's own background list refresh (provider.refresh(), FR-6.7), not under test here.
           const configSets = readFakeLog().invocations.filter((i) => i.key === 'config_set_global');
@@ -550,11 +550,11 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
             1,
             `expected device=${JSON.stringify(name)} to appear exactly once as one argv element`,
           );
-          await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+          await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
         }
       });
     } finally {
-      await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+      await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
     }
   });
 
@@ -563,11 +563,11 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
     const folder = vscode.workspace.workspaceFolders?.[0];
     try {
       const item = new DeviceTreeItem(fakeDevice({ name }), false);
-      await vscode.commands.executeCommand('sailfish.device.setDefault', item);
-      const configured = vscode.workspace.getConfiguration('sailfish', folder?.uri).get<string>('device');
+      await vscode.commands.executeCommand('sardina.device.setDefault', item);
+      const configured = vscode.workspace.getConfiguration('sardina', folder?.uri).get<string>('device');
       assert.strictEqual(configured, name);
     } finally {
-      await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+      await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
     }
   });
 
@@ -582,7 +582,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         clearFakeLog();
         const name = '日本語 café $(id)';
         const item = new DeviceTreeItem(fakeDevice({ name, kind: 'emulator', origin: 'autodetected' }), false);
-        await vscode.commands.executeCommand('sailfish.device.setSfdkDefault', item);
+        await vscode.commands.executeCommand('sardina.device.setSfdkDefault', item);
         await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'config_set_global'), 5000);
         const { invocations } = readFakeLog();
         const configSets = invocations.filter((i) => i.key === 'config_set_global');
@@ -590,7 +590,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         assert.strictEqual(configSets[0].argv.filter((a) => a === `device=${name}`).length, 1);
       });
     } finally {
-      await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+      await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
     }
   });
 
@@ -606,10 +606,10 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
         clearFakeLog();
         const messages = stubMessages();
         const name = 'Xperia 10 - Dual SIM (ARM)';
-        await vscode.commands.executeCommand('sailfish.device.installTools', { device: { name } });
+        await vscode.commands.executeCommand('sardina.device.installTools', { device: { name } });
         const warning = messages.calls.find((c) => c.kind === 'warning');
         assert.ok(warning, JSON.stringify(messages.calls));
-        assert.strictEqual(warning.message, `Sailfish: "${name}" is offline — connect it (USB or Wi-Fi, Developer Mode on) and try again.`);
+        assert.strictEqual(warning.message, `Sardina: "${name}" is offline — connect it (USB or Wi-Fi, Developer Mode on) and try again.`);
         assert.deepStrictEqual(warning.items, ['Open Devices view', 'Retry']);
         const execs = readFakeLog().invocations.filter((i) => i.key.startsWith('device_exec'));
         assert.deepStrictEqual(execs.map((i) => i.key), [], 'no check, no devel-su');

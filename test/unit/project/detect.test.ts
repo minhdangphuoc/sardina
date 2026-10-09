@@ -42,7 +42,7 @@ function fsIO(): DetectIO {
 describe('detectProjectAt (FR-2.2, M1.6)', () => {
   it('qml-app: detected via *.pro, buildSystem qmake, native binary', async () => {
     const project = await detectProjectAt(path.join(WORKSPACES, 'qml-app'), fsIO());
-    assert.ok(project, 'expected qml-app to be detected as a Sailfish project');
+    assert.ok(project, 'expected qml-app to be detected as an SFOS project');
     assert.strictEqual(project?.name, 'harbour-demo');
     assert.strictEqual(project?.buildSystem, 'qmake');
     assert.strictEqual(project?.hasNativeBinary, true);

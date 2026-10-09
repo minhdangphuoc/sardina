@@ -21,7 +21,7 @@ export function computeStatusBarState(opts: {
   const visible = isProject && sdkAvailable;
 
   if (!target) {
-    return { visible, text: '$(circuit-board) Select Sailfish target', tooltip: undefined };
+    return { visible, text: '$(circuit-board) Select SFOS target', tooltip: undefined };
   }
 
   const missing = knownTargetNames !== undefined && !knownTargetNames.includes(target);

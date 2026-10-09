@@ -232,7 +232,7 @@ export function sfdkDeviceName(device: SfdkDeviceInfo): string {
   return device.deviceName ?? device.name;
 }
 
-/** FR-6.2: default = status flag `default`, or an exact match on `sailfish.device`. */
+/** FR-6.2: default = status flag `default`, or an exact match on `sardina.device`. */
 export function isDefaultDevice(device: SfdkDeviceInfo, defaultDeviceName: string | undefined): boolean {
   return device.flags.includes('default') || (!!defaultDeviceName && sfdkDeviceName(device) === defaultDeviceName);
 }

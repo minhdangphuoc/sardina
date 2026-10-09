@@ -8,7 +8,7 @@ import type { AppCounters } from './appStats';
 
 // --- shared vocabulary ---
 
-/** What the editor title bar buttons run (`sailfish.monitor.*`). */
+/** What the editor title bar buttons run (`sardina.monitor.*`). */
 export const ACTION_NAMES = ['restartApp', 'stopApp', 'screenshot', 'openMirror', 'showLogs'] as const;
 export type ActionName = (typeof ACTION_NAMES)[number];
 

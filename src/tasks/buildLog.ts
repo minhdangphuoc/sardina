@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { BUILD_LOG_CHANNEL_NAME } from './buildLogCore';
 
-/** The "Sailfish OS Build" channel: created on first use, cleared at the start of each build. */
+/** The "Sardina Build" channel: created on first use, cleared at the start of each build. */
 export class BuildLog implements vscode.Disposable {
   private channel: vscode.OutputChannel | undefined;
 

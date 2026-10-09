@@ -2,7 +2,7 @@ import * as assert from 'assert';
 import * as vscode from 'vscode';
 import { extensionApi, waitForContext } from './helpers';
 
-const EXTENSION_ID = 'sailfish-tools-dev.sailfish-tools';
+const EXTENSION_ID = 'sailfish-tools-dev.sardina';
 
 // activation/bare (S6): only the required qt-qml stub is installed.
 suite('activation/bare', () => {
@@ -25,36 +25,36 @@ suite('activation/bare', () => {
 
   test('registers all v0.1 commands', async () => {
     const expected = [
-      'sailfish.setSdkPath',
-      'sailfish.newProject',
-      'sailfish.selectTarget',
-      'sailfish.setSfdkDefaultTarget',
-      'sailfish.build',
-      'sailfish.deploy',
-      'sailfish.run',
-      'sailfish.buildDeployRun',
-      'sailfish.package',
-      'sailfish.clean',
-      'sailfish.devices.refresh',
-      'sailfish.emulator.start',
-      'sailfish.emulator.stop',
-      'sailfish.emulator.status',
-      'sailfish.emulator.show',
-      'sailfish.emulator.installAvailable',
-      'sailfish.device.setDefault',
-      'sailfish.device.setSfdkDefault',
-      'sailfish.device.stopSessions',
-      'sailfish.device.openSsh',
-      'sailfish.showOutput',
-      'sailfish.setupSigning',
-      'sailfish.runInstalled',
-      'sailfish.debugInstalled',
-      'sailfish.agent.install',
-      'sailfish.agent.uninstall',
-      'sailfish.agent.status',
-      'sailfish.agent.screenshot',
-      'sailfish.agent.mirror',
-      'sailfish.agent.logs',
+      'sardina.setSdkPath',
+      'sardina.newProject',
+      'sardina.selectTarget',
+      'sardina.setSfdkDefaultTarget',
+      'sardina.build',
+      'sardina.deploy',
+      'sardina.run',
+      'sardina.buildDeployRun',
+      'sardina.package',
+      'sardina.clean',
+      'sardina.devices.refresh',
+      'sardina.emulator.start',
+      'sardina.emulator.stop',
+      'sardina.emulator.status',
+      'sardina.emulator.show',
+      'sardina.emulator.installAvailable',
+      'sardina.device.setDefault',
+      'sardina.device.setSfdkDefault',
+      'sardina.device.stopSessions',
+      'sardina.device.openSsh',
+      'sardina.showOutput',
+      'sardina.setupSigning',
+      'sardina.runInstalled',
+      'sardina.debugInstalled',
+      'sardina.agent.install',
+      'sardina.agent.uninstall',
+      'sardina.agent.status',
+      'sardina.agent.screenshot',
+      'sardina.agent.mirror',
+      'sardina.agent.logs',
     ];
     const registered = await vscode.commands.getCommands(true);
     const missing = expected.filter((c) => !registered.includes(c));
@@ -77,7 +77,7 @@ suite('activation/bare', () => {
     assert.deepStrictEqual(errors, [], `unexpected error notifications: ${JSON.stringify(errors)}`);
   });
 
-  test('sailfish.sdkAvailable becomes true within 3s (fake sfdk on PATH)', async function () {
+  test('sardina.sdkAvailable becomes true within 3s (fake sfdk on PATH)', async function () {
     if (process.env.HARNESS_SMOKE === '1') {
       this.skip();
       return;
@@ -97,6 +97,6 @@ suite('activation/bare', () => {
       }
       throw err;
     }
-    await waitForContext('sailfish.sdkAvailable', true, 3000);
+    await waitForContext('sardina.sdkAvailable', true, 3000);
   });
 });

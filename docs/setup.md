@@ -4,14 +4,14 @@
 
 | Term | Meaning |
 |---|---|
-| **Sailfish SDK** | Jolla's toolkit for building Sailfish OS apps. It installs into `~/SailfishOS`. |
+| **SFOS SDK** | The SFOS SDK, Jolla's toolkit for building SFOS apps. It installs into `~/SailfishOS`. |
 | **`sfdk`** | The SDK's command-line tool. The extension runs it for you; you can also run it in a terminal. |
 | **Build engine** | A virtual machine (VirtualBox) or container (Docker) where the SDK compiles your app. It starts by itself when needed. |
-| **Build target** | The Sailfish OS version and processor type you compile for, e.g. `SailfishOS-5.1.0.11-aarch64`. |
+| **Build target** | The SFOS version and processor type you compile for, e.g. `SailfishOS-5.1.0.11-aarch64`. |
 | **Architecture** | The end of a target name: `aarch64` (64-bit ARM phones), `armv7hl` (32-bit ARM phones) or `i486` (the emulator). |
-| **Emulator** | A Sailfish OS phone running as a VirtualBox virtual machine on your computer. |
+| **Emulator** | An SFOS phone running as a VirtualBox virtual machine on your computer. |
 | **Device** | A phone or the emulator that the SDK installs your app on. |
-| **RPM** | The package format Sailfish OS installs apps from. A build puts `.rpm` files in the project's `RPMS/` folder. |
+| **RPM** | The package format SFOS installs apps from. A build puts `.rpm` files in the project's `RPMS/` folder. |
 | **SDK workspace** | The folder the build engine can see, by default your home directory. Projects must be inside it. |
 | **Device agent** | `sailfish-devagent`, a small service this extension can install on a device for screenshots, logs and the mirror. |
 
@@ -19,11 +19,11 @@
 
 | What | Version | Notes |
 |---|---|---|
-| Computer | Linux (tested), macOS (untested) | **Windows: N/A.** The `sailfish.experimental.enableWindows` setting only lifts the Windows block and looks for the SDK in `C:\SailfishOS`; nothing else is implemented or tested, so leave it off. |
+| Computer | Linux (tested), macOS (untested) | **Windows: N/A.** The `sardina.experimental.enableWindows` setting only lifts the Windows block and looks for the SDK in `C:\SailfishOS`; nothing else is implemented or tested, so leave it off. |
 | Free disk space | about 15 GB | For the SDK with its default components. |
 | Memory | 4 GB or more | Recommended by the SDK. |
 | [VirtualBox](https://www.virtualbox.org/wiki/Downloads) | 6.1 or newer | **Install before the SDK.** Needed for the emulator, and for the build engine unless you choose Docker. Tested with 7.2.20. |
-| [Sailfish SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/) | 3.10 or newer | Tested with **3.13.5**. Older versions are not blocked; a warning goes to the **Sailfish OS** output channel. |
+| [SFOS SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/) | 3.10 or newer | Tested with **3.13.5**. Older versions are not blocked; a warning goes to the **Sardina** output channel. |
 | [VS Code](https://code.visualstudio.com/) | 1.94 or newer | |
 | [Qt QML](https://marketplace.visualstudio.com/items?itemName=theqtcompany.qt-qml) extension | any | Installed together with this extension (needs access to the Marketplace; VSCodium users install it from Open VSX first). |
 | OpenSSH client | 8.4 or newer | `ssh`, `ssh-keygen` and `ssh-copy-id`, for **Add Device** and the fast screen mirror. The extension checks for them at start and shows a notice if any is missing. |
@@ -43,7 +43,7 @@ and the device agent.
    distribution; Ubuntu and elementary OS can use Oracle's `.deb`).
 2. **Check:** `VBoxManage --version` prints a version such as `7.2.20r175154`.
 
-### Part 2: Install the Sailfish SDK
+### Part 2: Install the SFOS SDK
 
 1. Download the Linux installer from
    <https://docs.sailfishos.org/Tools/Sailfish_SDK/#latest-sdk-release>, named
@@ -80,7 +80,7 @@ and the device agent.
    The first command that needs the build engine starts it, which takes a
    minute.
 
-If the SDK is somewhere other than `~/SailfishOS`, set `sailfish.sdkPath` in
+If the SDK is somewhere other than `~/SailfishOS`, set `sardina.sdkPath` in
 VS Code, or the `SAILFISH_SDK_ROOT` environment variable, to that folder.
 
 ### Part 3: Install VS Code and this extension
@@ -94,14 +94,14 @@ VS Code, or the `SAILFISH_SDK_ROOT` environment variable, to that folder.
    cd vscode-sailfish
    npm ci                                         # install build tools
    npm run build                                  # compile into dist/
-   npx vsce package                               # creates sailfish-tools-<version>.vsix
-   code --install-extension sailfish-tools-*.vsix
+   npx vsce package                               # creates sardina-<version>.vsix
+   code --install-extension sardina-*.vsix
    ```
 
    The last command also installs the Qt QML extension. The package includes
    the device agent RPMs for `aarch64`, `armv7hl` and `i486`.
-3. **Check:** `code --list-extensions | grep -iE 'sailfish|qt-qml'` lists
-   `sailfish-tools-dev.sailfish-tools` and `theqtcompany.qt-qml`.
+3. **Check:** `code --list-extensions | grep -iE 'sardina|qt-qml'` lists
+   `sailfish-tools-dev.sardina` and `theqtcompany.qt-qml`.
 
 To update later: `git pull`, then repeat the last four commands.
 
@@ -109,21 +109,21 @@ To update later: `git pull`, then repeat the last four commands.
 
 1. Projects must be inside the SDK workspace (your home directory by default).
    Outside it, every `sfdk` command fails with "The command needs to be used
-   under Sailfish SDK workspace". The path must not contain spaces either; the
+   under SFOS SDK workspace". The path must not contain spaces either; the
    extension warns if it does.
 2. Create a project, either in VS Code with **Ctrl+Shift+P** (**Cmd+Shift+P**
-   on macOS) → **Sailfish: New Project**, or in a terminal:
+   on macOS) → **Sardina: New Project**, or in a terminal:
 
    ```sh
    mkdir -p ~/Projects/harbour-myapp && cd ~/Projects/harbour-myapp
    sfdk init -t qtquick2app
    ```
 
-   App names start with `harbour-` by Sailfish convention.
+   App names start with `harbour-` by SFOS convention.
 3. Open the folder in VS Code (**File → Open Folder**) and choose **Yes, I
    trust the authors**. In Restricted Mode the extension stays off.
-4. **Check:** a Sailfish icon appears in the activity bar on the left, and the
-   status bar shows the items in Part 5. A folder counts as a Sailfish project
+4. **Check:** a Sardina icon appears in the activity bar on the left, and the
+   status bar shows the items in Part 5. A folder counts as an SFOS project
    only if it contains `rpm/*.spec`.
 
 ### Part 5: The status bar
@@ -142,7 +142,7 @@ From left to right:
 | 🐞 `Debug` | Debug | Build, install and start the app under the debugger (Part 8). |
 
 To start or debug what is already installed without building again, use
-**Sailfish: Run Installed App** or **Sailfish: Debug Installed App** from the
+**Sardina: Run Installed App** or **Sardina: Debug Installed App** from the
 Command Palette.
 
 Deploy methods:
@@ -161,16 +161,16 @@ output. Press **Ctrl+C** there, or close the terminal, to stop it.
 **Changing architecture:** projects build in place, so building for another
 architecture on top of the old build gives a broken package. When you pick a
 target with a different architecture, the extension asks to clean first;
-answer **Clean**. Set `sailfish.build.cleanOnArchChange` to `true` to clean
+answer **Clean**. Set `sardina.build.cleanOnArchChange` to `true` to clean
 without asking.
 
-**OS versions:** a target may be older than the phone's Sailfish OS; this is
+**OS versions:** a target may be older than the phone's SFOS; this is
 normal. As of SDK 3.13.5 the newest targets are 5.1.0.11, and their apps run on
-Sailfish OS 5.2 phones.
+SFOS 5.2 phones.
 
 ### Part 6: Run on the emulator
 
-1. Click the Sailfish icon in the activity bar. In the **Devices** view under **Emulators**, start
+1. Click the Sardina icon in the activity bar. In the **Devices** view under **Emulators**, start
    `SailfishOS-5.1.0.11` with its start button. A phone-shaped window opens;
    wait for the home screen.
 2. In the status bar, pick an `…-i486` target and the device
@@ -182,7 +182,7 @@ The **SDK** view in the same sidebar shows the SDK version and location, the
 `sfdk` path, the build engine (with start and stop buttons) and the installed
 targets, with ✓ on the selected one. It does not update by itself when
 something changes outside VS Code, such as the engine starting during a build;
-press the view's **Refresh** button. If no SDK is found, it shows **Sailfish
+press the view's **Refresh** button. If no SDK is found, it shows **SFOS
 SDK not found**; click it to open the install guide.
 
 ### Part 7: Run on a phone
@@ -200,7 +200,7 @@ SDK not found**; click it to open the install guide.
    refuses to install your app.
 4. **Register the phone.** Close Qt Creator first; while it runs it rewrites
    the SDK's device list and would undo this. Then **Ctrl+Shift+P** →
-   **Sailfish: Add Device**, and answer:
+   **Sardina: Add Device**, and answer:
 
    | Prompt | Answer |
    |---|---|
@@ -222,7 +222,7 @@ SDK not found**; click it to open the install guide.
    ```
 
    If `uname -m` prints another architecture than you chose, run
-   **Sailfish: Remove Device** and add the phone again.
+   **Sardina: Remove Device** and add the phone again.
 5. **Install the deploy and debug tools.** The SDK copies apps with `rsync`,
    installs them with `sdk-deploy-rpm` and debugs them with `gdbserver`; some
    phones have none of them. The phone downloads them from Jolla's
@@ -271,7 +271,7 @@ Tips:
   generic part of `%optflags` and keeps the architecture flags; it also leaves
   out `-D_FORTIFY_SOURCE=2`, which needs optimisation. You do not need to change
   your `.pro` or `.spec`. Release builds are unchanged. Your own
-  `sailfish.build.extraArgs` come after this define, so a define of your own
+  `sardina.build.extraArgs` come after this define, so a define of your own
   wins. `Q_ASSERT` stays disabled (`QT_NO_DEBUG` is still defined), as in an
   `sfdk build -d`. CMake projects get the same flags through `%cmake`.
 - Debug builds also enable QML debugging support (`-DQT_QML_DEBUG`); nothing
@@ -297,14 +297,14 @@ debugger, without building or deploying again. QML and JavaScript debugging are 
 Signing is off by default. To turn it on for a project:
 
 1. Install GnuPG (for example `sudo apt install gnupg`).
-2. **Ctrl+Shift+P** → **Sailfish: Set Up Package Signing**. Pick a key from
+2. **Ctrl+Shift+P** → **Sardina: Set Up Package Signing**. Pick a key from
    the list (each shows the end of its fingerprint), or choose **Create a new
    key** and enter a name, an optional email and a passphrase.
 3. For an existing key, enter its passphrase. The extension signs a test file
    with the key and passphrase first; if that fails, nothing is saved.
-4. It then sets, for this project folder, `sailfish.build.sign` to `true`,
-   `sailfish.build.signingUser` to the key's **fingerprint**, and
-   `sailfish.build.signingPassphraseFile` to a private file (mode 600) in the
+4. It then sets, for this project folder, `sardina.build.sign` to `true`,
+   `sardina.build.signingUser` to the key's **fingerprint**, and
+   `sardina.build.signingPassphraseFile` to a private file (mode 600) in the
    extension's storage, because `sfdk` reads the passphrase from a file. The
    passphrase is never stored in settings.
 5. **Check:** the confirmation names the key and the end of its fingerprint.
@@ -316,7 +316,7 @@ Signing is off by default. To turn it on for a project:
    rpm -K RPMS/<package>.rpm
    ```
 
-If you set `sailfish.build.signingUser` to a name by hand, the extension looks
+If you set `sardina.build.signingUser` to a name by hand, the extension looks
 it up before building: a name matching exactly one key is used by its
 fingerprint, and a name matching none or several keys stops the build with a
 clear message (gpg matches names as substrings, so `Jane Doe` also matches

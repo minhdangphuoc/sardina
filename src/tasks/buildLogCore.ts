@@ -1,7 +1,7 @@
 import { mapEngineLine, normalizeSeverity } from './pathMap';
 
 /** The name of the output channel that streams Run / Debug / Deploy builds. */
-export const BUILD_LOG_CHANNEL_NAME = 'Sailfish OS Build';
+export const BUILD_LOG_CHANNEL_NAME = 'Sardina Build';
 
 /** `$ sfdk <args>` plus the start time, the first line of each sfdk step in the build log. */
 export function formatStepHeader(argv: string[], now: Date): string {

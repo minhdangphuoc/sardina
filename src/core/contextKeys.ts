@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
-import type { SailfishContextKey } from './types';
+import type { SardinaContextKey } from './types';
 import type { Services } from './services';
 
-const ALL_KEYS: SailfishContextKey[] = [
-  'sailfish.isProject',
-  'sailfish.projectCount',
-  'sailfish.sdkAvailable',
-  'sailfish.platformSupported',
-  'sailfish.hasTarget',
-  'sailfish.hasDevice',
+const ALL_KEYS: SardinaContextKey[] = [
+  'sardina.isProject',
+  'sardina.projectCount',
+  'sardina.sdkAvailable',
+  'sardina.platformSupported',
+  'sardina.hasTarget',
+  'sardina.hasDevice',
 ];
 
 /**
@@ -19,12 +19,12 @@ const ALL_KEYS: SailfishContextKey[] = [
 export class ContextKeys {
   private readonly values = new Map<string, boolean | number>();
 
-  async set(key: SailfishContextKey, value: boolean | number): Promise<void> {
+  async set(key: SardinaContextKey, value: boolean | number): Promise<void> {
     this.values.set(key, value);
     await vscode.commands.executeCommand('setContext', key, value);
   }
 
-  get(key: SailfishContextKey): boolean | number | undefined {
+  get(key: SardinaContextKey): boolean | number | undefined {
     return this.values.get(key);
   }
 
@@ -34,9 +34,9 @@ export class ContextKeys {
 }
 
 /**
- * The workspace folder `sailfish.target`/`sailfish.device` (resource scope)
+ * The workspace folder `sardina.target`/`sardina.device` (resource scope)
  * should be evaluated for: the active editor's project folder, else the
- * single Sailfish project. Unlike FR-2.5's resolveActiveProject this never
+ * single SFOS project. Unlike FR-2.5's resolveActiveProject this never
  * prompts — background context refresh must not pop a QuickPick.
  */
 function scopeFolder(services: Services): vscode.WorkspaceFolder | undefined {
@@ -53,21 +53,21 @@ function scopeFolder(services: Services): vscode.WorkspaceFolder | undefined {
 
 async function refreshProjectKeys(services: Services): Promise<void> {
   const projects = services.projects.projects();
-  await services.contextKeys.set('sailfish.isProject', projects.length > 0);
-  await services.contextKeys.set('sailfish.projectCount', projects.length);
+  await services.contextKeys.set('sardina.isProject', projects.length > 0);
+  await services.contextKeys.set('sardina.projectCount', projects.length);
 }
 
 async function refreshTargetDeviceKeys(services: Services): Promise<void> {
   const folder = scopeFolder(services);
   const target = services.settings.get('target', folder?.uri);
   const device = services.settings.get('device', folder?.uri);
-  await services.contextKeys.set('sailfish.hasTarget', typeof target === 'string' && target.length > 0);
-  await services.contextKeys.set('sailfish.hasDevice', typeof device === 'string' && device.length > 0);
+  await services.contextKeys.set('sardina.hasTarget', typeof target === 'string' && target.length > 0);
+  await services.contextKeys.set('sardina.hasDevice', typeof device === 'string' && device.length > 0);
 }
 
 export function activateContextKeys(ctx: vscode.ExtensionContext, services: Services): void {
   for (const key of ALL_KEYS) {
-    const initial = key === 'sailfish.projectCount' ? 0 : false;
+    const initial = key === 'sardina.projectCount' ? 0 : false;
     void services.contextKeys.set(key, initial);
   }
 

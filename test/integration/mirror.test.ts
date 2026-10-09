@@ -3,7 +3,7 @@ import * as vscode from 'vscode';
 import { clearFakeLog, readFakeLog, stubMessages, waitFor, waitForContext, withScenario, type FakeInvocation } from './helpers';
 
 /**
- * Screen mirror integration suite (device-agent/PLAN-phase2a-mirror.md M5): sailfish.agent.mirror against the
+ * Screen mirror integration suite (device-agent/PLAN-phase2a-mirror.md M5): sardina.agent.mirror against the
  * fake sfdk. The default scenario's agent reports 1.0.0, so the live-stream tests use `agent-new` (ping 1.1.0;
  * the mirror stream itself comes from default/ and hangs until killed). Only discovered when TEST_MODE != 'bare'.
  */
@@ -29,15 +29,15 @@ const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms
 suite('screen mirror (M5)', () => {
   suiteSetup(async function () {
     this.timeout(15000);
-    await waitForContext('sailfish.sdkAvailable', true, 10000);
+    await waitForContext('sardina.sdkAvailable', true, 10000);
     const folder = vscode.workspace.workspaceFolders?.[0];
-    await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   suiteTeardown(async function () {
     this.timeout(15000);
     const folder = vscode.workspace.workspaceFolders?.[0];
-    await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   teardown(async function () {
@@ -52,7 +52,7 @@ suite('screen mirror (M5)', () => {
     this.timeout(20000);
     await withScenario('agent-new', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => mirrorRuns().length > 0, 5000);
       const log = keys();
       assert.ok(log.indexOf('device_exec.sailfish-devagent.ping') >= 0 && log.indexOf('device_exec.sailfish-devagent.ping') < log.indexOf(MIRROR), JSON.stringify(log));
@@ -69,9 +69,9 @@ suite('screen mirror (M5)', () => {
     this.timeout(20000);
     await withScenario('agent-new', async () => {
       stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => mirrorRuns().length === 1, 5000);
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await sleep(2000);
       assert.strictEqual(mirrorTabs().length, 1);
       assert.strictEqual(mirrorRuns().length, 1, JSON.stringify(keys()));
@@ -82,9 +82,9 @@ suite('screen mirror (M5)', () => {
     this.timeout(20000);
     await withScenario('agent-new', async () => {
       stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => mirrorRuns().length === 1, 5000);
-      await vscode.commands.executeCommand('sailfish.agent.mirror'); // reveals it, making it the active editor
+      await vscode.commands.executeCommand('sardina.agent.mirror'); // reveals it, making it the active editor
       await vscode.commands.executeCommand('workbench.action.closeActiveEditor');
       await waitFor(() => readFakeLog().killed.some((k) => k.key === MIRROR), 8000);
       assert.strictEqual(mirrorTabs().length, 0);
@@ -95,14 +95,14 @@ suite('screen mirror (M5)', () => {
     this.timeout(30000);
     await withScenario('agent-new', async () => {
       stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => mirrorRuns().length === 1, 5000);
       const column = mirrorTabs()[0]?.group.viewColumn;
       assert.ok(column !== undefined, 'no mirror tab');
       const doc = await vscode.workspace.openTextDocument({ content: 'x' });
       await vscode.window.showTextDocument(doc, { viewColumn: column, preview: false });
       await waitFor(() => readFakeLog().killed.some((k) => k.key === MIRROR), 5000);
-      await vscode.commands.executeCommand('sailfish.agent.mirror'); // reveals the panel
+      await vscode.commands.executeCommand('sardina.agent.mirror'); // reveals the panel
       await waitFor(() => mirrorRuns().length >= 2, 5000);
     });
   });
@@ -111,7 +111,7 @@ suite('screen mirror (M5)', () => {
     this.timeout(20000);
     await withScenario('agent-old', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       const warning = messages.calls.find((m) => m.kind === 'warning');
       assert.ok(warning && warning.message.includes('1.1.0'), JSON.stringify(messages.calls));
       assert.ok(warning.items.includes('Install Device Agent'), JSON.stringify(warning));
@@ -124,7 +124,7 @@ suite('screen mirror (M5)', () => {
     this.timeout(20000);
     await withScenario('agent-devmode-off', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       const error = messages.calls.find((m) => m.kind === 'error');
       assert.ok(error?.message.includes('Developer Mode is off'), JSON.stringify(messages.calls));
       assert.strictEqual(mirrorRuns().length, 0, JSON.stringify(keys()));
@@ -135,7 +135,7 @@ suite('screen mirror (M5)', () => {
     this.timeout(20000);
     await withScenario('agent-missing', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       const warning = messages.calls.find((m) => m.kind === 'warning');
       assert.ok(warning?.items.includes('Install Device Agent'), JSON.stringify(messages.calls));
       assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));

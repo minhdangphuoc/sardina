@@ -20,7 +20,7 @@ import {
 } from './helpers';
 
 /**
- * Device agent integration suite (device-agent/PLAN.md T4): the sailfish.agent.* commands against the
+ * Device agent integration suite (device-agent/PLAN.md T4): the sardina.agent.* commands against the
  * fake sfdk (scenarios default, agent-missing, agent-devmode-off). Only discovered when TEST_MODE != 'bare'.
  */
 
@@ -60,18 +60,18 @@ suite('device agent (T4)', () => {
 
   suiteSetup(async function () {
     this.timeout(15000);
-    await waitForContext('sailfish.sdkAvailable', true, 10000);
+    await waitForContext('sardina.sdkAvailable', true, 10000);
     // The fixture device's address does not answer; the root-shell offline guard must let it through.
     restoreReachability = forceDeviceReachability(true);
     const folder = vscode.workspace.workspaceFolders?.[0];
-    await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   suiteTeardown(async function () {
     this.timeout(15000);
     restoreReachability?.();
     const folder = vscode.workspace.workspaceFolders?.[0];
-    await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   teardown(async () => {
@@ -90,7 +90,7 @@ suite('device agent (T4)', () => {
   test('status: reports the running agent and its version', async () => {
     const messages = stubMessages();
     clearFakeLog();
-    await vscode.commands.executeCommand('sailfish.agent.status');
+    await vscode.commands.executeCommand('sardina.agent.status');
     assert.strictEqual(messages.calls.length, 1, JSON.stringify(messages.calls));
     assert.strictEqual(messages.calls[0].kind, 'information');
     assert.ok(messages.calls[0].message.includes('1.0.0') && messages.calls[0].message.includes('running'), messages.calls[0].message);
@@ -103,7 +103,7 @@ suite('device agent (T4)', () => {
     const target = path.join(dir, 'shot.png');
     const dialog = stubSaveDialog(vscode.Uri.file(target));
     clearFakeLog();
-    await vscode.commands.executeCommand('sailfish.agent.screenshot');
+    await vscode.commands.executeCommand('sardina.agent.screenshot');
 
     const data = fs.readFileSync(target);
     assert.ok(data.subarray(0, 8).equals(PNG_MAGIC), 'saved file is not a PNG');
@@ -133,7 +133,7 @@ suite('device agent (T4)', () => {
     const dir = tmpDir();
     stubSaveDialog(undefined);
     clearFakeLog();
-    await vscode.commands.executeCommand('sailfish.agent.screenshot');
+    await vscode.commands.executeCommand('sardina.agent.screenshot');
 
     assert.deepStrictEqual(fs.readdirSync(dir), []);
     assert.ok(keys().includes('device_exec.rm'), JSON.stringify(keys()));
@@ -145,7 +145,7 @@ suite('device agent (T4)', () => {
     await withScenario('agent-missing', async () => {
       const messages = stubMessages();
       stubSaveDialog(undefined);
-      await vscode.commands.executeCommand('sailfish.agent.screenshot');
+      await vscode.commands.executeCommand('sardina.agent.screenshot');
       const warning = messages.calls.find((m) => m.kind === 'warning');
       assert.ok(warning, JSON.stringify(messages.calls));
       assert.ok(warning.items.includes('Install Device Agent'), JSON.stringify(warning));
@@ -159,7 +159,7 @@ suite('device agent (T4)', () => {
       const messages = stubMessages();
       messages.chosenAction = 'Install Device Agent';
       stubInputBox('secret');
-      await vscode.commands.executeCommand('sailfish.agent.screenshot');
+      await vscode.commands.executeCommand('sardina.agent.screenshot');
 
       const log = keys();
       assertInOrder(log, [
@@ -190,7 +190,7 @@ suite('device agent (T4)', () => {
   test('screenshot: Developer Mode off gives a clear error and fetches nothing', async () => {
     await withScenario('agent-devmode-off', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.screenshot');
+      await vscode.commands.executeCommand('sardina.agent.screenshot');
       const error = messages.calls.find((m) => m.kind === 'error');
       assert.ok(error?.message.includes('Developer Mode is off'), JSON.stringify(messages.calls));
       assert.ok(!keys().includes('device_exec.base64'), JSON.stringify(keys()));
@@ -204,12 +204,12 @@ suite('device agent (T4)', () => {
     const stopStream = async (): Promise<void> => {
       if (!(await deviceLogView()).running) return;
       messages.chosenAction = 'Stop';
-      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await vscode.commands.executeCommand('sardina.agent.logs');
       await waitForLog((v) => !v.running, 8000);
       messages.chosenAction = undefined;
     };
     clearFakeLog();
-    await vscode.commands.executeCommand('sailfish.agent.logs');
+    await vscode.commands.executeCommand('sardina.agent.logs');
     await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 8000);
     const logs = find('device_exec.sailfish-devagent.logs');
     assert.ok(logs, JSON.stringify(keys()));
@@ -221,7 +221,7 @@ suite('device agent (T4)', () => {
     assert.ok((await deviceLogView()).lines[0]?.includes('streaming'), JSON.stringify(await deviceLogView()));
     await stopStream();
     await withScenario('monitor-agent', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await vscode.commands.executeCommand('sardina.agent.logs');
       await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 8000);
       const argv = find('device_exec.sailfish-devagent.logs')?.argv ?? [];
       assert.ok(argv.includes('--format') && argv[argv.indexOf('--format') + 1] === 'json', JSON.stringify(argv));
@@ -236,7 +236,7 @@ suite('device agent (T4)', () => {
   test('screenshot: screen view off on the phone is refused with the Settings place and fetches nothing', async () => {
     await withScenario('agent-settings-view-off', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.screenshot');
+      await vscode.commands.executeCommand('sardina.agent.screenshot');
       const error = messages.calls.find((m) => m.kind === 'error');
       assert.ok(error?.message.includes('Screen view is turned off on the phone'), JSON.stringify(messages.calls));
       assert.ok(error);
@@ -248,7 +248,7 @@ suite('device agent (T4)', () => {
   test('I24 logs: logs off on the phone is refused before streaming', async () => {
     await withScenario('agent-settings-logs-off', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await vscode.commands.executeCommand('sardina.agent.logs');
       const error = messages.calls.find((m) => m.kind === 'error');
       assert.ok(error?.message.includes('System logs are turned off on the phone'), JSON.stringify(messages.calls));
       assert.ok(!keys().includes('device_exec.sailfish-devagent.logs'), JSON.stringify(keys()));
@@ -260,7 +260,7 @@ suite('device agent (T4)', () => {
     this.timeout(20000);
     await withScenario('agent-settings-stopped', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await vscode.commands.executeCommand('sardina.agent.logs');
       await waitFor(() => messages.calls.some((m) => m.kind === 'error'), 8000);
       const error = messages.calls.find((m) => m.kind === 'error');
       assert.ok(error?.message.includes('stopped from the phone'), JSON.stringify(messages.calls));
@@ -274,7 +274,7 @@ suite('device agent (T4)', () => {
     await withScenario('agent-uninstall', async () => {
       const messages = stubMessages();
       stubInputBox('secret');
-      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      await vscode.commands.executeCommand('sardina.agent.uninstall');
       assertInOrder(keys(), ['device_exec.devel-su', 'device_exec.sh']);
       const root = find('device_exec.devel-su');
       assert.ok(root, JSON.stringify(keys()));
@@ -295,7 +295,7 @@ suite('device agent (T4)', () => {
     await withScenario('agent-uninstall-left', async () => {
       const messages = stubMessages();
       stubInputBox('secret');
-      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      await vscode.commands.executeCommand('sardina.agent.uninstall');
       const last = messages.calls[messages.calls.length - 1];
       assert.strictEqual(last.kind, 'warning', JSON.stringify(messages.calls));
       assert.ok(last.message.includes('Still on the device: /var/lib/sailfish-devagent'), last.message);
@@ -308,7 +308,7 @@ suite('device agent (T4)', () => {
       {
         const messages = stubMessages();
         messages.chosenAction = 'Restart Home Screen';
-        await vscode.commands.executeCommand('sailfish.device.restartHomeScreen');
+        await vscode.commands.executeCommand('sardina.device.restartHomeScreen');
         const restart = readFakeLog().invocations.find((i) => i.key === 'device_exec.systemctl');
         assert.ok(restart, JSON.stringify(keys()));
         assert.deepStrictEqual(restart.argv.slice(-4), ['systemctl', '--user', 'restart', 'lipstick'], JSON.stringify(restart.argv));
@@ -324,7 +324,7 @@ suite('device agent (T4)', () => {
     await withScenario('agent-uninstall', async () => {
       stubMessages();
       stubInputBox(undefined);
-      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      await vscode.commands.executeCommand('sardina.agent.uninstall');
       assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));
       assert.ok(!keys().includes('device_exec.sh'), JSON.stringify(keys()));
     });
@@ -337,7 +337,7 @@ suite('device agent (T4)', () => {
       messages.chosenAction = 'Install Device Agent';
       stubQuickPick(((items: readonly vscode.QuickPickItem[]) => items.filter((i) => i.label === 'logs')) as never);
       stubInputBox(undefined);
-      await vscode.commands.executeCommand('sailfish.agent.install');
+      await vscode.commands.executeCommand('sardina.agent.install');
       assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));
       const sh = readFakeLog().invocations.filter((i) => i.key === 'device_exec.sh');
       // Empty the folder, copy the core and the logs module, remove them again.
@@ -361,7 +361,7 @@ suite('device agent (T4)', () => {
         return items.filter((i) => i.label === 'input');
       }) as never);
       stubInputBox(undefined);
-      await vscode.commands.executeCommand('sailfish.agent.install');
+      await vscode.commands.executeCommand('sardina.agent.install');
       assert.deepStrictEqual(offered.map((i) => [i.label, i.picked]), ['logs', 'stats', 'screenshot', 'mirror', 'input'].map((m) => [m, true]));
       const copied = readFakeLog().invocations.filter((i) => i.key === 'device_exec.sh').slice(1, -1).map((i) => i.argv[i.argv.length - 2]);
       assert.deepStrictEqual(copied, ['sailfish-devagent.rpm', 'sailfish-devagent-mirror.rpm', 'sailfish-devagent-input.rpm']);
@@ -376,7 +376,7 @@ suite('device agent (T4)', () => {
         offered = items;
         return [];
       }) as never);
-      await vscode.commands.executeCommand('sailfish.agent.install');
+      await vscode.commands.executeCommand('sardina.agent.install');
       assert.deepStrictEqual(offered.filter((i) => i.picked).map((i) => i.label), ['logs']);
       assert.ok(!keys().includes('device_exec.devel-su') && !keys().includes('device_exec.sh'), JSON.stringify(keys()));
     });
@@ -385,7 +385,7 @@ suite('device agent (T4)', () => {
   test('status: lists the installed and the missing modules', async () => {
     await withScenario('agent-modules-logs-only', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.status');
+      await vscode.commands.executeCommand('sardina.agent.status');
       assert.ok(messages.calls[0].message.includes('with logs (not installed: stats, screenshot, mirror, input)'), messages.calls[0].message);
     });
   });
@@ -397,7 +397,7 @@ suite('device agent (T4)', () => {
       messages.chosenAction = 'Install Device Agent';
       stubInputBox('secret');
       stubSaveDialog(undefined);
-      await vscode.commands.executeCommand('sailfish.agent.screenshot');
+      await vscode.commands.executeCommand('sardina.agent.screenshot');
       const warnings = messages.calls.filter((m) => m.kind === 'warning');
       assert.strictEqual(warnings.length, 1, JSON.stringify(messages.calls));
       assert.ok(warnings[0].message.includes('Screenshots needs the screenshot module of the device agent'), warnings[0].message);
@@ -411,11 +411,11 @@ suite('device agent (T4)', () => {
     this.timeout(20000);
     await withScenario('agent-modules-logs-only', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await vscode.commands.executeCommand('sardina.agent.logs');
       await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 8000);
       assert.ok(!messages.calls.some((m) => m.kind === 'warning'), JSON.stringify(messages.calls));
       messages.chosenAction = 'Stop';
-      await vscode.commands.executeCommand('sailfish.agent.logs');
+      await vscode.commands.executeCommand('sardina.agent.logs');
       await waitForLog((v) => !v.running, 8000);
     });
   });
@@ -423,7 +423,7 @@ suite('device agent (T4)', () => {
   test('screenshot: a module removed since the ping gives the module refusal text', async () => {
     await withScenario('agent-module-missing', async () => {
       const messages = stubMessages();
-      await vscode.commands.executeCommand('sailfish.agent.screenshot');
+      await vscode.commands.executeCommand('sardina.agent.screenshot');
       const error = messages.calls.find((m) => m.kind === 'error');
       assert.ok(error?.message.includes('The screenshot module of the device agent is not installed'), JSON.stringify(messages.calls));
       assert.ok(!keys().includes('device_exec.base64'), JSON.stringify(keys()));
@@ -438,7 +438,7 @@ suite('device agent (T4)', () => {
         offered = items;
         return undefined;
       }));
-      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      await vscode.commands.executeCommand('sardina.agent.uninstall');
       assert.deepStrictEqual(offered.map((i) => i.label), ['Device agent and all modules', 'logs module']);
       assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));
     });
@@ -449,7 +449,7 @@ suite('device agent (T4)', () => {
       const messages = stubMessages();
       stubQuickPick(((items: readonly vscode.QuickPickItem[]) => items.find((i) => i.label === 'logs module')) as never);
       stubInputBox('secret');
-      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      await vscode.commands.executeCommand('sardina.agent.uninstall');
       const root = find('device_exec.devel-su');
       assert.ok(root?.argv.some((a) => a.startsWith('rpm -e sailfish-devagent-logs ||')), JSON.stringify(root?.argv));
       assert.ok(!root?.argv.some((a) => a.includes('rpm -e sailfish-devagent ')), JSON.stringify(root?.argv));
@@ -465,7 +465,7 @@ suite('device agent (T4)', () => {
       stubMessages();
       stubQuickPick(((items: readonly vscode.QuickPickItem[]) => items[0]) as never);
       stubInputBox('secret');
-      await vscode.commands.executeCommand('sailfish.agent.uninstall');
+      await vscode.commands.executeCommand('sardina.agent.uninstall');
       assert.ok(find('device_exec.devel-su')?.argv.some((a) => a.includes('rpm -e sailfish-devagent$m')), JSON.stringify(keys()));
       assert.ok(keys().includes('device_exec.sh'), 'the cleanup runs');
     });

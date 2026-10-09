@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { buildWlanSshLaunch, isValidPort } from '../../../src/devices/connectWlan';
 
-describe('buildWlanSshLaunch ("Sailfish: Connect to Device (WLAN)")', () => {
+describe('buildWlanSshLaunch ("Sardina: Connect to Device (WLAN)")', () => {
   it('builds ssh -p <port> -- <user>@<host>', () => {
     const launch = buildWlanSshLaunch('192.168.50.125', '22', 'nemo');
     assert.deepStrictEqual(launch, { shellPath: 'ssh', shellArgs: ['-p', '22', '--', 'nemo@192.168.50.125'] });

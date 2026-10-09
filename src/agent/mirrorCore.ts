@@ -104,7 +104,7 @@ export function agentUpdateAvailable(running: string, bundled: string | undefine
 }
 
 export function agentUpdateNotice(device: string, running: string, bundled: string): string {
-  return `Sailfish: the device agent on "${device}" is ${running}; this extension includes ${bundled} (faster mirror: ${AGENT_UPDATE_BENEFITS}).`;
+  return `Sardina: the device agent on "${device}" is ${running}; this extension includes ${bundled} (faster mirror: ${AGENT_UPDATE_BENEFITS}).`;
 }
 
 /** The strip's reason for the sfdk path when the agent is too old for the forward. */

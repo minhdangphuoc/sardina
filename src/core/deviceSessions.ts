@@ -177,13 +177,13 @@ function stopParts(device: string, result: StopAllResult): string[] {
 export function switchNotice(oldDevice: string, newDevice: string | undefined, result: StopAllResult): string {
   const parts = stopParts(oldDevice, result);
   parts.push(newDevice ? `Now using "${newDevice}".` : 'No device selected.');
-  return `Sailfish: ${parts.join(' ')}`;
+  return `Sardina: ${parts.join(' ')}`;
 }
 
 /** The notice after "Stop Sessions on Device"; says so when nothing was running. */
 export function stopNotice(device: string, result: StopAllResult): string {
   const parts = stopParts(device, result);
-  return `Sailfish: ${parts.length > 0 ? parts.join(' ') : `Nothing is running on "${device}".`}`;
+  return `Sardina: ${parts.length > 0 ? parts.join(' ') : `Nothing is running on "${device}".`}`;
 }
 
 /** The singleton every feature registers with. */

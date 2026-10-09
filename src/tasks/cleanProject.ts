@@ -14,17 +14,17 @@ const DELETE = 'Delete';
 export async function cleanProjectBuild(services: Services): Promise<boolean> {
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sailfish: no Sailfish project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
     return false;
   }
   if (buildState.running) {
-    void services.prompts.showWarningMessage('Sailfish: a build is running. Stop it before cleaning.');
+    void services.prompts.showWarningMessage('Sardina: a build is running. Stop it before cleaning.');
     return false;
   }
   const root = project.folder.uri.fsPath;
   const plan = scanProject(root, nodeCleanFs);
   if (plan.entries.length === 0) {
-    void services.prompts.showInformationMessage(`Sailfish: nothing to clean in ${project.folder.name}.`);
+    void services.prompts.showInformationMessage(`Sardina: nothing to clean in ${project.folder.name}.`);
     return true;
   }
   const choice = await services.prompts.showWarningMessage(confirmationMessage(project.folder.name, plan), { modal: true }, DELETE);
@@ -37,17 +37,17 @@ export async function cleanProjectBuild(services: Services): Promise<boolean> {
   }
   if (result.failed.length > 0) {
     void services.prompts.showWarningMessage(
-      `Sailfish: cleaned ${result.deleted.length} items; ${result.failed.length} could not be deleted (see the Sailfish OS output).`,
+      `Sardina: cleaned ${result.deleted.length} items; ${result.failed.length} could not be deleted (see the Sardina output).`,
     );
     return false;
   }
-  void services.prompts.showInformationMessage(`Sailfish: cleaned ${result.deleted.length} generated items in ${project.folder.name}.`);
+  void services.prompts.showInformationMessage(`Sardina: cleaned ${result.deleted.length} generated items in ${project.folder.name}.`);
   return true;
 }
 
 /** Clean Project Build, then Build. */
 export async function rebuild(services: Services): Promise<void> {
   if (await cleanProjectBuild(services)) {
-    await vscode.commands.executeCommand('sailfish.build');
+    await vscode.commands.executeCommand('sardina.build');
   }
 }

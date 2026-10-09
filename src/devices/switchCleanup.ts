@@ -39,7 +39,7 @@ function notify(services: Services, message: string): void {
   });
 }
 
-/** `sailfish.device` edited directly (settings.json, Settings UI): the change cannot be intercepted, so clean up right after it. */
+/** `sardina.device` edited directly (settings.json, Settings UI): the change cannot be intercepted, so clean up right after it. */
 export function watchDeviceChange(ctx: vscode.ExtensionContext, services: Services): void {
   const current = (): string | undefined => services.settings.get('device', vscode.workspace.workspaceFolders?.[0]?.uri) || undefined;
   let last = current();

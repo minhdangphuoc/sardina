@@ -455,22 +455,22 @@ describe('parseCleanupReport', () => {
 
 describe('uninstallSummary', () => {
   it('names the removed modules', () => {
-    assert.strictEqual(uninstallSummary('Jolla', report(), ['logs']).message, 'Sailfish: removed the logs module from "Jolla". Nothing of it is left.');
+    assert.strictEqual(uninstallSummary('Jolla', report(), ['logs']).message, 'Sardina: removed the logs module from "Jolla". Nothing of it is left.');
     const s = uninstallSummary('Jolla', report({ removed: ['/r'], left: ['package sailfish-devagent-input'] }), ['mirror', 'input']);
     assert.strictEqual(s.level, 'warning');
     assert.strictEqual(
       s.message,
-      'Sailfish: removed the mirror, input modules from "Jolla". Also removed 1 leftover item. Still on the device: package sailfish-devagent-input (see the Sailfish OS output; root-owned items need "devel-su").',
+      'Sardina: removed the mirror, input modules from "Jolla". Also removed 1 leftover item. Still on the device: package sailfish-devagent-input (see the Sardina output; root-owned items need "devel-su").',
     );
   });
   it('clean: one information line', () => {
     const s = uninstallSummary('Jolla', report());
     assert.strictEqual(s.level, 'information');
-    assert.strictEqual(s.message, 'Sailfish: the device agent was removed from "Jolla". Nothing of the agent is left.');
+    assert.strictEqual(s.message, 'Sardina: the device agent was removed from "Jolla". Nothing of the agent is left.');
   });
   it('counts what it removed and closed', () => {
     const s = uninstallSummary('Jolla', report({ removed: ['/a', '/b'], closed: [3] }));
-    assert.strictEqual(s.message, 'Sailfish: the device agent was removed from "Jolla". Also removed 2 leftover items and 1 notification. Nothing of the agent is left.');
+    assert.strictEqual(s.message, 'Sardina: the device agent was removed from "Jolla". Also removed 2 leftover items and 1 notification. Nothing of the agent is left.');
   });
   it('warns about leftovers, unchecked parts and an unfinished check', () => {
     let s = uninstallSummary('Jolla', report({ left: ['/var/lib/sailfish-devagent', '/a', '/b', '/c'] }));

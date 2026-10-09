@@ -10,7 +10,7 @@ import {
   withScenario,
 } from './helpers';
 import type { Services } from '../../src/core/services';
-import { SAILFISH_TASK_TYPE } from '../../src/tasks/provider';
+import { SARDINA_TASK_TYPE } from '../../src/tasks/provider';
 
 /** Tasks integration suite (FR-5, AC-1.5/1.6/1.7); only discovered when TEST_MODE != 'bare' (test/integration/index.ts). */
 
@@ -22,7 +22,7 @@ function services(): Services {
 
 async function sfdkReady(): Promise<boolean> {
   try {
-    await waitForContext('sailfish.sdkAvailable', true, 5000);
+    await waitForContext('sardina.sdkAvailable', true, 5000);
   } catch {
     return false;
   }
@@ -47,14 +47,14 @@ function folder(): vscode.WorkspaceFolder {
 
 /** Global scope: never writes into the shared qml-app fixture's .vscode/settings.json. */
 async function setSetting(key: string, value: unknown): Promise<void> {
-  await vscode.workspace.getConfiguration('sailfish').update(key, value, vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration('sardina').update(key, value, vscode.ConfigurationTarget.Global);
 }
 
-/** Resolves with the exit code of the specific sailfish task `command` starts, not any other concurrently-running one (M1.12). */
+/** Resolves with the exit code of the specific sardina task `command` starts, not any other concurrently-running one (M1.12). */
 async function runCommandAndWaitForTask(command: string, timeoutMs = 15000): Promise<number | undefined> {
   // Waits out a still-retiring previous task so executeTask() below can't be coalesced into it.
-  await waitFor(() => !vscode.tasks.taskExecutions.some((e) => (e.task.definition as { type?: string }).type === SAILFISH_TASK_TYPE), 5000).catch(() => undefined);
-  const expectedTaskCommand = command.startsWith('sailfish.') ? command.slice('sailfish.'.length) : undefined;
+  await waitFor(() => !vscode.tasks.taskExecutions.some((e) => (e.task.definition as { type?: string }).type === SARDINA_TASK_TYPE), 5000).catch(() => undefined);
+  const expectedTaskCommand = command.startsWith('sardina.') ? command.slice('sardina.'.length) : undefined;
   return new Promise((resolve, reject) => {
     let settled = false;
     let captured: vscode.TaskExecution | undefined;
@@ -68,7 +68,7 @@ async function runCommandAndWaitForTask(command: string, timeoutMs = 15000): Pro
     };
     const matches = (execution: vscode.TaskExecution): boolean => {
       const def = execution.task.definition as { type?: string; command?: string };
-      if (def.type !== SAILFISH_TASK_TYPE) {
+      if (def.type !== SARDINA_TASK_TYPE) {
         return false;
       }
       return expectedTaskCommand === undefined || def.command === expectedTaskCommand;
@@ -89,7 +89,7 @@ async function runCommandAndWaitForTask(command: string, timeoutMs = 15000): Pro
       }
     });
     const timer = setTimeout(() => {
-      finish(() => reject(new Error(`sailfish task did not end within ${timeoutMs}ms`)));
+      finish(() => reject(new Error(`sardina task did not end within ${timeoutMs}ms`)));
     }, timeoutMs);
     Promise.resolve(vscode.commands.executeCommand(command)).catch((err: unknown) => {
       finish(() => reject(err instanceof Error ? err : new Error(String(err))));
@@ -117,22 +117,22 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
   });
 
   test('provideTasks offers build/build(debug)/deploy/run/package/check/clean for the qml-app project', async () => {
-    const tasks = await vscode.tasks.fetchTasks({ type: SAILFISH_TASK_TYPE });
+    const tasks = await vscode.tasks.fetchTasks({ type: SARDINA_TASK_TYPE });
     const names = tasks.map((t) => t.name);
     for (const expected of ['build', 'build (debug)', 'deploy', 'run', 'package', 'check', 'clean']) {
       assert.ok(names.includes(expected), `expected a "${expected}" task, got: ${names.join(', ')}`);
     }
     const build = tasks.find((t) => t.name === 'build');
-    assert.deepStrictEqual(build?.problemMatchers, ['$sailfish-gcc', '$sailfish-qmake', '$sailfish-rpmbuild']);
+    assert.deepStrictEqual(build?.problemMatchers, ['$sardina-gcc', '$sardina-qmake', '$sardina-rpmbuild']);
     const check = tasks.find((t) => t.name === 'check');
-    assert.deepStrictEqual(check?.problemMatchers, ['$sailfish-rpmvalidator']);
+    assert.deepStrictEqual(check?.problemMatchers, ['$sardina-rpmvalidator']);
   });
 
-  test('AC-1.5: sailfish.build issues the exact default argv with LC_ALL=C', async function () {
+  test('AC-1.5: sardina.build issues the exact default argv with LC_ALL=C', async function () {
     if (!ready) return this.skip();
     this.timeout(20000);
     await withScenario('default', async () => {
-      const exitCode = await runCommandAndWaitForTask('sailfish.build');
+      const exitCode = await runCommandAndWaitForTask('sardina.build');
       assert.strictEqual(exitCode, 0);
       const { invocations } = readFakeLog();
       const build = invocations.find((i) => i.key === 'build');
@@ -146,7 +146,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     if (!ready) return this.skip();
     this.timeout(20000);
     await withScenario('build-fails-compile', async () => {
-      await runCommandAndWaitForTask('sailfish.build').catch(() => undefined);
+      await runCommandAndWaitForTask('sardina.build').catch(() => undefined);
       await waitFor(() => {
         const diags = vscode.languages
           .getDiagnostics()
@@ -167,7 +167,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     if (!ready) return this.skip();
     this.timeout(20000);
     await withScenario('build-warnings-only', async () => {
-      const exitCode = await runCommandAndWaitForTask('sailfish.build');
+      const exitCode = await runCommandAndWaitForTask('sardina.build');
       assert.strictEqual(exitCode, 0);
       await waitFor(() => {
         const diags = vscode.languages
@@ -193,7 +193,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     if (!ready) return this.skip();
     this.timeout(20000);
     await withScenario('build-fails-spec', async () => {
-      const exitCode = await runCommandAndWaitForTask('sailfish.build').catch(() => 1);
+      const exitCode = await runCommandAndWaitForTask('sardina.build').catch(() => 1);
       assert.notStrictEqual(exitCode, 0);
       await waitFor(() => {
         const diags = vscode.languages
@@ -214,7 +214,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     if (!ready) return this.skip();
     this.timeout(20000);
     await withScenario('no-engine', async () => {
-      await runCommandAndWaitForTask('sailfish.build').catch(() => undefined);
+      await runCommandAndWaitForTask('sardina.build').catch(() => undefined);
       const { invocations } = readFakeLog();
       const keys = invocations.map((i) => i.key);
       const iStatus = keys.indexOf('engine_status');
@@ -231,7 +231,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
       this.timeout(20000);
       await setSetting('deploy.method', method);
       await withScenario('default', async () => {
-        await runCommandAndWaitForTask('sailfish.deploy').catch(() => undefined);
+        await runCommandAndWaitForTask('sardina.deploy').catch(() => undefined);
         const { invocations } = readFakeLog();
         const deploy = invocations.find((i) => i.key === 'deploy');
         assert.ok(deploy?.argv.includes(`--${method}`), `expected --${method} in ${JSON.stringify(deploy?.argv)}`);
@@ -251,7 +251,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
       this.timeout(20000);
       const messages = stubMessages();
       await withScenario(scenario, async () => {
-        await runCommandAndWaitForTask('sailfish.deploy').catch(() => undefined);
+        await runCommandAndWaitForTask('sardina.deploy').catch(() => undefined);
         await waitFor(() => messages.calls.some((c) => expected.test(c.message)), 8000);
       });
       assert.ok(!messages.calls.some((c) => /password/i.test(c.message)), 'must never prompt for a password');
@@ -265,12 +265,12 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
       clearFakeLog();
       const executionPromise = new Promise<vscode.TaskExecution>((resolve) => {
         const sub = vscode.tasks.onDidStartTask((e) => {
-          if ((e.execution.task.definition as { type?: string }).type === SAILFISH_TASK_TYPE) {
+          if ((e.execution.task.definition as { type?: string }).type === SARDINA_TASK_TYPE) {
             sub.dispose();
             resolve(e.execution);
           }
         });
-        void vscode.commands.executeCommand('sailfish.build');
+        void vscode.commands.executeCommand('sardina.build');
       });
       const execution = await executionPromise;
       const ended = new Promise<void>((resolve) => {
@@ -292,7 +292,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     if (!ready) return this.skip();
     this.timeout(20000);
     await withScenario('engine-stopped', async () => {
-      await runCommandAndWaitForTask('sailfish.build').catch(() => undefined);
+      await runCommandAndWaitForTask('sardina.build').catch(() => undefined);
       const { invocations } = readFakeLog();
       const keys = invocations.map((i) => i.key);
       const iStatus = keys.indexOf('engine_status');
@@ -308,7 +308,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     this.timeout(20000);
     const messages = stubMessages();
     await withScenario('target-missing', async () => {
-      await runCommandAndWaitForTask('sailfish.build').catch(() => undefined);
+      await runCommandAndWaitForTask('sardina.build').catch(() => undefined);
       await waitFor(() => messages.calls.some((c) => /not found/i.test(c.message)), 8000);
     });
   });
@@ -316,10 +316,10 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
   test('target-not-set: build fails with the sfdk stderr, no -c target= is sent (M1.11/M0.5)', async function () {
     if (!ready) return this.skip();
     this.timeout(20000);
-    // Runs the task directly, bypassing sailfish.build's ensureTarget guard (no target configured here).
+    // Runs the task directly, bypassing sardina.build's ensureTarget guard (no target configured here).
     await setSetting('target', '');
     await withScenario('target-not-set', async () => {
-      const tasks = await vscode.tasks.fetchTasks({ type: SAILFISH_TASK_TYPE });
+      const tasks = await vscode.tasks.fetchTasks({ type: SARDINA_TASK_TYPE });
       const buildTask = tasks.find((t) => t.name === 'build');
       assert.ok(buildTask, 'expected a "build" task');
       const ended = new Promise<number | undefined>((resolve) => {
@@ -344,7 +344,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     if (!ready) return this.skip();
     this.timeout(20000);
     await withScenario('check-fails', async () => {
-      const tasks = await vscode.tasks.fetchTasks({ type: SAILFISH_TASK_TYPE });
+      const tasks = await vscode.tasks.fetchTasks({ type: SARDINA_TASK_TYPE });
       const checkTask = tasks.find((t) => t.name === 'check');
       assert.ok(checkTask, 'expected a "check" task');
       const ended = new Promise<void>((resolve) => {
@@ -378,7 +378,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     await withScenario('huge-output', async () => {
       gc?.();
       const before = process.memoryUsage().rss;
-      await runCommandAndWaitForTask('sailfish.build').catch(() => undefined);
+      await runCommandAndWaitForTask('sardina.build').catch(() => undefined);
       gc?.();
       const after = process.memoryUsage().rss;
       const deltaMb = (after - before) / (1024 * 1024);
@@ -403,7 +403,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     for (const payload of payloads) {
       await setSetting('device', payload);
       await withScenario('default', async () => {
-        await runCommandAndWaitForTask('sailfish.deploy').catch(() => undefined);
+        await runCommandAndWaitForTask('sardina.deploy').catch(() => undefined);
         const deploys = readFakeLog().invocations.filter((i) => i.key === 'deploy');
         assert.strictEqual(deploys.length, 1, `expected exactly 1 deploy invocation for ${JSON.stringify(payload)}`);
         assert.strictEqual(
@@ -418,7 +418,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     for (const payload of payloads) {
       await setSetting('target', payload);
       await withScenario('default', async () => {
-        await runCommandAndWaitForTask('sailfish.build').catch(() => undefined);
+        await runCommandAndWaitForTask('sardina.build').catch(() => undefined);
         const builds = readFakeLog().invocations.filter((i) => i.key === 'build');
         assert.strictEqual(builds.length, 1, `expected exactly 1 build invocation for ${JSON.stringify(payload)}`);
         assert.strictEqual(
@@ -431,13 +431,13 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     await setSetting('target', TARGET);
   });
 
-  test('M1.21: sailfish.run issues device=<value> verbatim for a non-ASCII device name', async function () {
+  test('M1.21: sardina.run issues device=<value> verbatim for a non-ASCII device name', async function () {
     if (!ready) return this.skip();
     this.timeout(20000);
     const nonAscii = 'Xperia 10 III – 日本語';
     await setSetting('device', nonAscii);
     await withScenario('default', async () => {
-      await runCommandAndWaitForTask('sailfish.run').catch(() => undefined);
+      await runCommandAndWaitForTask('sardina.run').catch(() => undefined);
       // The status bar's own background poll can also land in the log; wait for our own key.
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'device_exec.invoker'), 8000);
       const { invocations } = readFakeLog();
@@ -450,7 +450,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     await setSetting('device', 'Xperia 10 III');
   });
 
-  test('M1.23: stopping sailfish.run mid-flight sends a remote pkill via device exec', async function () {
+  test('M1.23: stopping sardina.run mid-flight sends a remote pkill via device exec', async function () {
     if (!ready) return this.skip();
     this.timeout(20000);
     // Isolates the stop-triggered kill from the run task's own optional pre-launch pkill step.
@@ -458,15 +458,15 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     try {
       await withScenario('run-stop', async () => {
         clearFakeLog();
-        await waitFor(() => !vscode.tasks.taskExecutions.some((e) => (e.task.definition as { type?: string }).type === SAILFISH_TASK_TYPE), 5000).catch(() => undefined);
+        await waitFor(() => !vscode.tasks.taskExecutions.some((e) => (e.task.definition as { type?: string }).type === SARDINA_TASK_TYPE), 5000).catch(() => undefined);
         const executionPromise = new Promise<vscode.TaskExecution>((resolve) => {
           const sub = vscode.tasks.onDidStartTask((e) => {
-            if ((e.execution.task.definition as { type?: string }).type === SAILFISH_TASK_TYPE) {
+            if ((e.execution.task.definition as { type?: string }).type === SARDINA_TASK_TYPE) {
               sub.dispose();
               resolve(e.execution);
             }
           });
-          void vscode.commands.executeCommand('sailfish.run');
+          void vscode.commands.executeCommand('sardina.run');
         });
         const execution = await executionPromise;
         const ended = new Promise<void>((resolve) => {
@@ -497,7 +497,7 @@ suite('tasks (FR-5, AC-1.5/1.6/1.7)', () => {
     this.timeout(30000);
     await withScenario('slow', async () => {
       const start = Date.now();
-      const exitCode = await runCommandAndWaitForTask('sailfish.build', 25000);
+      const exitCode = await runCommandAndWaitForTask('sardina.build', 25000);
       const elapsedMs = Date.now() - start;
       assert.strictEqual(exitCode, 0);
       assert.ok(elapsedMs >= 3500, `expected the delayed sfdk responses to be waited out, took only ${elapsedMs}ms`);

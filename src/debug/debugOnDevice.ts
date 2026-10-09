@@ -21,7 +21,7 @@ const RUN_WITHOUT_DEBUGGER = 'Run without debugger';
 async function ensureCppTools(services: Services): Promise<boolean> {
   if (vscode.extensions.getExtension(CPPTOOLS_ID)) return true;
   const choice = await services.prompts.showInformationMessage(
-    'Sailfish: debugging on the device uses the C/C++ extension (ms-vscode.cpptools) as the debugger UI. Install it?',
+    'Sardina: debugging on the device uses the C/C++ extension (ms-vscode.cpptools) as the debugger UI. Install it?',
     INSTALL_CPPTOOLS,
   );
   if (choice !== INSTALL_CPPTOOLS) return false;
@@ -33,14 +33,14 @@ async function ensureCppTools(services: Services): Promise<boolean> {
 async function ensureDebugBuild(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
   if (services.settings.get('build.type', folder.uri) === 'debug') return true;
   const choice = await services.prompts.showWarningMessage(
-    'Sailfish: the build type is Release, so breakpoints and variables may not work. Switch to Debug?',
+    'Sardina: the build type is Release, so breakpoints and variables may not work. Switch to Debug?',
     { modal: true },
     SWITCH_TO_DEBUG,
     DEBUG_ANYWAY,
   );
   if (choice === undefined) return false;
   if (choice === SWITCH_TO_DEBUG) {
-    await vscode.workspace.getConfiguration('sailfish', folder.uri).update('build.type', 'debug', vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder.uri).update('build.type', 'debug', vscode.ConfigurationTarget.WorkspaceFolder);
   }
   return true;
 }
@@ -68,7 +68,7 @@ async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolde
   if (has !== false) return 'ready'; // unknown: later steps report it
 
   const choice = await services.prompts.showWarningMessage(
-    `Sailfish: gdbserver is not installed on "${device}", so the debugger can't attach.`,
+    `Sardina: gdbserver is not installed on "${device}", so the debugger can't attach.`,
     {
       modal: true,
       detail: `"Install on device" runs \`${GDBSERVER_INSTALL_HINT}\` on the device; you will be asked for its developer-mode password, and debugging continues once it finishes.`,
@@ -85,7 +85,7 @@ async function ensureGdbserver(services: Services, folder: vscode.WorkspaceFolde
   if (after === true) return 'ready';
   if (after === 'stop') return 'cancel';
   void services.prompts.showErrorMessage(
-    `Sailfish: gdbserver is still missing on "${device}". The device downloads it from Jolla's repositories, ` +
+    `Sardina: gdbserver is still missing on "${device}". The device downloads it from Jolla's repositories, ` +
       `so it needs internet access (Wi-Fi or mobile data; the USB link alone is not enough), and the password must be ` +
       `the developer-mode one. Then try again, or run on the device: ${GDBSERVER_INSTALL_HINT}`,
   );
@@ -237,7 +237,7 @@ function cppdbgConfiguration(services: Services, app: DeployedApp, recipe: Debug
   return {
     type: 'cppdbg',
     request: 'launch',
-    name: `Sailfish: ${app.project.name}${app.device ? ` on ${app.device}` : ''}`,
+    name: `Sardina: ${app.project.name}${app.device ? ` on ${app.device}` : ''}`,
     program: recipe.program,
     cwd: app.cwd,
     ...(targetArchitecture ? { targetArchitecture } : {}),
@@ -259,46 +259,46 @@ async function openMonitorForDebug(services: Services, folder: vscode.WorkspaceF
   if (!services.settings.get('debug.openDeviceMonitor', folder.uri)) return;
   const device = services.settings.get('device', folder.uri);
   if (!device) return; // the build step reports the missing device
-  await vscode.commands.executeCommand('sailfish.monitor.open', { device, preserveFocus: true });
+  await vscode.commands.executeCommand('sardina.monitor.open', { device, preserveFocus: true });
 }
 
-/** "Sailfish: Debug on Device": build, deploy, start the app under gdbserver and attach VS Code's debugger. */
+/** "Sardina: Debug on Device": build, deploy, start the app under gdbserver and attach VS Code's debugger. */
 export async function debugOnDevice(services: Services): Promise<void> {
   if (!(await ensureCppTools(services))) return;
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sailfish: no Sailfish project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
     return;
   }
   const gdbserver = await ensureGdbserver(services, project.folder);
   if (gdbserver === 'run-instead') {
-    await vscode.commands.executeCommand('sailfish.buildDeployRun');
+    await vscode.commands.executeCommand('sardina.buildDeployRun');
     return;
   }
   if (gdbserver === 'cancel') return;
   if (!(await ensureDebugBuild(services, project.folder))) return;
   await openMonitorForDebug(services, project.folder);
 
-  await buildDeployThen(services, 'Sailfish: Debug on Device', (app, progress, token) => attachDebugger(services, app, progress, token), project);
+  await buildDeployThen(services, 'Sardina: Debug on Device', (app, progress, token) => attachDebugger(services, app, progress, token), project);
 }
 
-/** "Sailfish: Debug Installed App": the app already on the device, under the debugger, without building or deploying. */
+/** "Sardina: Debug Installed App": the app already on the device, under the debugger, without building or deploying. */
 export async function debugInstalled(services: Services): Promise<void> {
   if (!(await ensureCppTools(services))) return;
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sailfish: no Sailfish project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
     return;
   }
   const gdbserver = await ensureGdbserver(services, project.folder);
   if (gdbserver === 'run-instead') {
-    await vscode.commands.executeCommand('sailfish.runInstalled');
+    await vscode.commands.executeCommand('sardina.runInstalled');
     return;
   }
   if (gdbserver === 'cancel') return;
   // No Release-to-Debug offer here: nothing is rebuilt, so switching the build type would not help this session.
   await openMonitorForDebug(services, project.folder);
-  await installedAppThen(services, 'Sailfish: Debug Installed App', 'sailfish.debugOnDevice', (app, progress, token) =>
+  await installedAppThen(services, 'Sardina: Debug Installed App', 'sardina.debugOnDevice', (app, progress, token) =>
     attachDebugger(services, app, progress, token), project);
 }
 
@@ -324,7 +324,7 @@ async function attachDebugger(
   const recipe = dryRun.exitCode === 0 ? parseDebugRecipe(dryRun.stdout) : undefined;
   if (!recipe || !recipe.program) {
     services.output.log('error', `sfdk debug --dry-run gave no usable GDB setup (exit ${dryRun.exitCode}): ${dryRun.stdout}${dryRun.stderr}`);
-    void services.prompts.showErrorMessage('Sailfish: could not prepare the debugger (see the Sailfish OS output).');
+    void services.prompts.showErrorMessage('Sardina: could not prepare the debugger (see the Sardina output).');
     return;
   }
 
@@ -332,7 +332,7 @@ async function attachDebugger(
   try {
     await terminal.start(token);
   } catch (err) {
-    void services.prompts.showErrorMessage(`Sailfish: ${err instanceof Error ? err.message : String(err)}`);
+    void services.prompts.showErrorMessage(`Sardina: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
@@ -359,7 +359,7 @@ async function attachDebugger(
         await terminal.start();
         return true;
       } catch (err) {
-        void services.prompts.showErrorMessage(`Sailfish: restart failed: ${err instanceof Error ? err.message : String(err)}`);
+        void services.prompts.showErrorMessage(`Sardina: restart failed: ${err instanceof Error ? err.message : String(err)}`);
         return false;
       }
     },
@@ -406,7 +406,7 @@ async function attachDebugger(
   }
   if (!started) {
     lifecycle.stop();
-    void services.prompts.showErrorMessage('Sailfish: VS Code could not start the debug session.');
+    void services.prompts.showErrorMessage('Sardina: VS Code could not start the debug session.');
   }
 }
 
@@ -439,8 +439,8 @@ const restartTracker: vscode.DebugAdapterTrackerFactory = {
 
 export function activateDebug(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.debugOnDevice', () => debugOnDevice(services)),
-    vscode.commands.registerCommand('sailfish.debugInstalled', () => debugInstalled(services)),
+    vscode.commands.registerCommand('sardina.debugOnDevice', () => debugOnDevice(services)),
+    vscode.commands.registerCommand('sardina.debugInstalled', () => debugInstalled(services)),
     vscode.debug.registerDebugAdapterTrackerFactory('cppdbg', restartTracker),
   );
 }

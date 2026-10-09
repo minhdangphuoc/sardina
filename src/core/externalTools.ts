@@ -5,7 +5,7 @@ import { missingTools, installHint, REQUIRED_SSH_TOOLS } from './externalToolsCo
 export type { SshToolName } from './externalToolsCore';
 export { missingTools, installHint, REQUIRED_SSH_TOOLS } from './externalToolsCore';
 
-const DISMISSED_KEY = 'sailfish.externalToolsNoticeDismissed';
+const DISMISSED_KEY = 'sardina.externalToolsNoticeDismissed';
 const DONT_SHOW_AGAIN = "Don't show again";
 
 /**
@@ -24,7 +24,7 @@ export async function checkExternalToolsOnce(ctx: vscode.ExtensionContext, servi
   }
   const hints = missing.map((tool) => `• ${installHint(tool, process.platform)}`).join('\n');
   const choice = await services.prompts.showWarningMessage(
-    `Sailfish: some tools used by device commands (Connect to Device, Add Device) are missing:\n${hints}`,
+    `Sardina: some tools used by device commands (Connect to Device, Add Device) are missing:\n${hints}`,
     DONT_SHOW_AGAIN,
   );
   if (choice === DONT_SHOW_AGAIN) {

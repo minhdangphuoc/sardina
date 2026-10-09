@@ -52,7 +52,7 @@ export async function checkDeviceToolsGuarded(services: Services, device: string
   for (;;) {
     if (!(await ensureDeviceOnline(services, device))) return { kind: 'unreachable', detail: 'offline' };
     const outcome = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Sailfish', cancellable: true },
+      { location: vscode.ProgressLocation.Notification, title: 'Sardina', cancellable: true },
       (progress, token) => {
         progress.report({ message: `checking deploy and debug tools on "${device}"…` });
         return checkDeviceTools(services, device, cwd, token);
@@ -83,7 +83,7 @@ export function installOnDevice(services: Services, device: string, packages: re
   return runAsRootOnDevice(services, device, {
     title: `Install ${packages.join(', ')} on "${device}"`,
     prompt: 'Developer-mode password of the device (Settings → Developer tools). The device needs internet access.',
-    progressTitle: `Sailfish: install ${packages.join(', ')} on "${device}"`,
+    progressTitle: `Sardina: install ${packages.join(', ')} on "${device}"`,
     workingMessage: `installing ${packages.join(', ')}…`,
     script: installScript(packages),
     streamOutput: true,
@@ -173,7 +173,7 @@ export async function runAsRootOnDevice(services: Services, device: string, opts
             detached: process.platform !== 'win32',
           });
         } catch (err) {
-          void services.prompts.showErrorMessage(`Sailfish: could not start sfdk: ${err instanceof Error ? err.message : String(err)}`);
+          void services.prompts.showErrorMessage(`Sardina: could not start sfdk: ${err instanceof Error ? err.message : String(err)}`);
           resolve(undefined);
           return;
         }
@@ -254,7 +254,7 @@ export async function runAsRootOnDevice(services: Services, device: string, opts
           resolve(code);
         };
         child.on('error', (err) => {
-          void services.prompts.showErrorMessage(`Sailfish: could not run sfdk: ${err.message}`);
+          void services.prompts.showErrorMessage(`Sardina: could not run sfdk: ${err.message}`);
           cancelled = true; // already reported
           finish(undefined);
         });
@@ -267,14 +267,14 @@ export async function runAsRootOnDevice(services: Services, device: string, opts
   );
 }
 
-/** "Sailfish: Install Deploy & Debug Tools on Device": for a right-clicked device, else the selected deploy device. */
+/** "Sardina: Install Deploy & Debug Tools on Device": for a right-clicked device, else the selected deploy device. */
 export function installDeviceTools(services: Services) {
   return async (item?: unknown): Promise<void> => {
     const fromItem =
       item && typeof item === 'object' && 'device' in item ? (item as { device?: { name?: string } }).device?.name : undefined;
     const device = fromItem ?? services.settings.get('device', vscode.workspace.workspaceFolders?.[0]?.uri);
     if (!device) {
-      void services.prompts.showWarningMessage('Sailfish: select a device first (status bar or Devices view).');
+      void services.prompts.showWarningMessage('Sardina: select a device first (status bar or Devices view).');
       return;
     }
     const check = await checkDeviceToolsGuarded(services, device, vscode.workspace.workspaceFolders?.[0]?.uri.fsPath);
@@ -288,7 +288,7 @@ export function installDeviceTools(services: Services) {
       return;
     }
     const packages = plan.packages;
-    if (check.kind === 'checked') void services.prompts.showInformationMessage(`Sailfish: missing on "${device}": ${packages.join(', ')}. Installing only these.`);
+    if (check.kind === 'checked') void services.prompts.showInformationMessage(`Sardina: missing on "${device}": ${packages.join(', ')}. Installing only these.`);
     const exitCode = await installOnDevice(services, device, packages);
     // undefined: cancelled, or a stop the user was already told about (offline, dropped, timeout).
     if (exitCode === undefined) return;

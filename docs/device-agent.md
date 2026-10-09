@@ -10,25 +10,25 @@ you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
 
 1. **Before you start:** the phone is registered ([Part 7](setup.md#part-7-run-on-a-phone)) and Developer Mode is
    on.
-2. **Install the agent.** **Ctrl+Shift+P** → **Sailfish: Install Device
+2. **Install the agent.** **Ctrl+Shift+P** → **Sardina: Install Device
    Agent** (also in the device's right-click menu). Tick the modules you want
    (all are ticked on a new phone; on a phone that has the agent, the installed
    ones), read the dialog, which lists only what those modules can do, confirm,
    and enter the developer-mode password once.
-   **Check:** **Sailfish: Device Agent Status** reports agent 1.11.2 running
+   **Check:** **Sardina: Device Agent Status** reports agent 1.11.2 running
    with the installed modules, and which are not installed.
-3. **Take a screenshot.** **Sailfish: Take Device Screenshot**, or the camera
+3. **Take a screenshot.** **Sardina: Take Device Screenshot**, or the camera
    button on the device in the Devices view. Choose where to save
    the PNG (the dialog remembers the folder). The picture opens in VS Code, and
    the notice offers **Reveal in folder**. If you cancel the dialog, nothing is
    saved.
-4. **Read the logs.** **Sailfish: Show Device Logs** streams the device's system
-   log into the **Sailfish Device Log** output channel (JSON with levels and
+4. **Read the logs.** **Sardina: Show Device Logs** streams the device's system
+   log into the **Sardina Device Log** output channel (JSON with levels and
    tags with agent 1.10.0 or newer, plain text lines with older agents; ANSI
    colours are removed). Stop the stream with **Cancel** on the progress
    notification, or choose **Stop** when you run the command again. Changing
    the selected device also stops it.
-5. **Mirror the screen.** **Sailfish: Mirror Device Screen**, or the mirror
+5. **Mirror the screen.** **Sardina: Mirror Device Screen**, or the mirror
    button on the device, opens the screen in a tab beside the editor.
    **Check:** the tab shows the current screen and follows what you do on the
    phone. If it says **Disconnected**, press **Reconnect**.
@@ -47,13 +47,13 @@ you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
    edit shows one error and keeps the last good layout. Picking an existing
    valid layout file uses it as is. If the file goes missing the strip says
    `Keypad layout missing` with **Edit**. The strip hint goes away once you use
-   it. **Sailfish: Edit Keypad Layout** opens the file again, **Sailfish: Reset
+   it. **Sardina: Edit Keypad Layout** opens the file again, **Sardina: Reset
    Keypad Layout** forgets it (the file is kept).
    With **Show touch indicator** on in the phone's Developer agent settings, a
    circle marks where you touch: on the phone itself, or (agent 1.10.4, when
    the phone cannot show it) in the mirror. The ⓘ details show `Touch
    indicator: on phone`, `in mirror` or `off`.
-7. **Remove the agent or one module.** **Sailfish: Uninstall Device Agent**
+7. **Remove the agent or one module.** **Sardina: Uninstall Device Agent**
    asks what to remove: **Device agent and all modules** or one installed
    module (removing `mirror` also removes `input`). A module removal stops only
    that module's sessions, erases only its package, removes that module's own
@@ -92,7 +92,7 @@ connection through the SDK. The phone captures the screen with Lipstick's own
 recorder, so no "Screenshot captured." notices appear. The mirror never takes
 screenshots: if the recorder cannot be used (agent 1.10.5), the stream ends
 with `native screen capture unavailable: <reason>`, the strip says
-**Disconnected** with **Reconnect**, and the **Sailfish OS** output has the reason.
+**Disconnected** with **Reconnect**, and the **Sardina** output has the reason.
 Hiding the tab pauses the stream after a moment; closing it stops the stream.
 
 **The status strip** below the picture is one line, for example `● Live · 30

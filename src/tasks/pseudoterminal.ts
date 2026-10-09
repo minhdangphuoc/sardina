@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'node:path';
 import type { Services } from '../core/services';
 import type { ProjectDescriptor } from '../core/types';
-import type { SailfishTaskDefinitionLike } from './argv';
+import type { SardinaTaskDefinitionLike } from './argv';
 import { buildArgs, checkArgs, cleanArgs, deployArgs, isValidAppName, packageArgs, runArgs } from './argv';
 import { chooseLauncher } from './launcher';
 import { PathMapCache, mapEngineLine, normalizeSeverity, prefixSpecLine } from './pathMap';
@@ -18,8 +18,8 @@ import { buildState, stageForArgv } from '../build/buildStateCore';
 const SHOW_OUTPUT_ACTION = 'Show output';
 /** The tasks that can sign: they run `sfdk build` or `sfdk package`. */
 /** The tasks the Build view reports on. */
-const TRACKED_COMMANDS = new Set<SailfishTaskDefinitionLike['command']>(['build', 'deploy', 'run', 'package', 'check']);
-const SIGNED_COMMANDS = new Set<SailfishTaskDefinitionLike['command']>(['build', 'deploy', 'run', 'package']);
+const TRACKED_COMMANDS = new Set<SardinaTaskDefinitionLike['command']>(['build', 'deploy', 'run', 'package', 'check']);
+const SIGNED_COMMANDS = new Set<SardinaTaskDefinitionLike['command']>(['build', 'deploy', 'run', 'package']);
 
 /** One `sfdk engine exec -- pwd` probe cache per extension-host session (FR-5.9). */
 export const sessionPathMapCache = new PathMapCache();
@@ -43,7 +43,7 @@ function specRelativePath(project: ProjectDescriptor): string {
 /** Computes the sfdk invocations a task issues (FR-5.3..5.6); since the Task API has no `dependsOn`, deploy/run prepend their own prerequisite steps here. */
 function stepsFor(
   project: ProjectDescriptor,
-  def: SailfishTaskDefinitionLike,
+  def: SardinaTaskDefinitionLike,
   services: Services,
   signingUser: string = services.settings.get('build.signingUser', project.folder.uri),
 ): Step[] {
@@ -124,7 +124,7 @@ function stepsFor(
 const DIAGNOSTIC_LINE_RE = /^(fatal error|error|warning|note|ERROR|WARNING|INFO)\b/;
 
 /** FR-5.7/FR-5.9 Pseudoterminal: streams sfdk output, rewrites engine-side paths, prefixes diagnostic lines with the spec path, maps `fatal error` -> `error`. */
-export class SailfishPseudoterminal implements vscode.Pseudoterminal {
+export class SardinaPseudoterminal implements vscode.Pseudoterminal {
   private readonly writeEmitter = new vscode.EventEmitter<string>();
   private readonly closeEmitter = new vscode.EventEmitter<number>();
   private readonly cts = new vscode.CancellationTokenSource();
@@ -137,7 +137,7 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
   constructor(
     private readonly services: Services,
     private readonly project: ProjectDescriptor,
-    private readonly def: SailfishTaskDefinitionLike,
+    private readonly def: SardinaTaskDefinitionLike,
   ) {}
 
   private write(text: string): void {
@@ -188,7 +188,7 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
       const signing = await resolveSigningUser(this.services, folder.uri);
       if (!signing.ok) {
         this.write(`error: ${signing.message}\n`);
-        void this.notifyMappedError({ message: `Sailfish: ${signing.message}`, actionLabel: 'Set up signing' });
+        void this.notifyMappedError({ message: `Sardina: ${signing.message}`, actionLabel: 'Set up signing' });
         this.finished = true;
         this.closeEmitter.fire(1);
         return;
@@ -308,7 +308,7 @@ export class SailfishPseudoterminal implements vscode.Pseudoterminal {
   /** FR-5.6: clean is non-critical, so a failed fallback only warns with manual instructions. */
   private async notifyCleanFailed(): Promise<void> {
     const choice = await this.services.prompts.showWarningMessage(
-      'Sailfish: automatic clean failed. Manual clean: remove RPMS/BUILD/BUILDROOT under the sfdk output dir, or run "sfdk make -- clean" yourself.',
+      'Sardina: automatic clean failed. Manual clean: remove RPMS/BUILD/BUILDROOT under the sfdk output dir, or run "sfdk make -- clean" yourself.',
       SHOW_OUTPUT_ACTION,
     );
     await runNotificationAction(this.services, choice);

@@ -17,14 +17,14 @@ import { relaunchInstalled } from '../tasks/commands';
 import { onDeviceLogEntries } from './deviceLog';
 import { BoundedSet } from '../core/bounded';
 
-export const VIEW_TYPE = 'sailfish.deviceMonitor';
-export const APP_RUNNING_KEY = 'sailfish.monitor.appRunning';
+export const VIEW_TYPE = 'sardina.deviceMonitor';
+export const APP_RUNNING_KEY = 'sardina.monitor.appRunning';
 
 export interface MonitorOpenOptions {
   preserveFocus?: boolean;
 }
 
-/** What `sailfish._test.monitor` returns (TEST_MODE=full): the panel's current view model. */
+/** What `sardina._test.monitor` returns (TEST_MODE=full): the panel's current view model. */
 export interface MonitorView {
   device: string;
   state: ConnectionState;
@@ -224,7 +224,7 @@ export class MonitorPanel {
 
   /** Feedback for a title bar command: a plain message, since the page has no room for it. */
   private notice(text: string): void {
-    void this.services.prompts.showInformationMessage(`Sailfish: ${text}`);
+    void this.services.prompts.showInformationMessage(`Sardina: ${text}`);
   }
 
   private setBanner(text: string, actions: BannerAction[]): void {
@@ -447,13 +447,13 @@ export class MonitorPanel {
       const item = deviceItem(this.device, this.info);
       switch (name) {
         case 'screenshot':
-          await vscode.commands.executeCommand('sailfish.agent.screenshot', item);
+          await vscode.commands.executeCommand('sardina.agent.screenshot', item);
           return;
         case 'openMirror':
-          await vscode.commands.executeCommand('sailfish.agent.mirror', item);
+          await vscode.commands.executeCommand('sardina.agent.mirror', item);
           return;
         case 'showLogs':
-          await vscode.commands.executeCommand('sailfish.agent.logs', item);
+          await vscode.commands.executeCommand('sardina.agent.logs', item);
           return;
         case 'stopApp':
           await this.stopApp();
@@ -491,7 +491,7 @@ export class MonitorPanel {
   private async restartApp(): Promise<void> {
     const debugging = deviceSessions.activeFor(this.device).find((s) => s.kind === 'debug');
     for (const s of this.appSessions()) await this.stopSession(s.id);
-    if (debugging) await vscode.commands.executeCommand('sailfish.debugInstalled');
+    if (debugging) await vscode.commands.executeCommand('sardina.debugInstalled');
     else await relaunchInstalled(this.services);
   }
 

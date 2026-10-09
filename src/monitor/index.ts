@@ -9,7 +9,7 @@ import { MonitorPanel, type MonitorOpenOptions, type MonitorView } from './monit
 export type { MonitorView } from './monitorPanel';
 
 /**
- * What `sailfish.monitor.open` accepts: nothing (the selected device), a Devices-view item, or
+ * What `sardina.monitor.open` accepts: nothing (the selected device), a Devices-view item, or
  * `{device, preserveFocus?}` from other commands (Debug).
  */
 function parseArgument(arg: unknown): { device?: string; info?: SfdkDeviceInfo; opts: MonitorOpenOptions } {
@@ -24,7 +24,7 @@ function parseArgument(arg: unknown): { device?: string; info?: SfdkDeviceInfo; 
 }
 
 /**
- * The Device Monitor: one tab per device, opened by `sailfish.monitor.open` (Command Palette, the
+ * The Device Monitor: one tab per device, opened by `sardina.monitor.open` (Command Palette, the
  * Devices view, the status bar tooltip, and Debug). Returns the open panels.
  */
 export function activateMonitor(ctx: vscode.ExtensionContext, services: Services): Map<string, MonitorPanel> {
@@ -65,13 +65,13 @@ export function activateMonitor(ctx: vscode.ExtensionContext, services: Services
   };
 
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.monitor.open', openCommand),
+    vscode.commands.registerCommand('sardina.monitor.open', openCommand),
     // The editor title bar buttons of the monitor tab; each acts on the device of the active tab.
-    vscode.commands.registerCommand('sailfish.monitor.restartApp', onActive('restartApp')),
-    vscode.commands.registerCommand('sailfish.monitor.stopApp', onActive('stopApp')),
-    vscode.commands.registerCommand('sailfish.monitor.screenshot', onActive('screenshot')),
-    vscode.commands.registerCommand('sailfish.monitor.mirror', onActive('openMirror')),
-    vscode.commands.registerCommand('sailfish.monitor.showLogs', onActive('showLogs')),
+    vscode.commands.registerCommand('sardina.monitor.restartApp', onActive('restartApp')),
+    vscode.commands.registerCommand('sardina.monitor.stopApp', onActive('stopApp')),
+    vscode.commands.registerCommand('sardina.monitor.screenshot', onActive('screenshot')),
+    vscode.commands.registerCommand('sardina.monitor.mirror', onActive('openMirror')),
+    vscode.commands.registerCommand('sardina.monitor.showLogs', onActive('showLogs')),
     {
       dispose: () => {
         for (const p of [...panels.values()]) p.dispose();
@@ -81,7 +81,7 @@ export function activateMonitor(ctx: vscode.ExtensionContext, services: Services
 
   if (process.env.TEST_MODE === 'full') {
     ctx.subscriptions.push(
-      vscode.commands.registerCommand('sailfish._test.monitor', async (device: unknown, op: unknown, message?: unknown): Promise<MonitorView | string | undefined> => {
+      vscode.commands.registerCommand('sardina._test.monitor', async (device: unknown, op: unknown, message?: unknown): Promise<MonitorView | string | undefined> => {
         if (typeof device !== 'string') return undefined;
         if (op === 'open') return open(device, undefined, { preserveFocus: true }).view();
         const panel = panels.get(device);

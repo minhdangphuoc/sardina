@@ -1009,7 +1009,7 @@ describe('bundled agent version', () => {
   });
 
   it('words the notice and the strip reason', () => {
-    assert.ok(agentUpdateNotice('phone', '1.1.0', '1.4.0').startsWith('Sailfish: the device agent on "phone" is 1.1.0; this extension includes 1.4.0 (faster mirror:'));
+    assert.ok(agentUpdateNotice('phone', '1.1.0', '1.4.0').startsWith('Sardina: the device agent on "phone" is 1.1.0; this extension includes 1.4.0 (faster mirror:'));
     assert.strictEqual(staleAgentReason('1.1.0'), 'agent 1.1.0 — update for the fast mirror');
     assert.strictEqual(
       logText({ state: 'live', transport: 'sfdk', fallbackReason: staleAgentReason('1.1.0') }).split(',')[0],

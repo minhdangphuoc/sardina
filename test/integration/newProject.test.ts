@@ -26,7 +26,7 @@ function services(): Services {
 
 async function sfdkReady(): Promise<boolean> {
   try {
-    await waitForContext('sailfish.sdkAvailable', true, 5000);
+    await waitForContext('sardina.sdkAvailable', true, 5000);
   } catch {
     return false;
   }
@@ -91,7 +91,7 @@ suite('newProject wizard (FR-3, AC-1.3)', () => {
       stubOpenDialog([vscode.Uri.file(tmpParent)]);
       const messages = stubMessages();
 
-      await vscode.commands.executeCommand('sailfish.newProject');
+      await vscode.commands.executeCommand('sardina.newProject');
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'init_template'), 8000);
 
       const init = readFakeLog().invocations.find((i) => i.key === 'init_template');
@@ -129,7 +129,7 @@ suite('newProject wizard (FR-3, AC-1.3)', () => {
       stubInputBox(undefined);
       const openDialog = stubOpenDialog([vscode.Uri.file(tmpParent)]);
 
-      await vscode.commands.executeCommand('sailfish.newProject');
+      await vscode.commands.executeCommand('sardina.newProject');
       // Step 1's `init -l` listing call always lands first; wait for it, then
       // clear the log so the assertion below only covers invocations from
       // the cancel point on (no further `init` call once step 3 is cancelled).
@@ -159,7 +159,7 @@ suite('newProject wizard (FR-3, AC-1.3)', () => {
         stubOpenDialog([vscode.Uri.file(tmpParent)]);
         stubMessages();
 
-        await vscode.commands.executeCommand('sailfish.newProject');
+        await vscode.commands.executeCommand('sardina.newProject');
         await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'init_template'), 8000);
         const projectDir = path.join(tmpParent, 'harbour-touch');
         await waitFor(() => fs.existsSync(path.join(projectDir, 'harbour-touch.pro')), 5000);
@@ -194,7 +194,7 @@ suite('newProject wizard (FR-3, AC-1.3)', () => {
       const messages = stubMessages();
       messages.chosenAction = 'Force';
 
-      await vscode.commands.executeCommand('sailfish.newProject');
+      await vscode.commands.executeCommand('sardina.newProject');
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'init_template'), 8000);
 
       const init = readFakeLog().invocations.find((i) => i.key === 'init_template');
@@ -224,7 +224,7 @@ suite('newProject wizard (FR-3, AC-1.3)', () => {
       const messages = stubMessages();
       messages.chosenAction = 'Cancel';
 
-      await vscode.commands.executeCommand('sailfish.newProject');
+      await vscode.commands.executeCommand('sardina.newProject');
       await new Promise((r) => setTimeout(r, 300));
 
       assert.strictEqual(
@@ -252,7 +252,7 @@ suite('newProject wizard (FR-3, AC-1.3)', () => {
       });
       const messages = stubMessages();
 
-      await vscode.commands.executeCommand('sailfish.newProject');
+      await vscode.commands.executeCommand('sardina.newProject');
       await waitFor(() => inputBox.called, 5000);
 
       assert.ok(sawPrefilled, 'expected the free-text InputBox pre-filled with "qtquick2app"');
@@ -294,7 +294,7 @@ suite('newProject wizard (FR-3, AC-1.3)', () => {
         stubOpenDialog([vscode.Uri.file(tmpParent)]);
         const messages = stubMessages();
 
-        await vscode.commands.executeCommand('sailfish.newProject');
+        await vscode.commands.executeCommand('sardina.newProject');
         await new Promise((r) => setTimeout(r, 200));
 
         assert.strictEqual(

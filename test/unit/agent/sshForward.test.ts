@@ -161,9 +161,9 @@ describe('sshForward socket path cache', () => {
     const { ctx: c, store } = ctx();
     assert.strictEqual(cachedSocketPath(c, 'Xperia 10'), undefined);
     await rememberSocketPath(c, 'Xperia 10', SOCK);
-    assert.deepStrictEqual([...store.keys()], ['sailfish.mirror.socketPath.sailfish-Xperia-10']);
+    assert.deepStrictEqual([...store.keys()], ['sardina.mirror.socketPath.sailfish-Xperia-10']);
     assert.strictEqual(cachedSocketPath(c, 'Xperia 10'), SOCK);
-    store.set('sailfish.mirror.socketPath.sailfish-Xperia-10', '/tmp/evil:/x');
+    store.set('sardina.mirror.socketPath.sailfish-Xperia-10', '/tmp/evil:/x');
     assert.strictEqual(cachedSocketPath(c, 'Xperia 10'), undefined);
   });
 

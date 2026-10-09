@@ -6,7 +6,7 @@ import type { SdkInfo, SdkSource, TargetDescriptor } from '../core/types';
 export function sdkSourceLabel(source: SdkSource): string {
   switch (source) {
     case 'setting':
-      return 'sailfish.sdkPath setting';
+      return 'sardina.sdkPath setting';
     case 'env':
       return 'SAILFISH_SDK_ROOT';
     case 'home':
@@ -33,14 +33,14 @@ export function sdkRootState(
   if (!info) {
     return {
       description: 'not found',
-      tooltip: 'Sailfish SDK not found. Install it, or point sailfish.sdkPath at an existing installation.',
+      tooltip: 'SFOS SDK not found. Install it, or point sardina.sdkPath at an existing installation.',
       contextValue: 'devices-root-sdk.missing',
     };
   }
   const known = info.version !== 'unknown';
   return {
     description: `${known ? info.version : 'version unknown'} · ${abbreviateHome(info.root, home)}`,
-    tooltip: `Sailfish SDK${known ? ` ${info.version}` : ''}\n${info.root}\nsfdk: ${info.sfdkPath}\nFound via: ${sdkSourceLabel(info.source)}`,
+    tooltip: `SFOS SDK${known ? ` ${info.version}` : ''}\n${info.root}\nsfdk: ${info.sfdkPath}\nFound via: ${sdkSourceLabel(info.source)}`,
     contextValue: 'devices-root-sdk',
   };
 }
@@ -64,13 +64,13 @@ export function engineItemState(outcome: EngineOutcome): {
   return outcome.value === 'running'
     ? {
         description: '● running',
-        tooltip: 'The Sailfish SDK build engine is running.',
+        tooltip: 'The SFOS SDK build engine is running.',
         contextValue: 'sdk-engine.running',
         state: 'running',
       }
     : {
         description: '○ stopped',
-        tooltip: 'The Sailfish SDK build engine is stopped.',
+        tooltip: 'The SFOS SDK build engine is stopped.',
         contextValue: 'sdk-engine.stopped',
         state: 'stopped',
       };

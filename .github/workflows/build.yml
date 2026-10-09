@@ -46,12 +46,12 @@ jobs:
         id: package
         run: |
           VERSION=$(node -p "require('./package.json').version")
-          npx vsce package --no-dependencies --out "sailfish-tools-${VERSION}.vsix"
-          echo "file=sailfish-tools-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
+          npx vsce package --no-dependencies --out "sardina-${VERSION}.vsix"
+          echo "file=sardina-${VERSION}.vsix" >> "$GITHUB_OUTPUT"
 
       - uses: actions/upload-artifact@v7
         with:
-          name: sailfish-tools-vsix
+          name: sardina-vsix
           path: ${{ steps.package.outputs.file }}
           if-no-files-found: error
 
@@ -65,7 +65,7 @@ jobs:
     steps:
       - uses: actions/download-artifact@v8
         with:
-          name: sailfish-tools-vsix
+          name: sardina-vsix
       - uses: softprops/action-gh-release@v3
         with:
           files: '*.vsix'

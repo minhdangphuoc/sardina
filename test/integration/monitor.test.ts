@@ -19,7 +19,7 @@ import {
 
 /**
  * Device Monitor integration suite (PLAN-device-monitor §9.3, I-M1..I-M10) against the monitor-* fake sfdk
- * scenarios and the `sailfish._test.monitor` seam (registered only when TEST_MODE === 'full').
+ * scenarios and the `sardina._test.monitor` seam (registered only when TEST_MODE === 'full').
  * Only discovered when TEST_MODE != 'bare'.
  */
 
@@ -50,16 +50,16 @@ function monitorTabs(): vscode.Tab[] {
 }
 
 async function openMonitor(): Promise<void> {
-  await vscode.commands.executeCommand('sailfish.monitor.open');
+  await vscode.commands.executeCommand('sardina.monitor.open');
   await waitFor(() => monitorTabs().length === 1, 8000);
 }
 
 async function send(message: PageMessage | Record<string, unknown>): Promise<MonitorView> {
-  return await vscode.commands.executeCommand<MonitorView>('sailfish._test.monitor', DEVICE, 'send', message);
+  return await vscode.commands.executeCommand<MonitorView>('sardina._test.monitor', DEVICE, 'send', message);
 }
 
 async function html(): Promise<string> {
-  return await vscode.commands.executeCommand<string>('sailfish._test.monitor', DEVICE, 'html');
+  return await vscode.commands.executeCommand<string>('sardina._test.monitor', DEVICE, 'html');
 }
 
 async function waitForLog(predicate: (v: DeviceLogView) => boolean, timeoutMs: number): Promise<DeviceLogView> {
@@ -82,13 +82,13 @@ async function viewWhen(predicate: (v: MonitorView) => boolean, timeoutMs: numbe
 
 async function setSetting(key: string, value: unknown, target = vscode.ConfigurationTarget.Global): Promise<void> {
   const folder = target === vscode.ConfigurationTarget.WorkspaceFolder ? vscode.workspace.workspaceFolders?.[0]?.uri : undefined;
-  await vscode.workspace.getConfiguration('sailfish', folder).update(key, value, target);
+  await vscode.workspace.getConfiguration('sardina', folder).update(key, value, target);
 }
 
 suite('Device Monitor (I-M1..I-M10)', () => {
   suiteSetup(async function () {
     this.timeout(15000);
-    await waitForContext('sailfish.sdkAvailable', true, 10000);
+    await waitForContext('sardina.sdkAvailable', true, 10000);
     await setSetting('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
@@ -110,7 +110,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     this.timeout(30000);
     await withScenario('monitor-agent', async () => {
       await openMonitor();
-      await vscode.commands.executeCommand('sailfish.monitor.open');
+      await vscode.commands.executeCommand('sardina.monitor.open');
       await new Promise((r) => setTimeout(r, 300));
       assert.strictEqual(monitorTabs().length, 1, 'a second open reveals the existing tab');
       await waitFor(() => keys().includes('device_exec.sailfish-devagent.stats'), 10000);
@@ -132,7 +132,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
         stubMessages();
         const before = vscode.window.activeTextEditor?.document.uri.toString();
         await setSetting('debug.openDeviceMonitor', true);
-        void vscode.commands.executeCommand('sailfish.debugOnDevice');
+        void vscode.commands.executeCommand('sardina.debugOnDevice');
         await waitFor(() => monitorTabs().length === 1, 20000);
         const tab = monitorTabs()[0];
         const group = vscode.window.tabGroups.all.find((g) => g.tabs.includes(tab));
@@ -142,7 +142,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await waitFor(() => monitorTabs().length === 0, 5000);
         await setSetting('debug.openDeviceMonitor', false);
-        void vscode.commands.executeCommand('sailfish.debugOnDevice');
+        void vscode.commands.executeCommand('sardina.debugOnDevice');
         await new Promise((r) => setTimeout(r, 3000));
         assert.strictEqual(monitorTabs().length, 0, 'no monitor tab with the setting off');
       });
@@ -156,7 +156,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     await withScenario('monitor-agent', async () => {
       stubMessages();
       await openMonitor();
-      await vscode.commands.executeCommand('sailfish.monitor.showLogs');
+      await vscode.commands.executeCommand('sardina.monitor.showLogs');
       await waitFor(() => keys().includes('device_exec.sailfish-devagent.logs'), 10000);
       const argv = all('device_exec.sailfish-devagent.logs')[0].argv;
       assert.strictEqual(argv[argv.indexOf('--format') + 1], 'json', JSON.stringify(argv));
@@ -199,11 +199,11 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       await viewWhen((v) => v.state === 'connected' && v.line.includes('agent 1.10.0'), 10000);
       const page = await html();
       assert.ok(!/<button|act-/.test(page), 'no buttons in the page; the actions are in the editor title bar');
-      const menu = (vscode.extensions.getExtension('sailfish-tools-dev.sailfish-tools')?.packageJSON as { contributes?: { menus?: Record<string, { command: string; when?: string }[]> } } | undefined)?.contributes?.menus?.['editor/title'] ?? [];
+      const menu = (vscode.extensions.getExtension('sailfish-tools-dev.sardina')?.packageJSON as { contributes?: { menus?: Record<string, { command: string; when?: string }[]> } } | undefined)?.contributes?.menus?.['editor/title'] ?? [];
       // Every editor title button is scoped to one panel; the Device Monitor shows only its own.
       assert.ok(menu.every((m) => /^activeWebviewPanelId == '[\w.]+'/.test(m.when ?? '')), JSON.stringify(menu));
-      const monitorMenu = menu.filter((m) => m.when?.startsWith("activeWebviewPanelId == 'sailfish.deviceMonitor'"));
-      assert.deepStrictEqual(monitorMenu.map((m) => m.command), ['restartApp', 'stopApp', 'screenshot', 'mirror', 'showLogs'].map((c) => `sailfish.monitor.${c}`));
+      const monitorMenu = menu.filter((m) => m.when?.startsWith("activeWebviewPanelId == 'sardina.deviceMonitor'"));
+      assert.deepStrictEqual(monitorMenu.map((m) => m.command), ['restartApp', 'stopApp', 'screenshot', 'mirror', 'showLogs'].map((c) => `sardina.monitor.${c}`));
       assert.ok(!/log-grid|sessions-list|<section id="sec-/.test(page), 'no log viewer and no sessions list in the page');
       // The agent never serves a journal stream to the monitor itself.
       await new Promise((r) => setTimeout(r, 1000));
@@ -255,7 +255,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     await withScenario('monitor-logs-off', async () => {
       const messages = stubMessages();
       await openMonitor();
-      await vscode.commands.executeCommand('sailfish.monitor.showLogs');
+      await vscode.commands.executeCommand('sardina.monitor.showLogs');
       await waitFor(() => messages.calls.some((m) => m.kind === 'error'), 10000);
       assert.ok(messages.calls.some((m) => /Allow system logs/.test(m.message)), JSON.stringify(messages.calls));
       assert.ok(!keys().includes('device_exec.sailfish-devagent.logs'), JSON.stringify(keys()));
@@ -273,7 +273,7 @@ suite('Device Monitor (I-M1..I-M10)', () => {
       assert.strictEqual(view.actions.openMirror?.enabled, false, JSON.stringify(view.actions));
       assert.strictEqual(view.actions.showLogs?.enabled, true, JSON.stringify(view.actions));
       clearFakeLog();
-      await vscode.commands.executeCommand('sailfish.monitor.stopApp');
+      await vscode.commands.executeCommand('sardina.monitor.stopApp');
       await waitFor(() => keys().includes('device_exec.pkill'), 8000);
     });
   });

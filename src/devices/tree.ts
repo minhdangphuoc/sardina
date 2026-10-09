@@ -30,7 +30,7 @@ import {
 
 /** How often the connected/offline state is re-checked while the view exists (TCP only, no sfdk). */
 
-/** Devices & Emulators tree view (`sailfish.devices`, FR-6.2/FR-6.7). */
+/** Devices & Emulators tree view (`sardina.devices`, FR-6.2/FR-6.7). */
 
 export class EmulatorsRootItem extends vscode.TreeItem {
   constructor() {
@@ -87,7 +87,7 @@ export class ListErrorItem extends vscode.TreeItem {
     this.contextValue = 'devices-list-error';
     this.tooltip = detail;
     this.iconPath = new vscode.ThemeIcon('warning');
-    this.command = { command: 'sailfish.showOutput', title: 'Sailfish: Show Output' };
+    this.command = { command: 'sardina.showOutput', title: 'Sardina: Show Output' };
   }
 }
 
@@ -119,11 +119,11 @@ export class SdkRootItem extends vscode.TreeItem {
 
 export class SdkNotFoundItem extends vscode.TreeItem {
   constructor() {
-    super('Sailfish SDK not found', vscode.TreeItemCollapsibleState.None);
+    super('SFOS SDK not found', vscode.TreeItemCollapsibleState.None);
     this.description = 'click to install';
     this.contextValue = 'sdk-not-found';
     this.iconPath = new vscode.ThemeIcon('warning');
-    this.command = { command: 'sailfish.sdk.install', title: 'Sailfish: Install SDK' };
+    this.command = { command: 'sardina.sdk.install', title: 'Sardina: Install SDK' };
   }
 }
 

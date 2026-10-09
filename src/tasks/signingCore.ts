@@ -127,12 +127,12 @@ export function signingProblemMessage(configured: string, decision: Exclude<Sign
   if (decision.kind === 'none') {
     return (
       `no GPG secret key matches the signing user "${configured}". ` +
-      'Run "Sailfish: Set Up Package Signing" to pick or create a key, or turn off sailfish.build.sign.'
+      'Run "Sardina: Set Up Package Signing" to pick or create a key, or turn off sardina.build.sign.'
     );
   }
   const list = decision.keys.map((k) => `${k.name} (…${k.fingerprint.slice(-8)})`).join(', ');
   return (
     `the signing user "${configured}" matches ${decision.keys.length} GPG keys: ${list}. sfdk needs exactly one. ` +
-    'Run "Sailfish: Set Up Package Signing" to select one by its fingerprint.'
+    'Run "Sardina: Set Up Package Signing" to select one by its fingerprint.'
   );
 }

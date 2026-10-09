@@ -6,7 +6,7 @@ import { decideSigningUser, looksLikeKeyId, parseSecretKeys, signingProblemMessa
 export type SigningResolution = { ok: true; user: string } | { ok: false; message: string };
 
 /**
- * Before a signed build: turns the configured `sailfish.build.signingUser` into the value sfdk should get.
+ * Before a signed build: turns the configured `sardina.build.signingUser` into the value sfdk should get.
  * A name matching exactly one secret key becomes that key's fingerprint; a name matching none or several is
  * reported here, where it can be explained, instead of failing inside the build engine's key import.
  * Anything that cannot be checked (signing off, no value, a key ID, gpg missing or hanging) passes through unchanged.

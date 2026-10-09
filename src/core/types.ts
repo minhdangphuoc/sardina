@@ -69,11 +69,11 @@ export interface SdkInfo {
 }
 
 /** Context keys set via ContextKeys (src/core/contextKeys.ts). */
-export type SailfishContextKey =
-  | 'sailfish.isProject'
-  | 'sailfish.projectCount'
-  | 'sailfish.sdkAvailable'
-  | 'sailfish.platformSupported'
-  | 'sailfish.hasTarget'
-  | 'sailfish.hasDevice'
-  | 'sailfish.building';
+export type SardinaContextKey =
+  | 'sardina.isProject'
+  | 'sardina.projectCount'
+  | 'sardina.sdkAvailable'
+  | 'sardina.platformSupported'
+  | 'sardina.hasTarget'
+  | 'sardina.hasDevice'
+  | 'sardina.building';

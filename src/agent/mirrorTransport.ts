@@ -497,7 +497,7 @@ export class ForwardTransport implements MirrorTransport {
       }
       this.warnOnce(
         `${alias}:changed`,
-        `Sailfish: the SSH host key of "${name}" has changed (the SDK sees the new key too). The mirror uses the SDK connection until you trust the new key.`,
+        `Sardina: the SSH host key of "${name}" has changed (the SDK sees the new key too). The mirror uses the SDK connection until you trust the new key.`,
         ['Trust New Key'],
         async () => {
           await pinHostKeys(services, name, knownHosts, alias);
@@ -509,7 +509,7 @@ export class ForwardTransport implements MirrorTransport {
     if (verdict === 'path-mismatch') {
       this.warnOnce(
         `${alias}:mismatch`,
-        `Sailfish: the SSH host key of "${name}" on the direct connection does not match the key seen through the SDK; the mirror uses the SDK connection.`,
+        `Sardina: the SSH host key of "${name}" on the direct connection does not match the key seen through the SDK; the mirror uses the SDK connection.`,
         [],
       );
     }

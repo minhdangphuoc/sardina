@@ -24,7 +24,7 @@ async function cleanStaleOutput(services: Services, folder: vscode.WorkspaceFold
   const project = services.projects.forFolder(folder);
   const nativeBuildDir = project?.buildSystem === 'qmake' || project?.buildSystem === 'cmake';
   const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Sailfish: cleaning ${targetArch(previousTarget)} build output…` },
+    { location: vscode.ProgressLocation.Notification, title: `Sardina: cleaning ${targetArch(previousTarget)} build output…` },
     () =>
       services.runner.run({
         args: nativeBuildDir ? ['make', '--', 'distclean'] : cleanArgs(false),
@@ -37,7 +37,7 @@ async function cleanStaleOutput(services: Services, folder: vscode.WorkspaceFold
   if (result.exitCode !== 0) {
     services.output.log('warn', `clean before arch change failed (exit ${result.exitCode}): ${(result.stderr || result.stdout).trim()}`);
     void services.prompts.showWarningMessage(
-      'Sailfish: could not fully clean the previous build. Run "Sailfish: Clean" or delete the build files, then try again.',
+      'Sardina: could not fully clean the previous build. Run "Sardina: Clean" or delete the build files, then try again.',
     );
     return false;
   }
@@ -46,7 +46,7 @@ async function cleanStaleOutput(services: Services, folder: vscode.WorkspaceFold
 
 async function rememberAlways(folder: vscode.WorkspaceFolder): Promise<void> {
   await vscode.workspace
-    .getConfiguration('sailfish', folder.uri)
+    .getConfiguration('sardina', folder.uri)
     .update('build.cleanOnArchChange', true, vscode.ConfigurationTarget.WorkspaceFolder);
 }
 
@@ -59,7 +59,7 @@ export async function offerCleanOnTargetChange(services: Services, folder: vscod
     return;
   }
   const choice = await services.prompts.showWarningMessage(
-    `Sailfish: target architecture changed (${targetArch(previous)} → ${targetArch(newTarget)}). ` +
+    `Sardina: target architecture changed (${targetArch(previous)} → ${targetArch(newTarget)}). ` +
       `The existing build output is for ${targetArch(previous)}; building on top of it produces a broken package. Clean now?`,
     CLEAN,
     NOT_NOW,
@@ -78,7 +78,7 @@ export async function ensureBuildMatchesTargetArch(services: Services, folder: v
   if (!previous) return true;
   if (!services.settings.get('build.cleanOnArchChange', folder.uri)) {
     const choice = await services.prompts.showWarningMessage(
-      `Sailfish: the build output is for ${targetArch(previous)} but the target is ${targetArch(target)}. Clean it first?`,
+      `Sardina: the build output is for ${targetArch(previous)} but the target is ${targetArch(target)}. Clean it first?`,
       { modal: true },
       CLEAN_AND_BUILD,
       ALWAYS,

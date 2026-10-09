@@ -1,8 +1,8 @@
 import type { ProjectDescriptor } from '../core/types';
-import type { SailfishSettings } from '../settings/index';
+import type { SardinaSettings } from '../settings/index';
 import { isValidAppName } from './argv';
 
-export type LauncherMode = SailfishSettings['run.launcher'];
+export type LauncherMode = SardinaSettings['run.launcher'];
 
 export interface LauncherSettings {
   mode: LauncherMode;
@@ -10,7 +10,7 @@ export interface LauncherSettings {
 }
 
 /**
- * Quote-aware, shell-free tokenizer for `sailfish.run.customCommand`
+ * Quote-aware, shell-free tokenizer for `sardina.run.customCommand`
  * (NFR-20: never passed through a shell). Splits on whitespace, honouring
  * single and double quotes (no escape handling beyond that — deliberately
  * simple).

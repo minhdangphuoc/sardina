@@ -32,8 +32,8 @@ async function main(): Promise<void> {
   const extensionDevelopmentPath = REPO_ROOT;
   const extensionTestsPath = path.join(REPO_ROOT, 'out', 'test', 'integration', 'index');
 
-  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sailfish-tools-test-'));
-  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sailfish-tools-userdata-'));
+  const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'sardina-test-'));
+  const userDataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sardina-userdata-'));
 
   const sdkRoot = path.join(tmpHome, 'sdk');
   const sdkBin = path.join(sdkRoot, 'bin');
@@ -52,7 +52,7 @@ async function main(): Promise<void> {
   const fakeLogPath = path.join(tmpHome, 'fake-invocations.jsonl');
 
   // Hard qt-qml dependency (TRD §2.2) must resolve in every mode; see CONVENTIONS.md.
-  const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sailfish-tools-extdir-'));
+  const extensionsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sardina-extdir-'));
   fs.cpSync(path.join(FIXTURES_ROOT, 'stub-qtqml'), path.join(extensionsDir, 'theqtcompany.qt-qml-1.19.0'), {
     recursive: true,
   });

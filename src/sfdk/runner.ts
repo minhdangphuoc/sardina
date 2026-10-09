@@ -120,7 +120,7 @@ export class SfdkRunner {
       return undefined;
     }
     const started = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Sailfish: starting the build engine…' },
+      { location: vscode.ProgressLocation.Notification, title: 'Sardina: starting the build engine…' },
       () => this.execRaw(['--no-pager', 'engine', 'start'], { args: [], token, onLine }, cwd),
     );
     if (started.cancelled || started.exitCode !== 0) {
@@ -139,7 +139,7 @@ export class SfdkRunner {
     if (!bin) {
       return Promise.resolve({
         stdout: '',
-        stderr: 'Sailfish SDK not found; commands are disabled until an SDK is configured.',
+        stderr: 'SFOS SDK not found; commands are disabled until an SDK is configured.',
         exitCode: -1,
         argv: ['sfdk', ...argv],
         durationMs: 0,

@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
 import type { ProjectDescriptor } from '../core/types';
-import { activateTasks as registerTaskProvider, SAILFISH_TASK_TYPE, type SailfishTaskDefinition } from './provider';
+import { activateTasks as registerTaskProvider, SARDINA_TASK_TYPE, type SardinaTaskDefinition } from './provider';
 import { buildArgs, deployArgs, runArgs } from './argv';
 import { chooseLauncher } from './launcher';
 import { mapBuildError, mapDeployError, type MappedError } from './errors';
@@ -23,7 +23,7 @@ async function ensureTarget(services: Services, folder: vscode.WorkspaceFolder):
   if (target) {
     return true;
   }
-  await vscode.commands.executeCommand('sailfish.selectTarget');
+  await vscode.commands.executeCommand('sardina.selectTarget');
   return Boolean(services.settings.get('target', folder.uri));
 }
 
@@ -39,17 +39,17 @@ const CONFIRM_ON_DEVICE_RE = /Please confirm installation on device/i;
 async function activeProjectOrWarn(services: Services): Promise<ProjectDescriptor | undefined> {
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sailfish: no Sailfish project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
   }
   return project;
 }
 
 function findTask(tasks: vscode.Task[], command: string, project: ProjectDescriptor): vscode.Task | undefined {
   return tasks.find((t) => {
-    const def = t.definition as Partial<SailfishTaskDefinition>;
+    const def = t.definition as Partial<SardinaTaskDefinition>;
     const scope = t.scope as vscode.WorkspaceFolder | undefined;
     return (
-      def.type === SAILFISH_TASK_TYPE &&
+      def.type === SARDINA_TASK_TYPE &&
       def.command === command &&
       scope?.uri.toString() === project.folder.uri.toString()
     );
@@ -69,11 +69,11 @@ function makeExecuteTaskCommand(services: Services, command: 'build' | 'deploy' 
     if (command !== 'package' && command !== 'check' && !(await ensureArchClean(services, project.folder))) {
       return;
     }
-    const tasks = await vscode.tasks.fetchTasks({ type: SAILFISH_TASK_TYPE });
+    const tasks = await vscode.tasks.fetchTasks({ type: SARDINA_TASK_TYPE });
     const task = findTask(tasks, command, project);
     if (!task) {
       const SHOW_OUTPUT = 'Show output';
-      void services.prompts.showErrorMessage(`Sailfish: could not find the "${command}" task`, SHOW_OUTPUT).then((choice) => {
+      void services.prompts.showErrorMessage(`Sardina: could not find the "${command}" task`, SHOW_OUTPUT).then((choice) => {
         if (choice === SHOW_OUTPUT) {
           services.output.show();
         }
@@ -86,7 +86,7 @@ function makeExecuteTaskCommand(services: Services, command: 'build' | 'deploy' 
 
 /** Fire-and-forget: a command's own completion must never block on the user dismissing a notification (NFR-1-adjacent). */
 function reportFailure(services: Services, stage: string, mapped: MappedError | undefined, outputTarget: 'main' | 'build' = 'main'): void {
-  const message = mapped?.message ?? `Sailfish: ${stage} failed`;
+  const message = mapped?.message ?? `Sardina: ${stage} failed`;
   const actions = mapped?.actionLabel ? [mapped.actionLabel, 'Show output'] : ['Show output'];
   if (stage === 'build') actions.push('Clean & Rebuild');
   void services.prompts.showErrorMessage(message, ...actions).then((chosen) => void runNotificationAction(services, chosen, outputTarget));
@@ -131,11 +131,11 @@ export async function buildDeployThen(
   const pathWarning = whitespacePathWarning(cwd);
   if (pathWarning) {
     services.output.log('warn', pathWarning);
-    void services.prompts.showWarningMessage(`Sailfish: ${pathWarning}`);
+    void services.prompts.showWarningMessage(`Sardina: ${pathWarning}`);
   }
   const signing = await resolveSigningUser(services, folderUri);
   if (!signing.ok) {
-    reportFailure(services, 'build', { message: `Sailfish: ${signing.message}`, actionLabel: 'Set up signing' });
+    reportFailure(services, 'build', { message: `Sardina: ${signing.message}`, actionLabel: 'Set up signing' });
     return;
   }
   const target = services.settings.get('target', folderUri) || undefined;
@@ -156,7 +156,7 @@ export async function buildDeployThen(
         buildState.end(runId, ok, Date.now(), token.isCancellationRequested);
       };
       try {
-        // Stream the whole build and deploy into the "Sailfish OS Build" channel, cleared first.
+        // Stream the whole build and deploy into the "Sardina Build" channel, cleared first.
         buildLog.begin(services.settings.get('build.revealLog', folderUri));
         const engineLine = (line: string): void => buildLog.appendLine(line);
         const wasCached = sessionPathMapCache.has(project.folder);
@@ -186,7 +186,7 @@ export async function buildDeployThen(
             reportFailure(
               services,
               'build',
-              { message: 'Sailfish: could not clean the build output of the previous build type. Run "Clean Project Build" and try again.' },
+              { message: 'Sardina: could not clean the build output of the previous build type. Run "Clean Project Build" and try again.' },
               'build',
             );
             return;
@@ -251,7 +251,7 @@ export async function buildDeployThen(
         const method = services.settings.get('deploy.method', folderUri);
         if (!deployInstallsApp(method)) {
           void services.prompts.showInformationMessage(
-            `Sailfish: ${deployMethodLabel(method)} done — the RPM is in ~/RPMS on the device; install it there to run it.`,
+            `Sardina: ${deployMethodLabel(method)} done — the RPM is in ~/RPMS on the device; install it there to run it.`,
           );
           return;
         }
@@ -295,7 +295,7 @@ async function appIsInstalled(services: Services, project: ProjectDescriptor, de
 export async function installedAppThen(
   services: Services,
   title: string,
-  fullCommand: 'sailfish.buildDeployRun' | 'sailfish.debugOnDevice',
+  fullCommand: 'sardina.buildDeployRun' | 'sardina.debugOnDevice',
   then: (app: DeployedApp, progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<void>,
   resolvedProject?: ProjectDescriptor,
 ): Promise<void> {
@@ -313,7 +313,7 @@ export async function installedAppThen(
   }
   if (!deployInstallsApp(services.settings.get('deploy.method', folderUri))) {
     void services.prompts.showInformationMessage(
-      'Sailfish: the deploy method only copies the RPM to the device, so there is no installed app to launch. Pick another deploy method.',
+      'Sardina: the deploy method only copies the RPM to the device, so there is no installed app to launch. Pick another deploy method.',
     );
     return;
   }
@@ -321,7 +321,7 @@ export async function installedAppThen(
   const BUILD_AND_DEPLOY = 'Build & Deploy first';
   if ((await appIsInstalled(services, project, device, cwd)) === false) {
     const choice = await services.prompts.showWarningMessage(
-      `Sailfish: ${project.name} is not installed on "${device}" (${project.appBinaryPath} is missing).`,
+      `Sardina: ${project.name} is not installed on "${device}" (${project.appBinaryPath} is missing).`,
       BUILD_AND_DEPLOY,
     );
     if (choice === BUILD_AND_DEPLOY) await vscode.commands.executeCommand(fullCommand);
@@ -372,7 +372,7 @@ export async function relaunchInstalled(services: Services): Promise<boolean> {
     cwd: folderUri.fsPath,
     ...launchPlan(services, project),
   };
-  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Sailfish: Restart App', cancellable: true }, (progress, token) =>
+  await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: 'Sardina: Restart App', cancellable: true }, (progress, token) =>
     launchApp(services, app, progress, token),
   );
   return true;
@@ -380,12 +380,12 @@ export async function relaunchInstalled(services: Services): Promise<boolean> {
 
 /** FR-5.10 exception: build -> deploy -> run via SfdkRunner directly. */
 function buildDeployRun(services: Services): Promise<void> {
-  return buildDeployThen(services, 'Sailfish: Build, Deploy & Run', (app, progress, token) => launchApp(services, app, progress, token));
+  return buildDeployThen(services, 'Sardina: Build, Deploy & Run', (app, progress, token) => launchApp(services, app, progress, token));
 }
 
 /** Launches the app already on the device, without building or deploying. */
 function runInstalled(services: Services): Promise<void> {
-  return installedAppThen(services, 'Sailfish: Run Installed App', 'sailfish.buildDeployRun', (app, progress, token) =>
+  return installedAppThen(services, 'Sardina: Run Installed App', 'sardina.buildDeployRun', (app, progress, token) =>
     launchApp(services, app, progress, token),
   );
 }
@@ -397,7 +397,7 @@ async function clean(services: Services): Promise<void> {
     return;
   }
   try {
-    const tasks = await vscode.tasks.fetchTasks({ type: SAILFISH_TASK_TYPE });
+    const tasks = await vscode.tasks.fetchTasks({ type: SARDINA_TASK_TYPE });
     const task = findTask(tasks, 'clean', project);
     if (!task) {
       throw new Error('clean task not found');
@@ -405,7 +405,7 @@ async function clean(services: Services): Promise<void> {
     await vscode.tasks.executeTask(task);
   } catch (err) {
     void services.prompts.showWarningMessage(
-      `Sailfish: automatic clean could not run (${err instanceof Error ? err.message : String(err)}). ` +
+      `Sardina: automatic clean could not run (${err instanceof Error ? err.message : String(err)}). ` +
         'Manual clean: remove the sfdk build output (RPMS/BUILD/BUILDROOT under the sfdk output dir) or run "sfdk make -- clean" yourself.',
     );
   }
@@ -417,18 +417,18 @@ export function activateTasks(ctx: vscode.ExtensionContext, services: Services):
   ctx.subscriptions.push(buildLog);
 
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.build', makeExecuteTaskCommand(services, 'build')),
-    vscode.commands.registerCommand('sailfish.deploy', makeExecuteTaskCommand(services, 'deploy')),
-    vscode.commands.registerCommand('sailfish.run', makeExecuteTaskCommand(services, 'run')),
-    vscode.commands.registerCommand('sailfish.buildDeployRun', () => buildDeployRun(services)),
-    vscode.commands.registerCommand('sailfish.runInstalled', () => runInstalled(services)),
-    vscode.commands.registerCommand('sailfish.package', makeExecuteTaskCommand(services, 'package')),
-    vscode.commands.registerCommand('sailfish.check', makeExecuteTaskCommand(services, 'check')),
-    vscode.commands.registerCommand('sailfish.clean', () => clean(services)),
-    vscode.commands.registerCommand('sailfish.cleanProjectBuild', () => cleanProjectBuild(services)),
-    vscode.commands.registerCommand('sailfish.rebuild', () => rebuild(services)),
-    vscode.commands.registerCommand('sailfish.showBuildLog', () => buildLog.show()),
-    vscode.commands.registerCommand('sailfish.stopBuild', () => buildState.stopAll()),
-    buildState.onDidChange(() => void services.contextKeys.set('sailfish.building', buildState.running)),
+    vscode.commands.registerCommand('sardina.build', makeExecuteTaskCommand(services, 'build')),
+    vscode.commands.registerCommand('sardina.deploy', makeExecuteTaskCommand(services, 'deploy')),
+    vscode.commands.registerCommand('sardina.run', makeExecuteTaskCommand(services, 'run')),
+    vscode.commands.registerCommand('sardina.buildDeployRun', () => buildDeployRun(services)),
+    vscode.commands.registerCommand('sardina.runInstalled', () => runInstalled(services)),
+    vscode.commands.registerCommand('sardina.package', makeExecuteTaskCommand(services, 'package')),
+    vscode.commands.registerCommand('sardina.check', makeExecuteTaskCommand(services, 'check')),
+    vscode.commands.registerCommand('sardina.clean', () => clean(services)),
+    vscode.commands.registerCommand('sardina.cleanProjectBuild', () => cleanProjectBuild(services)),
+    vscode.commands.registerCommand('sardina.rebuild', () => rebuild(services)),
+    vscode.commands.registerCommand('sardina.showBuildLog', () => buildLog.show()),
+    vscode.commands.registerCommand('sardina.stopBuild', () => buildState.stopAll()),
+    buildState.onDidChange(() => void services.contextKeys.set('sardina.building', buildState.running)),
   );
 }

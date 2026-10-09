@@ -15,7 +15,7 @@ describe('device tool install', () => {
   });
 
   it('reports success only for exit 0, and explains failures', () => {
-    assert.deepStrictEqual(installOutcomeMessage('Flip Phone', ['rsync'], 0), { ok: true, message: 'Sailfish: installed rsync on "Flip Phone".' });
+    assert.deepStrictEqual(installOutcomeMessage('Flip Phone', ['rsync'], 0), { ok: true, message: 'Sardina: installed rsync on "Flip Phone".' });
     const failed = installOutcomeMessage('Flip Phone', ['rsync'], 4);
     assert.strictEqual(failed.ok, false);
     assert.match(failed.message, /failed \(exit 4\)/);

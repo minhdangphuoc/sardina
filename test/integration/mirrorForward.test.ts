@@ -89,8 +89,8 @@ function knownHostsFile(): string {
   const tmp = os.tmpdir();
   const dirs = fs
     .readdirSync(tmp)
-    .filter((n) => n.startsWith('sailfish-tools-userdata-'))
-    .map((n) => path.join(tmp, n, 'User', 'globalStorage', 'sailfish-tools-dev.sailfish-tools', 'ssh'))
+    .filter((n) => n.startsWith('sardina-userdata-'))
+    .map((n) => path.join(tmp, n, 'User', 'globalStorage', 'sailfish-tools-dev.sardina', 'ssh'))
     .filter((d) => fs.existsSync(path.dirname(d)));
   dirs.sort((a, b) => fs.statSync(path.dirname(b)).mtimeMs - fs.statSync(path.dirname(a)).mtimeMs);
   assert.ok(dirs[0], 'cannot locate the extension global storage');
@@ -192,15 +192,15 @@ async function hidePanel(): Promise<void> {
 }
 
 async function showPanel(): Promise<void> {
-  await vscode.commands.executeCommand('sailfish.agent.mirror');
+  await vscode.commands.executeCommand('sardina.agent.mirror');
 }
 
 async function sendTestInput(message: Record<string, unknown>): Promise<void> {
-  await vscode.commands.executeCommand('sailfish._test.mirrorInput', DEVICE, message);
+  await vscode.commands.executeCommand('sardina._test.mirrorInput', DEVICE, message);
 }
 
 async function setTestFocus(focused: boolean): Promise<void> {
-  await vscode.commands.executeCommand('sailfish._test.mirrorFocus', DEVICE, focused);
+  await vscode.commands.executeCommand('sardina._test.mirrorFocus', DEVICE, focused);
 }
 
 async function waitLive(): Promise<void> {
@@ -214,15 +214,15 @@ suite('screen mirror over the SSH forward (F6)', () => {
 
   suiteSetup(async function () {
     this.timeout(15000);
-    await waitForContext('sailfish.sdkAvailable', true, 10000);
+    await waitForContext('sardina.sdkAvailable', true, 10000);
     const folder = vscode.workspace.workspaceFolders?.[0];
-    await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', DEVICE, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   suiteTeardown(async function () {
     this.timeout(15000);
     const folder = vscode.workspace.workspaceFolders?.[0];
-    await vscode.workspace.getConfiguration('sailfish', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
+    await vscode.workspace.getConfiguration('sardina', folder?.uri).update('device', undefined, vscode.ConfigurationTarget.WorkspaceFolder);
   });
 
   setup(() => {
@@ -249,7 +249,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     this.timeout(30000);
     await withScenario('agent-forward', async () => {
       resetKnownHosts();
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => acks().length >= 3, 8000);
       const keys = sfdkKeys();
       const ping = keys.indexOf('device_exec.sailfish-devagent.ping');
@@ -282,7 +282,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I2 private socket: mode 0600 in a 0700 directory owned by the user', async function () {
     this.timeout(30000);
     await withScenario('agent-forward', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       const sock = localSocket(spawns()[0]);
       const st = fs.lstatSync(sock);
@@ -298,7 +298,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I3 close: the connection closes, ssh gets SIGTERM, socket and directory are removed', async function () {
     this.timeout(30000);
     await withScenario('agent-forward', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       const sock = localSocket(spawns()[0]);
       await showPanel();
@@ -312,7 +312,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I4 hide and show: the connection closes, ssh is reused, closing then kills it', async function () {
     this.timeout(40000);
     await withScenario('agent-forward', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       await hidePanel();
       await waitFor(() => closed().length >= 1, 5000);
@@ -329,7 +329,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I5 auth fallback: ssh fails with a permission error, the mirror runs through sfdk', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-auth', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => sfdkMirrors().length >= 1, 8000);
       assert.strictEqual(spawns().length, 1);
       const all = readLog();
@@ -342,7 +342,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I6 direct-path mismatch: one warning without Trust New Key, falls back, pins nothing new, warns once', async function () {
     this.timeout(40000);
     await withScenario('agent-forward-hostkey', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => sfdkMirrors().length >= 1, 10000);
       assert.strictEqual(entries('device_exec.cat').length, 2, JSON.stringify(sfdkKeys()));
       const warnings = messages.calls.filter((m) => m.kind === 'warning');
@@ -354,7 +354,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
       // Reopen in the same session: no second warning.
       await vscode.commands.executeCommand('workbench.action.closeAllEditors');
       await sleep(500);
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => sfdkMirrors().length >= 2, 10000);
       assert.strictEqual(messages.calls.filter((m) => m.kind === 'warning').length, 1, JSON.stringify(messages.calls));
       assert.strictEqual(fs.readFileSync(knownHostsFile(), 'utf8'), known);
@@ -364,7 +364,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I7 remote refused: falls back to sfdk', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-refused', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => sfdkMirrors().length >= 1, 8000);
       assert.ok(!messages.calls.some((m) => m.kind === 'error'), JSON.stringify(messages.calls));
     });
@@ -373,7 +373,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I8 old agent: no ssh, the mirror runs through sfdk without a lease', async function () {
     this.timeout(30000);
     await withScenario('agent-new', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => sfdkMirrors().length >= 1, 8000);
       assert.strictEqual(spawns().length, 0, JSON.stringify(readLog()));
       // The 1.1.0 client exits 2 on an unknown option: the request stays as in extension 0.1.6 (plan O14).
@@ -385,7 +385,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     this.timeout(30000);
     // default's ping reports 1.0.0 (no mirror), so agent-forward-nokey pairs a 1.2.0 ping with default's device list.
     await withScenario('agent-forward-nokey', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => sfdkMirrors().length >= 1, 8000);
       assert.strictEqual(spawns().length, 0, JSON.stringify(readLog()));
     });
@@ -394,7 +394,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I10 corrupt binary stream: disconnected, no sfdk fallback', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-corrupt', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => hasStatus(log, 'disconnected'), 8000);
       await sleep(1500);
       assert.strictEqual(sfdkMirrors().length, 0, JSON.stringify(sfdkKeys()));
@@ -412,7 +412,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     fs.writeFileSync(path.join(dead, 'ssh.pid'), '999999998\n');
     try {
       await withScenario('agent-forward', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await waitLive();
         await waitFor(() => !fs.existsSync(dead), 5000);
         assert.ok(fs.existsSync(live), 'the live host directory must stay');
@@ -430,7 +430,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     timing.keepaliveIntervalMs = 500;
     try {
       await withScenario('agent-forward', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await waitLive();
         assert.ok((requests()[0].line ?? '').includes('"lease":60'), JSON.stringify(requests()));
         await waitFor(() => keepalives().length >= 3, 3000);
@@ -449,7 +449,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     timing.keepaliveIntervalMs = 300;
     try {
       await withScenario('agent-forward', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await waitLive();
         await waitFor(() => keepalives().length >= 1, 3000);
         await hidePanel();
@@ -467,7 +467,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I14 lease expiry is shown: disconnected, no sfdk fallback, no automatic retry', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-lease', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       await waitFor(() => hasStatus(log, 'disconnected'), 6000);
       assert.ok(log.messages.some((m) => m.includes('lease expired')), JSON.stringify(log.messages));
@@ -485,7 +485,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     try {
       // A 1.2.0 agent whose forward is ineligible (missing key): only agents from 1.2.0 get a lease through sfdk.
       await withScenario('agent-forward-sfdk-lease', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await waitFor(() => sfdkMirrors().length >= 1, 8000);
         assert.strictEqual(spawns().length, 0, JSON.stringify(readLog()));
         const argv = argvOf(sfdkMirrors()[0]);
@@ -512,7 +512,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
       const file = knownHostsFile();
       fs.mkdirSync(path.dirname(file), { recursive: true, mode: 0o700 });
       fs.writeFileSync(file, `${alias} ssh-ed25519 ${OTHER_KEY}\n`, { mode: 0o600 });
-      await vscode.commands.executeCommand('sailfish.agent.mirror', emulatorItem());
+      await vscode.commands.executeCommand('sardina.agent.mirror', emulatorItem());
       await waitFor(() => acks().length >= 1, 15000);
       assert.strictEqual(spawns().length, 2, JSON.stringify(readLog().map((e) => e.key)));
       const known = fs.readFileSync(file, 'utf8');
@@ -529,14 +529,14 @@ suite('screen mirror over the SSH forward (F6)', () => {
     timing.keepaliveIntervalMs = 500;
     try {
       await withScenario('agent-forward', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await waitFor(() => acks().length >= 3, 8000);
         await sleep(1200);
         await vscode.commands.executeCommand('workbench.action.closeAllEditors');
         await sleep(500);
       });
       await withScenario('agent-forward-auth', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await waitFor(() => sfdkMirrors().length >= 1, 8000);
       });
     } finally {
@@ -552,7 +552,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I18 vp8: agent 1.6.0 and a page with WebCodecs get video; the page decodes it without asking for a key frame', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-vp8', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitOrDump(log, () => hasStatus(log, 'video: decoding 90x200'), 10000);
       const req = requests()[0].line ?? '';
       for (const f of ['"encoding":"vp8"', '"fps":60', '"width":720', '"bitrate":2000', '"adapt":true']) assert.ok(req.includes(f), req);
@@ -568,7 +568,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I19 vp8 gap: deltas without a key frame are skipped and one key frame is asked for, then the stream decodes', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-vp8-gap', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitOrDump(log, () => keyframeRequests().length >= 1, 10000);
       assert.ok(hasStatus(log, 'video: key frame requested (no key frame yet'));
       await waitOrDump(log, () => hasStatus(log, 'video: decoding 90x200'), 8000);
@@ -579,7 +579,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I20 vp8 that does not decode: after three decode errors the panel reconnects with JPEG', async function () {
     this.timeout(40000);
     await withScenario('agent-forward-vp8-broken', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitOrDump(log, () => requests().length >= 2, 15000);
       assert.ok((requests()[0].line ?? '').includes('"encoding":"vp8"'), JSON.stringify(requests()));
       assert.ok((requests()[1].line ?? '').includes('"encoding":"binary"'), JSON.stringify(requests()));
@@ -593,7 +593,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I21 input focus lease: 1.7 opts in, renews only while focused, and clears immediately when hidden', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-input', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       await setTestFocus(true);
       await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
@@ -611,7 +611,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I26 live contact: a focused 1.9 panel sends diagonal down, move and fail-open up', async function () {
     this.timeout(30000);
     await withScenario('agent-forward-input-live', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       await setTestFocus(true);
       await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
@@ -649,13 +649,13 @@ suite('screen mirror over the SSH forward (F6)', () => {
     });
     try {
       await withScenario('agent-forward-keypad', async () => {
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await waitLive();
         type Posted = { type?: string; strip?: { action?: string }; layout?: { model: string; rows: Array<Array<{ key: string; label: string; style?: string } | null>> } | null };
         const keypadPosts = (): Posted[] => (posted as Posted[]).filter((m) => m?.type === 'keypad');
         await waitFor(() => (posted as Posted[]).some((m) => m.type === 'state' && m.strip?.action === 'keypad'), 8000);
         assert.strictEqual(keypadPosts().some((m) => m.layout), false, 'no layout is applied by default');
-        await vscode.commands.executeCommand('sailfish.agent.editKeypadLayout');
+        await vscode.commands.executeCommand('sardina.agent.editKeypadLayout');
         assert.strictEqual(saveDialog.callCount, 1);
         const saveOptions = saveDialog.firstCall.args[0] as vscode.SaveDialogOptions;
         assert.ok(saveOptions.defaultUri?.fsPath.endsWith(path.join('.sailfish', 'keypads', 'commodore-callback.json')));
@@ -670,7 +670,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
         assert.strictEqual(layout?.model, 'Commodore Callback');
         const keys = (layout?.rows ?? []).flat().filter((c) => c !== null).map((c) => c.key);
         assert.deepStrictEqual(keys, ['5']);
-        await vscode.commands.executeCommand('sailfish.agent.mirror');
+        await vscode.commands.executeCommand('sardina.agent.mirror');
         await setTestFocus(true);
         await waitFor(() => inputs().some((e) => e.input?.type === 'active' && e.input.active === true), 8000);
         await sendTestInput({ type: 'input', action: 'key', key: 'F23', pressed: true });
@@ -682,7 +682,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
           { type: 'key', key: '5', pressed: true },
           { type: 'key', key: '5', pressed: false },
         ]);
-        await vscode.commands.executeCommand('sailfish.agent.resetKeypadLayout');
+        await vscode.commands.executeCommand('sardina.agent.resetKeypadLayout');
         await waitFor(() => keypadPosts().at(-1)?.layout === null, 8000);
         assert.ok(fs.existsSync(layoutPath), 'reset forgets the layout without deleting it');
       });
@@ -708,7 +708,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     const of = (type: string): Posted[] => (posted as Posted[]).filter((m) => m?.type === type);
     const touchRow = (): string | undefined => of('state').at(-1)?.details?.find((r) => r.label === 'Touch indicator')?.value;
     await withScenario('agent-forward-touch-mirror', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       assert.ok((requests()[0].line ?? '').includes('"phoneState":true'), requests()[0].line);
       assert.ok(!of('contact').length, 'no marker before control is active');
@@ -744,7 +744,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     this.timeout(30000);
     const posts = capturePosts();
     await withScenario('agent-forward-idle-off', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       assert.ok(!(requests()[0].line ?? '').includes('idle'), requests()[0].line);
       await waitFor(() => posts.of('state').some((m) => m.details?.some((r) => r.label === 'Idle mode' && r.value === 'off')), 8000);
@@ -759,7 +759,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     this.timeout(40000);
     const posts = capturePosts();
     await withScenario('agent-forward-idle-restart', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       await waitFor(() => posts.of('state').some((m) => m.details?.some((r) => r.label === 'Idle mode' && r.value === 'on')), 8000);
       await waitFor(() => posts.of('state').some((m) => m.strip?.label === 'Connecting… mirroring is restarting'), 8000);
@@ -777,7 +777,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     const row = (label: string, value: string) => (m: { details?: { label: string; value: string }[] }) =>
       m.details?.some((r) => r.label === label && r.value === value) ?? false;
     await withScenario('agent-forward-fps-restart', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitLive();
       assert.ok((requests()[0].line ?? '').includes('"fps":60'), requests()[0].line);
       await waitFor(() => posts.of('state').some(row('Frame rate limit', '30')), 8000);
@@ -795,13 +795,13 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I22 control off on the phone: the strip says so, no active:true is ever sent, Device Agent Status names it', async function () {
     this.timeout(30000);
     await withScenario('agent-settings-control-off', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(() => hasStatus(log, 'control off (disabled on the phone)'), 8000);
       assert.ok((requests()[0].line ?? '').includes('"phoneState":true'), requests()[0].line);
       await sleep(1500);
       assert.ok(!inputs().some((e) => e.input?.type === 'active' && e.input.active === true), JSON.stringify(inputs()));
       messages.calls.length = 0;
-      await vscode.commands.executeCommand('sailfish.agent.status');
+      await vscode.commands.executeCommand('sardina.agent.status');
       assert.ok(messages.calls.some((m) => m.message.includes('turned off control')), JSON.stringify(messages.calls));
     });
   });
@@ -809,7 +809,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
   test('I23 screen view off on the phone: the strip reads disconnected with the reason, no retry, no sfdk fallback', async function () {
     this.timeout(30000);
     await withScenario('agent-settings-view-off', async () => {
-      await vscode.commands.executeCommand('sailfish.agent.mirror');
+      await vscode.commands.executeCommand('sardina.agent.mirror');
       await waitFor(
         () => hasStatus(log, 'disconnected: screen view is disabled on the phone (Settings › System › Developer agent)'),
         8000,

@@ -1,16 +1,16 @@
 import * as vscode from 'vscode';
 import { ConfigDispatcher } from './dispatcher';
-import { DEFAULTS, type SailfishSettings } from './defaults';
+import { DEFAULTS, type SardinaSettings } from './defaults';
 
-export type { SailfishSettings } from './defaults';
+export type { SardinaSettings } from './defaults';
 export { DEFAULTS } from './defaults';
 
-const SECTION = 'sailfish';
+const SECTION = 'sardina';
 
 type Listener = () => void;
 
 /**
- * Single place that calls `vscode.workspace.getConfiguration('sailfish')`.
+ * Single place that calls `vscode.workspace.getConfiguration('sardina')`.
  * All other modules read settings through this class (FR-14). The listener
  * fan-out itself lives in `ConfigDispatcher` (vscode-free, unit-tested).
  */
@@ -32,12 +32,12 @@ export class Settings {
     });
   }
 
-  get<K extends keyof SailfishSettings>(key: K, scope?: vscode.ConfigurationScope): SailfishSettings[K] {
+  get<K extends keyof SardinaSettings>(key: K, scope?: vscode.ConfigurationScope): SardinaSettings[K] {
     const config = vscode.workspace.getConfiguration(SECTION, scope);
-    return config.get<SailfishSettings[K]>(key, DEFAULTS[key]);
+    return config.get<SardinaSettings[K]>(key, DEFAULTS[key]);
   }
 
-  onDidChange(key: keyof SailfishSettings | '*', listener: Listener): vscode.Disposable {
+  onDidChange(key: keyof SardinaSettings | '*', listener: Listener): vscode.Disposable {
     return this.dispatcher.on(key, listener);
   }
 
