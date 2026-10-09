@@ -23,6 +23,7 @@ export default tseslint.config(
             'test/unit/wizard/*.ts',
             'test/unit/targets/*.ts',
             'test/unit/tasks/*.ts', 'test/unit/build/*.ts', 'test/unit/debug/*.ts',
+            'test/unit/qmldebug/*.ts',
             'test/unit/agent/*.ts',
             'test/unit/monitor/*.ts',
             'test/unit/sfdk/*.ts',

@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.12
+
+- QML debugging support is compiled into Debug builds (`-DQT_QML_DEBUG`); it opens nothing unless the app is started with `-qmljsdebugger`.
+
 ## v0.1.11
 
 - The Devices view checks whether a device is reachable only while the view is visible, every 60 s (was 15 s, always), once right when it opens, and not for devices with a running session. It stops after the window has been unfocused for 5 minutes. This stops the constant connections that made the phone's sshd fork, log and wake from suspend.

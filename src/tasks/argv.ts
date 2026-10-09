@@ -47,8 +47,10 @@ export interface BuildArgvSettings extends SigningSettings {
  * it to the compiler. Redefining `%__global_cflags` keeps the per-architecture part of `%optflags`
  * (`-march`, `-mfloat-abi=hard`, ...) and drops `-O2` and `-D_FORTIFY_SOURCE=2`, which glibc warns
  * about without optimisation. Verified with the 5.1.0.11 targets.
+ * `-DQT_QML_DEBUG` is all `CONFIG+=qml_debug` does: it compiles in the QML debugging support, which
+ * opens nothing unless the app is started with `-qmljsdebugger`.
  */
-export const DEBUG_GLOBAL_CFLAGS = '-O0 -g -pipe -Wall -fexceptions -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security';
+export const DEBUG_GLOBAL_CFLAGS = '-O0 -g -pipe -Wall -fexceptions -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security -DQT_QML_DEBUG';
 
 /** rpmbuild arguments (after `sfdk build --`) that make a Debug build unoptimised. */
 export const DEBUG_RPMBUILD_ARGS: readonly string[] = ['--define', `__global_cflags ${DEBUG_GLOBAL_CFLAGS}`];
