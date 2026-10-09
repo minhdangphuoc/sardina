@@ -2,10 +2,9 @@
 #include "displaystate.h"
 #include "idleplan.h"
 #include "indicatorlink.h"
-#include "mirrorinput.h"
+#include "inputlink.h"
 #include "phonesettings.h"
 #include "recorder.h"
-#include "touchoverlay.h"
 #include "videoencoder.h"
 
 #include <QBuffer>
@@ -98,7 +97,8 @@ bool jsonClampedInteger(const QJsonValue &v, int min, int max, int *value)
 
 MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding,
                            int window, int leaseSeconds, IndicatorLink *indicator, bool adapt, int bitrateKbps,
-                           bool inputRequested, const PhoneSettings *settings, bool phoneState)
+                           bool inputRequested, const PhoneSettings *settings, bool phoneState,
+                           const QString &inputModule)
     : QObject(socket)
     , m_socket(socket)
     , m_fps(fps)
@@ -131,8 +131,7 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
     , m_linkSkips(0)
     , m_rttMs(-1)
     , m_rttFrame(0)
-    , m_input(inputRequested ? new MirrorInput(this) : nullptr)
-    , m_touchOverlay(inputRequested ? new TouchOverlay(this) : nullptr)
+    , m_input(inputRequested ? new InputLink(inputModule, this) : nullptr)
     , m_controlAllowed(!settings || settings->control())
     , m_inputEnabled(m_controlAllowed && m_input && m_input->available())
     , m_inputActive(false)
@@ -220,9 +219,8 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
                 }
             });
         }
-        if (m_touchOverlay) {
-            connect(m_input, &MirrorInput::contactChanged, this, &MirrorStream::onContactChanged);
-        }
+        connect(m_input, &InputLink::contactChanged, this, &MirrorStream::onContactChanged);
+        connect(m_input, &InputLink::overlayChanged, this, [this]() { sendPhoneSettings(inputFields()); });
     }
     if (m_leaseSeconds > 0) {
         m_lease.setSingleShot(true);
@@ -342,10 +340,10 @@ void MirrorStream::sendPhoneSettings(const QByteArray &fields)
 
 QByteArray MirrorStream::touchIndicatorPath() const
 {
-    if (!m_touchOverlay || !m_settings || !m_settings->touchIndicator() || !m_controlAllowed || !m_inputActive) {
+    if (!m_input || !m_settings || !m_settings->touchIndicator() || !m_controlAllowed || !m_inputActive) {
         return QByteArrayLiteral("off");
     }
-    if (m_touchOverlay->showingOnPhone()) {
+    if (m_input->overlayOnPhone()) {
         return QByteArrayLiteral("phone");
     }
     return m_phoneState ? QByteArrayLiteral("mirror") : QByteArrayLiteral("off");
@@ -391,17 +389,14 @@ QByteArray MirrorStream::applyControlSetting(bool allowed)
 
 void MirrorStream::applyTouchIndicatorSetting(bool on)
 {
-    if (m_touchOverlay) {
-        m_touchOverlay->setEnabled(on && m_controlAllowed && m_inputActive);
+    if (m_input) {
+        m_input->setOverlayEnabled(on && m_controlAllowed && m_inputActive);
     }
 }
 
 void MirrorStream::onContactChanged(const QPoint &point, bool pressed)
 {
-    if (!m_touchOverlay) {
-        return;
-    }
-    m_touchOverlay->setContact(point, pressed);
+    // The input module draws the circle on the phone itself; this is the in-mirror marker.
     if (touchIndicatorPath() == QByteArrayLiteral("mirror")) {
         writeMessage(QByteArray("{\"contact\":{\"x\":") + QByteArray::number(point.x()) + ",\"y\":"
                      + QByteArray::number(point.y()) + ",\"down\":" + (pressed ? "true" : "false") + "}}");
@@ -533,8 +528,8 @@ void MirrorStream::handleUpstreamLine(const QByteArray &line)
 void MirrorStream::setInputActive(bool active)
 {
     if (!active) {
-        if (m_touchOverlay) {
-            m_touchOverlay->setEnabled(false);
+        if (m_input) {
+            m_input->setOverlayEnabled(false);
         }
         if (m_indicator) {
             m_indicator->setInputActive(false);
@@ -624,7 +619,7 @@ void MirrorStream::handleInput(const QJsonObject &input)
     }
     const QString key = input.value(QStringLiteral("key")).toString();
     const QJsonValue pressed = input.value(QStringLiteral("pressed"));
-    if (type == QLatin1String("key") && MirrorInput::validKeyName(key) && pressed.isBool() && !pressed.toBool()) {
+    if (type == QLatin1String("key") && InputLink::validKeyName(key) && pressed.isBool() && !pressed.toBool()) {
         if (m_input) {
             m_input->keyUp(key);
         }
@@ -656,7 +651,7 @@ void MirrorStream::handleInput(const QJsonObject &input)
         return;
     }
     if (type == QLatin1String("key")) {
-        if (MirrorInput::validKeyName(key) && pressed.isBool() && pressed.toBool() && m_input->keypadAvailable()) {
+        if (InputLink::validKeyName(key) && pressed.isBool() && pressed.toBool() && m_input->keypadAvailable()) {
             m_input->keyDown(key);
         }
         return;
@@ -960,9 +955,6 @@ void MirrorStream::sendFrame(const QByteArray &hash, const QByteArray &data, con
     if (m_input && m_input->available()) {
         m_input->setScreen(screen, true);
     }
-    if (m_touchOverlay) {
-        m_touchOverlay->setScreen(screen);
-    }
     m_lastHash = hash;
 
     if (m_encoding == MirrorEncoding::Binary) {
@@ -1019,8 +1011,8 @@ void MirrorStream::cleanup()
     m_idle.stop();
     m_lease.stop();
     m_inputLease.stop();
-    if (m_touchOverlay) {
-        m_touchOverlay->setEnabled(false);
+    if (m_input) {
+        m_input->setOverlayEnabled(false);
     }
     if (m_inputActive) {
         setInputActive(false);
@@ -1160,9 +1152,6 @@ void MirrorStream::videoFrame(const uchar *rows, int width, int height, int byte
     const QSize screen(width, height);
     if (m_input && m_input->available()) {
         m_input->setScreen(screen, true);
-    }
-    if (m_touchOverlay) {
-        m_touchOverlay->setScreen(screen);
     }
     const QSize out = VideoEncoder::outputSize(screen, m_width);
     // Key frames only at the start, after a size change and on request (agent 1.8.0: no periodic

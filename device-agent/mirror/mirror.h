@@ -20,9 +20,8 @@ class Recorder;
 class QLocalSocket;
 class IndicatorLink;
 class PhoneSettings;
-class TouchOverlay;
 class VideoEncoder;
-class MirrorInput;
+class InputLink;
 class DisplayState;
 
 // Text and Binary carry JPEG/PNG images; Vp8 (agent 1.6.0) uses the binary framing with VP8 video.
@@ -42,7 +41,7 @@ public:
     MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding = MirrorEncoding::Text,
                  int window = 2, int leaseSeconds = 0, IndicatorLink *indicator = nullptr, bool adapt = false,
                  int bitrateKbps = 0, bool inputRequested = false, const PhoneSettings *settings = nullptr,
-                 bool phoneState = false);
+                 bool phoneState = false, const QString &inputModule = QString());
     ~MirrorStream();
 
     // Writes the fatal reply {"ok":false,"error":...} in the stream's encoding, flushes,
@@ -180,8 +179,7 @@ private:
     // Remote touch input (agent 1.7.0). The request must opt in, then focused-view heartbeats keep
     // a short lease alive. Every input object except immediate deactivation consumes this bounded
     // dispatch budget before validation; valid gestures are therefore still capped at 20/s.
-    MirrorInput *m_input;
-    TouchOverlay *m_touchOverlay;
+    InputLink *m_input; // also draws the debug touch circle on the phone
     bool m_controlAllowed;
     bool m_inputEnabled;
     bool m_inputActive;

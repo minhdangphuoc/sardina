@@ -63,7 +63,9 @@ private:
     };
 
     QJsonObject pingReply() const;
-    ModuleProcess *startModule(const QString &module, int fd, const QJsonObject &request, const QString &client);
+    // `extra`: more fields for the first control line.
+    ModuleProcess *startModule(const QString &module, int fd, const QJsonObject &request, const QString &client,
+                               const QJsonObject &extra = QJsonObject());
     void startMirror(int fd, const QJsonObject &request, const QString &client);
     void spawnMirror(int fd, const QJsonObject &request, const QString &client);
     ModuleProcess *mirrorChild() const;

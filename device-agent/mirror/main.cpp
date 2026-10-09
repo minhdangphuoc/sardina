@@ -1,17 +1,13 @@
 #include "idleplan.h"
 #include "indicatorlink.h"
 #include "mirror.h"
-#include "mirrorinput.h"
 #include "modulehost.h"
 #include "phonesettings.h"
 
 #include <QCoreApplication>
 #include <QDateTime>
-#include <QJsonArray>
-#include <QJsonDocument>
 #include <QLocalSocket>
 #include <QPointer>
-#include <cstdio>
 
 namespace {
 
@@ -48,7 +44,7 @@ int lease(const QJsonValue &requested, bool required)
 
 // The request's arguments, clamped; anything but "binary" or "vp8" is text.
 MirrorStream *startStream(QLocalSocket *socket, const QJsonObject &request, IndicatorLink *indicator,
-                          const PhoneSettings *settings)
+                          const PhoneSettings *settings, const QString &inputModule)
 {
     const QString encodingName = request.value(QStringLiteral("encoding")).toString();
     const MirrorEncoding encoding = encodingName == QLatin1String("binary") ? MirrorEncoding::Binary
@@ -72,7 +68,7 @@ MirrorStream *startStream(QLocalSocket *socket, const QJsonObject &request, Indi
     const bool phoneState = request.value(QStringLiteral("phoneState")).toBool(false);
     return new MirrorStream(socket, fps, width, quality, encoding, window,
                             lease(request.value(QStringLiteral("lease")), encoding != MirrorEncoding::Text), indicator,
-                            adapt, bitrate, input, settings, phoneState);
+                            adapt, bitrate, input, settings, phoneState, inputModule);
 }
 
 QJsonObject statusEvent(const MirrorStream *stream)
@@ -87,26 +83,11 @@ QJsonObject statusEvent(const MirrorStream *stream)
     return QJsonObject{ { QStringLiteral("status"), status } };
 }
 
-int printKeypad()
-{
-    const MirrorKeypadInfo keypad = MirrorInput::keypadInfo();
-    QJsonObject o;
-    if (!keypad.model.isEmpty() && !keypad.keys.isEmpty()) {
-        o.insert(QStringLiteral("model"), keypad.model);
-        o.insert(QStringLiteral("keys"), QJsonArray::fromStringList(keypad.keys));
-    }
-    printf("%s\n", QJsonDocument(o).toJson(QJsonDocument::Compact).constData());
-    return 0;
-}
-
 }
 
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    if (app.arguments().value(1) == QLatin1String("--keypad")) {
-        return printKeypad();
-    }
     ModuleHost host("mirror");
     const int code = host.init(app.arguments());
     if (code >= 0) {
@@ -117,7 +98,9 @@ int main(int argc, char **argv)
     QPointer<MirrorStream> stream;
     QObject::connect(&host, &ModuleHost::started, [&](const QJsonObject &control) {
         settings.reset(control.value(QStringLiteral("settings")).toObject());
-        stream = startStream(host.socket(), control.value(QStringLiteral("request")).toObject(), &indicator, &settings);
+        // The daemon names the input module only when it is installed.
+        stream = startStream(host.socket(), control.value(QStringLiteral("request")).toObject(), &indicator, &settings,
+                             control.value(QStringLiteral("inputModule")).toString());
         QObject::connect(stream.data(), &MirrorStream::stateChanged, &host, [&]() {
             if (!stream) {
                 return;

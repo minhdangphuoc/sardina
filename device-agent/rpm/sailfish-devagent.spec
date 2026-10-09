@@ -64,6 +64,15 @@ Streams a live view of the screen to VS Code through the developer agent:
 lipstick's Wayland recorder, JPEG images or VP8 video through libvpx. Runs
 only while a mirror panel is open and "Allow screen view" is on.
 
+%package input
+Summary:    Developer agent module: control from VS Code
+Requires:   %{name}-mirror = %{version}-%{release}
+
+%description input
+Lets VS Code tap, swipe and press keypad keys on the phone from the mirror
+panel, through the phone's own input devices, while "Allow control from VS
+Code" is on. Without it the mirror is view-only.
+
 %prep
 %setup -q -n %{name}-%{version}
 
@@ -155,6 +164,11 @@ if [ "$1" = "0" ]; then
     pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-mirror( |$)' >/dev/null 2>&1 || :
 fi
 
+%preun input
+if [ "$1" = "0" ]; then
+    pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-input( |$)' >/dev/null 2>&1 || :
+fi
+
 %files
 %defattr(-,root,root,-)
 %{_bindir}/sailfish-devagent
@@ -186,3 +200,8 @@ fi
 %defattr(-,root,root,-)
 %dir %{_libexecdir}/sailfish-devagent
 %{_libexecdir}/sailfish-devagent/sailfish-devagent-mirror
+
+%files input
+%defattr(-,root,root,-)
+%dir %{_libexecdir}/sailfish-devagent
+%{_libexecdir}/sailfish-devagent/sailfish-devagent-input

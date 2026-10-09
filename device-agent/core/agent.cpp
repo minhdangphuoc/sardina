@@ -472,9 +472,10 @@ void Agent::onRequest(RequestReader *reader, const QJsonObject &request)
     startModule(module, fd, request, client);
 }
 
-ModuleProcess *Agent::startModule(const QString &module, int fd, const QJsonObject &request, const QString &client)
+ModuleProcess *Agent::startModule(const QString &module, int fd, const QJsonObject &request, const QString &client,
+                                  const QJsonObject &extra)
 {
-    QJsonObject control;
+    QJsonObject control = extra;
     control.insert(QStringLiteral("request"), request);
     control.insert(QStringLiteral("client"), client);
     control.insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(m_settings->toMap()));
@@ -518,5 +519,9 @@ void Agent::startMirror(int fd, const QJsonObject &request, const QString &clien
 void Agent::spawnMirror(int fd, const QJsonObject &request, const QString &client)
 {
     setMirrorRestarting(false);
-    startModule(QStringLiteral("mirror"), fd, request, client);
+    QJsonObject extra;
+    if (Modules::installed(QStringLiteral("input"))) {
+        extra.insert(QStringLiteral("inputModule"), Modules::executable(QStringLiteral("input")));
+    }
+    startModule(QStringLiteral("mirror"), fd, request, client, extra);
 }

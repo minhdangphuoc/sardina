@@ -40,9 +40,6 @@ QString executable(const QString &name)
 
 bool installed(const QString &name)
 {
-    if (name == QLatin1String("input")) {
-        return installed(QStringLiteral("mirror")); // still inside the mirror process
-    }
     const QFileInfo info(executable(name));
     return info.isFile() && info.isExecutable();
 }
@@ -62,7 +59,7 @@ QJsonObject keypadInfo()
 {
     static QDateTime probedVersion;
     static QJsonObject cached;
-    const QFileInfo info(executable(QStringLiteral("mirror")));
+    const QFileInfo info(executable(QStringLiteral("input")));
     if (!info.isFile() || !info.isExecutable()) {
         return QJsonObject();
     }

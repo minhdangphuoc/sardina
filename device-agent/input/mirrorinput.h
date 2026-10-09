@@ -58,6 +58,8 @@ signals:
     // A false state is emitted even if the evdev release write fails, so an overlay never remains
     // visible after the injector has abandoned a contact.
     void contactChanged(const QPoint &point, bool pressed);
+    // busy() or liveContact() changed.
+    void stateChanged();
 
 private slots:
     void advance();

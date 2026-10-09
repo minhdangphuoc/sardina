@@ -1,4 +1,5 @@
 #include "mirrorinput.h"
+#include "keypadkeys.h"
 
 #include <QDir>
 #include <QFile>
@@ -73,27 +74,17 @@ struct Candidate {
     input_absinfo slotRange = {};
 };
 
-struct KeySpec {
-    const char *name;
-    int code;
+// Evdev codes of KEYPAD_KEY_NAMES, in the same order.
+const int KEYPAD_CODES[] = {
+    KEY_0, KEY_1, KEY_2, KEY_3, KEY_4, KEY_5, KEY_6, KEY_7, KEY_8, KEY_9, KEY_NUMERIC_STAR, KEY_NUMERIC_POUND,
+    KEY_ENTER, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_MENU, KEY_BACK, KEY_PHONE, KEY_F21, KEY_F22, KEY_F23,
 };
-
-const KeySpec KEYPAD_KEYS[] = {
-    { "0", KEY_0 }, { "1", KEY_1 }, { "2", KEY_2 }, { "3", KEY_3 }, { "4", KEY_4 }, { "5", KEY_5 },
-    { "6", KEY_6 }, { "7", KEY_7 }, { "8", KEY_8 }, { "9", KEY_9 }, { "*", KEY_NUMERIC_STAR },
-    { "#", KEY_NUMERIC_POUND }, { "OK", KEY_ENTER }, { "UP", KEY_UP }, { "DOWN", KEY_DOWN },
-    { "LEFT", KEY_LEFT }, { "RIGHT", KEY_RIGHT }, { "MENU", KEY_MENU }, { "BACK", KEY_BACK },
-    { "CALL", KEY_PHONE }, { "F21", KEY_F21 }, { "F22", KEY_F22 }, { "F23", KEY_F23 },
-};
+static_assert(sizeof(KEYPAD_CODES) / sizeof(KEYPAD_CODES[0]) == KEYPAD_KEY_COUNT, "one code per key name");
 
 int keypadCode(const QString &name)
 {
-    for (const KeySpec &key : KEYPAD_KEYS) {
-        if (name == QLatin1String(key.name)) {
-            return key.code;
-        }
-    }
-    return -1;
+    const int index = keypadKeyIndex(name);
+    return index < 0 ? -1 : KEYPAD_CODES[index];
 }
 
 struct KeypadCandidate {
@@ -105,7 +96,8 @@ struct KeypadCandidate {
     QSet<int> codes;
 };
 
-KeypadCandidate findKeypad()
+// `access`: O_RDONLY to describe the keypad (ping), O_RDWR to press its keys.
+KeypadCandidate findKeypad(int access)
 {
     KeypadCandidate best;
     const QFileInfoList entries = QDir(QStringLiteral("/dev/input"))
@@ -113,7 +105,7 @@ KeypadCandidate findKeypad()
                                                      QDir::Name);
     for (const QFileInfo &entry : entries) {
         const QByteArray path = entry.absoluteFilePath().toLocal8Bit();
-        const int fd = open(path.constData(), O_RDWR | O_NONBLOCK | O_CLOEXEC);
+        const int fd = open(path.constData(), access | O_NONBLOCK | O_CLOEXEC);
         if (fd < 0) {
             continue;
         }
@@ -133,10 +125,10 @@ KeypadCandidate findKeypad()
         char rawName[256] = {};
         ioctl(fd, EVIOCGNAME(sizeof(rawName) - 1), rawName);
         candidate.name = QString::fromLocal8Bit(rawName);
-        for (const KeySpec &key : KEYPAD_KEYS) {
-            if (bit(keyBits, key.code)) {
-                candidate.keys.append(QLatin1String(key.name));
-                candidate.codes.insert(key.code);
+        for (int i = 0; i < KEYPAD_KEY_COUNT; ++i) {
+            if (bit(keyBits, KEYPAD_CODES[i])) {
+                candidate.keys.append(QLatin1String(KEYPAD_KEY_NAMES[i]));
+                candidate.codes.insert(KEYPAD_CODES[i]);
             }
         }
         candidate.score = candidate.keys.size();
@@ -234,7 +226,7 @@ MirrorInput::~MirrorInput()
 
 MirrorKeypadInfo MirrorInput::keypadInfo()
 {
-    KeypadCandidate keypad = findKeypad();
+    KeypadCandidate keypad = findKeypad(O_RDONLY);
     MirrorKeypadInfo info;
     if (keypad.fd >= 0) {
         close(keypad.fd);
@@ -379,7 +371,7 @@ bool MirrorInput::openTouchscreen()
 
 bool MirrorInput::openKeypad()
 {
-    const KeypadCandidate keypad = findKeypad();
+    const KeypadCandidate keypad = findKeypad(O_RDWR);
     if (keypad.fd < 0) {
         return false;
     }
@@ -537,6 +529,7 @@ bool MirrorInput::begin(const QPoint &point, bool live)
     }
     m_down = true;
     m_liveContact = live;
+    emit stateChanged();
     return true;
 }
 
@@ -555,6 +548,7 @@ bool MirrorInput::end()
     const bool ok = releaseContact();
     m_down = false;
     m_liveContact = false;
+    emit stateChanged();
     return ok;
 }
 

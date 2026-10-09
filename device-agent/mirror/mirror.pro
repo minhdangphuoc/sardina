@@ -5,22 +5,20 @@ include(../common/module.pri)
 QT = core dbus network gui
 PKGCONFIG += vpx
 
-INCLUDEPATH += ../input
-
 SOURCES += \
     main.cpp \
     mirror.cpp \
     indicatorlink.cpp \
+    inputlink.cpp \
     recorder.cpp \
     videoencoder.cpp \
     displaystate.cpp \
-    ../input/mirrorinput.cpp \
-    ../input/touchoverlay.cpp \
     ../common/waylandutil.cpp
 
 HEADERS += \
     mirror.h \
     indicatorlink.h \
+    inputlink.h \
     pacer.h \
     yuvrows.h \
     retrybudget.h \
@@ -30,8 +28,7 @@ HEADERS += \
     ../common/idleplan.h \
     ../common/phonesettings.h \
     ../common/waylandutil.h \
-    ../input/mirrorinput.h \
-    ../input/touchoverlay.h
+    ../common/keypadkeys.h
 
-WAYLAND_CLIENT_PROTOCOLS = protocol/lipstick-recorder.xml ../input/protocol/alien-manager.xml
+WAYLAND_CLIENT_PROTOCOLS = protocol/lipstick-recorder.xml
 include(../common/wayland.pri)
