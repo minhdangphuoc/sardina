@@ -274,6 +274,8 @@ Tips:
   `sailfish.build.extraArgs` come after this define, so a define of your own
   wins. `Q_ASSERT` stays disabled (`QT_NO_DEBUG` is still defined), as in an
   `sfdk build -d`. CMake projects get the same flags through `%cmake`.
+- Debug builds also enable QML debugging support (`-DQT_QML_DEBUG`); nothing
+  opens unless the app is started with `-qmljsdebugger`.
 - qmake does not rebuild objects when only the flags change. When you switch
   between Release and Debug, the next Build, Deploy, Run or Debug first runs
   `sfdk make -- clean` if the project's `Makefile` was generated for the other

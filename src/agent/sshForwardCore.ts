@@ -36,10 +36,16 @@ export interface ForwardArgsInput {
   port: number;
   user: string;
   privateKey: string;
-  localSocket: string;
-  remoteSocket: string;
+  forward: ForwardSpec;
   knownHostsFile: string;
   hostKeyAlias: string;
+}
+
+/** A unix-socket forward to the agent, or a loopback TCP forward of the same port on both ends. */
+export type ForwardSpec = { kind: 'unix'; local: string; remote: string } | { kind: 'tcp'; port: number };
+
+function forwardArg(f: ForwardSpec): string {
+  return f.kind === 'unix' ? `${f.local}:${f.remote}` : `127.0.0.1:${f.port}:127.0.0.1:${f.port}`;
 }
 
 /**
@@ -84,7 +90,7 @@ export function buildForwardArgs(o: ForwardArgsInput): string[] {
     '-p',
     String(o.port),
     '-L',
-    `${o.localSocket}:${o.remoteSocket}`,
+    forwardArg(o.forward),
     '--',
     `${o.user}@${o.host}`,
   ];

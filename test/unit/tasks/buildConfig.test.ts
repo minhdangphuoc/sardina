@@ -53,7 +53,7 @@ describe('buildConfig status bar selectors', () => {
   const releaseMakefile =
     'CC            = gcc\nCXXFLAGS      = -pipe -O2 -g -pipe -Wall -Wp,-D_FORTIFY_SOURCE=2 -fexceptions -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security -m32 -msse -msse2 -march=i686 -mfpmath=sse -mtune=generic -fno-omit-frame-pointer -fasynchronous-unwind-tables -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -Wall -W -D_REENTRANT -fPIC $(DEFINES)\n';
   const debugMakefile =
-    'CC            = gcc\nCXXFLAGS      = -pipe -O0 -g -pipe -Wall -fexceptions -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security -m32 -msse -msse2 -march=i686 -mfpmath=sse -mtune=generic -fno-omit-frame-pointer -fasynchronous-unwind-tables -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -Wall -W -D_REENTRANT -fPIC $(DEFINES)\n';
+    'CC            = gcc\nCXXFLAGS      = -pipe -O0 -g -pipe -Wall -fexceptions -fstack-protector --param=ssp-buffer-size=4 -Wformat -Wformat-security -DQT_QML_DEBUG -m32 -msse -msse2 -march=i686 -mfpmath=sse -mtune=generic -fno-omit-frame-pointer -fasynchronous-unwind-tables -fPIC -fvisibility=hidden -fvisibility-inlines-hidden -Wall -W -D_REENTRANT -fPIC $(DEFINES)\n';
 
   it('reads the build type a qmake Makefile was generated for', () => {
     assert.strictEqual(makefileBuildType(releaseMakefile), 'release');
@@ -67,6 +67,8 @@ describe('buildConfig status bar selectors', () => {
     assert.strictEqual(staleBuildType(debugMakefile, 'release'), true);
     assert.strictEqual(staleBuildType(releaseMakefile, 'release'), false);
     assert.strictEqual(staleBuildType(debugMakefile, 'debug'), false);
+    const olderDebug = debugMakefile.replace(' -DQT_QML_DEBUG', '');
+    assert.strictEqual(staleBuildType(olderDebug, 'debug'), true, 'Debug build from before QML debugging');
     assert.strictEqual(staleBuildType(undefined, 'debug'), false, 'never built');
     assert.strictEqual(staleBuildType('CXXFLAGS = -O3\n', 'release'), false, 'unknown flags never force a clean');
   });

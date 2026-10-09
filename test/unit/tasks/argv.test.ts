@@ -36,6 +36,7 @@ describe('argv.buildArgs (FR-5.3)', () => {
     assert.deepStrictEqual(argv, ['build', '-d', '--', '--define', `__global_cflags ${DEBUG_GLOBAL_CFLAGS}`]);
     assert.match(DEBUG_GLOBAL_CFLAGS, /^-O0 -g /);
     assert.doesNotMatch(DEBUG_GLOBAL_CFLAGS, /-O[1-3s]|_FORTIFY_SOURCE/);
+    assert.match(DEBUG_GLOBAL_CFLAGS, / -DQT_QML_DEBUG$/);
   });
 
   it('debug: the user\'s extraArgs follow the debug define, so their own define wins', () => {

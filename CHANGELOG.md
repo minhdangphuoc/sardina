@@ -3,6 +3,7 @@
 ## v0.1.12
 
 - QML completion, hover and error checks for Sailfish projects, read from the selected build target (no new view or command). Completion offers types, properties and `on...` handlers of the object's type chain, `id.`, singletons, enum values, attached properties and `import` lines with module names and versions; hover shows the type chain and member owner. An unknown type or property is reported as an error only when the file parses cleanly, every `import` resolves and the type chain is complete. New setting `sailfish.qml.languageFeatures` (default on). Checked against the installed targets on this machine only; not on a phone.
+- QML debugging support is compiled into Debug builds (`-DQT_QML_DEBUG`); it opens nothing unless the app is started with `-qmljsdebugger`.
 
 ## v0.1.11
 

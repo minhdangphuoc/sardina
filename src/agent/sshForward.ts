@@ -15,6 +15,7 @@ import {
   buildForwardArgs,
   classifySshFailure,
   expandHomePath,
+  type ForwardSpec,
   hostKeyAlias,
   isSafeLocalSocketPath,
   knownHostsLines,
@@ -50,9 +51,7 @@ export interface ForwardExit {
   stderrTail: string;
 }
 
-export interface SshForwardOpenOptions {
-  device: SfdkDeviceInfo;
-  remoteSocket: string;
+export interface SshForwardCommonOptions {
   /** The extension's `globalStorageUri.fsPath`; holds `ssh/known_hosts`. */
   storageDir: string;
   token: vscode.CancellationToken;
@@ -60,9 +59,26 @@ export interface SshForwardOpenOptions {
   readyTimeoutMs?: number;
 }
 
+export interface SshForwardOpenOptions extends SshForwardCommonOptions {
+  device: SfdkDeviceInfo;
+  remoteSocket: string;
+}
+
+/** What `start` needs from a forward kind: the `-L` spec, where to probe, and what identifies the process. */
+interface ForwardPlan {
+  forward: ForwardSpec;
+  target: net.NetConnectOpts;
+  marker: string;
+}
+
 export type SshForwardOpenResult =
   | { ok: true; forward: SshForward }
   | { ok: false; cls: SshFailureClass; detail: string };
+
+function failOpen(output: Output, cls: SshFailureClass, detail: string): SshForwardOpenResult {
+  output.log('info', `mirror forward: ${cls}: ${detail}`);
+  return { ok: false, cls, detail };
+}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => {
@@ -128,8 +144,11 @@ async function createSessionDir(base: string): Promise<{ dir: string } | { error
 export const FIRST_SOCKET_MAX_AGE_MS = 4000;
 
 export class SshForward {
-  readonly localSocket: string;
   readonly exited: Promise<ForwardExit>;
+  /** The unix forward's local socket; empty for a TCP forward. */
+  get localSocket(): string {
+    return 'path' in this.target ? this.target.path : '';
+  }
 
   private exitInfo: (ForwardExit & { spawnErrorCode?: string }) | undefined;
   private stderrTail = '';
@@ -143,9 +162,8 @@ export class SshForward {
   private constructor(
     private readonly child: ChildProcess,
     private readonly sessionDir: string,
-    localSocket: string,
+    private readonly target: net.NetConnectOpts,
   ) {
-    this.localSocket = localSocket;
     this.exited = new Promise<ForwardExit>((resolve) => {
       const finish = (code: number | null): void => {
         if (this.exitInfo) {
@@ -172,16 +190,47 @@ export class SshForward {
    * Every failure leaves no ssh process and no session directory behind.
    */
   static async open(o: SshForwardOpenOptions): Promise<SshForwardOpenResult> {
-    const d = o.device;
-    const fail = (cls: SshFailureClass, detail: string): SshForwardOpenResult => {
-      o.output.log('info', `mirror forward: ${cls}: ${detail}`);
-      return { ok: false, cls, detail };
-    };
+    if (!AGENT_SOCKET_RE.test(o.remoteSocket)) {
+      return failOpen(o.output, 'other', 'the remote socket path is not the agent socket');
+    }
+    return SshForward.start(o.device, o, (dir) => {
+      const local = path.join(dir, SOCKET_FILE);
+      if (!isSafeLocalSocketPath(local)) {
+        return { error: `the local socket path is unusable (characters or length): ${local}` };
+      }
+      return { forward: { kind: 'unix', local, remote: o.remoteSocket }, target: { path: local }, marker: local };
+    });
+  }
+
+  /**
+   * The same hardened forward for `127.0.0.1:<port>` on both ends (a debugger port). A port that is
+   * busy on this computer fails as `local-bind`.
+   */
+  static async openTcp(device: SfdkDeviceInfo, port: number, o: SshForwardCommonOptions): Promise<SshForwardOpenResult> {
+    if (!Number.isInteger(port) || port < 1 || port > 65535) {
+      return failOpen(o.output, 'other', `${port} is not a valid port`);
+    }
+    // A listener already there would pass the readiness probe before ssh fails to bind.
+    const occupant = await tryConnect({ host: '127.0.0.1', port });
+    if (occupant) {
+      occupant.destroy();
+      return failOpen(o.output, 'local-bind', `port ${port} is in use on this computer`);
+    }
+    return SshForward.start(device, o, () => ({
+      forward: { kind: 'tcp', port },
+      target: { host: '127.0.0.1', port },
+      marker: `127.0.0.1:${port}:127.0.0.1:${port}`,
+    }));
+  }
+
+  private static async start(
+    d: SfdkDeviceInfo,
+    o: SshForwardCommonOptions,
+    plan: (sessionDir: string) => ForwardPlan | { error: string },
+  ): Promise<SshForwardOpenResult> {
+    const fail = (cls: SshFailureClass, detail: string): SshForwardOpenResult => failOpen(o.output, cls, detail);
     if (!d.host || !d.user || d.port === undefined || !d.privateKey) {
       return fail('other', 'the device endpoint (host, port, user, key) is not fully known');
-    }
-    if (!AGENT_SOCKET_RE.test(o.remoteSocket)) {
-      return fail('other', 'the remote socket path is not the agent socket');
     }
     const privateKey = expandHomePath(d.privateKey, os.homedir());
     try {
@@ -205,10 +254,10 @@ export class SshForward {
     if ('error' in session) {
       return fail('local-bind', session.error);
     }
-    const localSocket = path.join(session.dir, SOCKET_FILE);
-    if (!isSafeLocalSocketPath(localSocket)) {
+    const planned = plan(session.dir);
+    if ('error' in planned) {
       await fsp.rm(session.dir, { recursive: true, force: true }).catch(() => undefined);
-      return fail('local-bind', `the local socket path is unusable (characters or length): ${localSocket}`);
+      return fail('local-bind', planned.error);
     }
 
     const args = buildForwardArgs({
@@ -216,8 +265,7 @@ export class SshForward {
       port: d.port,
       user: d.user,
       privateKey,
-      localSocket,
-      remoteSocket: o.remoteSocket,
+      forward: planned.forward,
       knownHostsFile,
       hostKeyAlias: hostKeyAlias(sfdkDeviceName(d)),
     });
@@ -229,10 +277,10 @@ export class SshForward {
       const code = (err as NodeJS.ErrnoException).code;
       return fail(classifySshFailure('', { spawnErrorCode: code }), err instanceof Error ? err.message : String(err));
     }
-    const forward = new SshForward(child, session.dir, localSocket);
+    const forward = new SshForward(child, session.dir, planned.target);
     if (child.pid !== undefined) {
       try {
-        fs.writeFileSync(path.join(session.dir, SSH_PID_FILE), `${child.pid}\n`, { mode: 0o600 });
+        fs.writeFileSync(path.join(session.dir, SSH_PID_FILE), `${child.pid}\n${planned.marker}\n`, { mode: 0o600 });
       } catch {
         // the sweep then only removes the directory
       }
@@ -256,7 +304,7 @@ export class SshForward {
         await forward.close();
         return fail(classifySshFailure(tail, { timedOut: true }), tail.trim() || 'the forward did not come up in time');
       }
-      const sock = await tryConnect(localSocket);
+      const sock = await tryConnect(planned.target);
       if (sock) {
         forward.firstSocket = sock;
         forward.firstSocketAt = Date.now();
@@ -283,7 +331,7 @@ export class SshForward {
       sock.destroy();
     }
     return new Promise<net.Socket>((resolve, reject) => {
-      const sock = net.connect(this.localSocket);
+      const sock = net.connect(this.target);
       const onError = (err: Error): void => {
         sock.destroy();
         reject(err);
@@ -342,9 +390,9 @@ export class SshForward {
   }
 }
 
-function tryConnect(socketPath: string): Promise<net.Socket | undefined> {
+function tryConnect(target: net.NetConnectOpts): Promise<net.Socket | undefined> {
   return new Promise((resolve) => {
-    const sock = net.connect(socketPath);
+    const sock = net.connect(target);
     sock.once('connect', () => {
       sock.removeAllListeners('error');
       resolve(sock);
@@ -425,8 +473,11 @@ export async function sweepOrphans(dir: string): Promise<number> {
 
 async function killRecordedSsh(sessionDir: string): Promise<void> {
   let pid: number;
+  let marker: string;
   try {
-    pid = Number((await fsp.readFile(path.join(sessionDir, SSH_PID_FILE), 'utf8')).trim());
+    const [pidLine, markerLine] = (await fsp.readFile(path.join(sessionDir, SSH_PID_FILE), 'utf8')).split('\n');
+    pid = Number(pidLine.trim());
+    marker = markerLine || path.join(sessionDir, SOCKET_FILE);
   } catch {
     return;
   }
@@ -434,7 +485,7 @@ async function killRecordedSsh(sessionDir: string): Promise<void> {
     return;
   }
   const cmdline = await commandLineOf(pid);
-  if (!cmdline || !cmdline.includes(path.join(sessionDir, SOCKET_FILE))) {
+  if (!cmdline || !cmdline.includes(marker)) {
     return;
   }
   try {
