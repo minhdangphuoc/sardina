@@ -2,7 +2,7 @@
 
 ## v0.1.13
 
-- The phone-side touch indicator no longer shows as a separate app in the switcher (device agent 1.11.1). It is now a standard toplevel tagged as an overlay, and the mirror draws the marker itself when the phone cannot. Not yet verified on a phone.
+- The touch indicator is drawn on the phone again (device agent 1.11.2), as a window above apps and the lock screen that is not listed in the switcher; the mirror draws the marker itself when the phone cannot. Fixed a Lipstick crash the earlier indicator could cause after a control session or on a clipboard change. Tested on the emulator (sessions, killed sessions, clipboard changes, rotation, lock and display off, keyboard, taps and swipes passing through); not yet on a phone.
 
 ## v0.1.12
 

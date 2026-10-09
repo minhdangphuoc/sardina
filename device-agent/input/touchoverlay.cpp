@@ -33,6 +33,9 @@ const wl_shell_surface_listener shellListener = { TouchOverlay::onShellPing, Tou
                                                   TouchOverlay::onShellPopupDone };
 const wl_output_listener outputListener = { TouchOverlay::onOutputGeometry, TouchOverlay::onOutputMode };
 const wl_buffer_listener bufferListener = { TouchOverlay::onBufferRelease };
+const wl_data_device_listener dataDeviceListener = { TouchOverlay::onDataOffer, TouchOverlay::onDataEnter,
+                                                     TouchOverlay::onDataLeave, TouchOverlay::onDataMotion,
+                                                     TouchOverlay::onDataDrop, TouchOverlay::onDataSelection };
 
 }
 
@@ -45,23 +48,20 @@ TouchOverlay::TouchOverlay(QObject *parent)
     , m_output(nullptr)
     , m_shell(nullptr)
     , m_extension(nullptr)
+    , m_seat(nullptr)
+    , m_dataManager(nullptr)
+    , m_dataDevice(nullptr)
     , m_role(nullptr)
     , m_extended(nullptr)
     , m_surface(nullptr)
     , m_transform(0)
     , m_notifier(nullptr)
-    , m_data(nullptr)
-    , m_dataSize(0)
     , m_alpha(0.0)
     , m_enabled(false)
     , m_pressed(false)
-    , m_mapped(false)
     , m_renderPending(false)
     , m_broken(false)
 {
-    for (Buffer &buffer : m_buffers) {
-        buffer.owner = this;
-    }
     m_fade.setSingleShot(false);
     m_fade.setInterval(FADE_INTERVAL_MS);
     connect(&m_fade, &QTimer::timeout, this, &TouchOverlay::fade);
@@ -69,42 +69,7 @@ TouchOverlay::TouchOverlay(QObject *parent)
 
 TouchOverlay::~TouchOverlay()
 {
-    m_fade.stop();
-    delete m_notifier; // before the display closes its fd
-    m_notifier = nullptr;
-    hideSurface();
-    destroyBuffers();
-    if (m_extended) {
-        qt_extended_surface_destroy(m_extended);
-    }
-    if (m_role) {
-        wl_shell_surface_destroy(m_role);
-    }
-    if (m_surface) {
-        wl_surface_destroy(m_surface);
-    }
-    if (m_extension) {
-        qt_surface_extension_destroy(m_extension);
-    }
-    if (m_shell) {
-        wl_shell_destroy(m_shell);
-    }
-    if (m_output) {
-        wl_output_destroy(m_output);
-    }
-    if (m_shm) {
-        wl_shm_destroy(m_shm);
-    }
-    if (m_compositor) {
-        wl_compositor_destroy(m_compositor);
-    }
-    if (m_registry) {
-        wl_registry_destroy(m_registry);
-    }
-    if (m_display) {
-        wl_display_flush(m_display);
-        wl_display_disconnect(m_display);
-    }
+    disconnectDisplay();
 }
 
 void TouchOverlay::setEnabled(bool enabled)
@@ -112,15 +77,26 @@ void TouchOverlay::setEnabled(bool enabled)
     if (enabled == m_enabled) {
         return;
     }
-    if (enabled && !m_display && !initialize()) {
+    if (!enabled) {
+        m_enabled = false;
+        m_fade.stop();
+        m_alpha = 0.0;
+        m_pressed = false;
+        render();
+        return;
+    }
+    if (!m_display && !initialize()) {
         if (!m_error.isEmpty()) {
             fprintf(stderr, "sailfish-devagent: touch indicator unavailable: %s\n", qPrintable(m_error));
         }
         return;
     }
-    m_enabled = enabled && available();
-    if (!m_enabled) {
-        hideSurface();
+    if (!available()) {
+        return;
+    }
+    m_enabled = true;
+    if (!m_surface) {
+        showSurface();
     }
 }
 
@@ -133,7 +109,7 @@ void TouchOverlay::setScreen(const QSize &screen)
 
 void TouchOverlay::setContact(const QPoint &point, bool pressed)
 {
-    if (!m_enabled || !available()) {
+    if (!m_enabled || !m_surface) {
         return;
     }
     m_point = point;
@@ -162,30 +138,17 @@ bool TouchOverlay::initialize()
         fail(QStringLiteral("no answer from the compositor: ") + WaylandUtil::displayError(m_display));
         return false;
     }
-    if (!m_compositor || !m_shm || !m_output || !m_shell || !m_extension) {
-        fail(QStringLiteral("the compositor has no wl_shell or qt_surface_extension for the touch overlay"));
+    if (!m_compositor || !m_shm || !m_output || !m_shell || !m_extension || !m_seat || !m_dataManager) {
+        fail(QStringLiteral("the compositor lacks a global the touch overlay needs (wl_shell, qt_surface_extension, "
+                            "wl_seat or wl_data_device_manager)"));
         return false;
     }
+    m_dataDevice = wl_data_device_manager_get_data_device(m_dataManager, m_seat);
+    wl_data_device_add_listener(m_dataDevice, &dataDeviceListener, this);
     // The output's mode event follows its binding; the surface is sized from it.
-    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS) || m_surfaceSize.isEmpty() || !m_buffers[0].handle) {
-        fail(m_error.isEmpty() ? QStringLiteral("the compositor reported no output size for the touch overlay") : m_error);
-        return false;
-    }
-    m_surface = wl_compositor_create_surface(m_compositor);
-    m_role = wl_shell_get_shell_surface(m_shell, m_surface);
-    wl_shell_surface_add_listener(m_role, &shellListener, this);
-    wl_shell_surface_set_title(m_role, "Remote touch indicator");
-    wl_shell_surface_set_toplevel(m_role);
-    m_extended = qt_surface_extension_get_extended_surface(m_extension, m_surface);
-    sendOverlayCategory();
-
-    // Empty (not null) means no point is part of the input region. The marker can therefore never
-    // consume a physical touch or interfere with the event stream it visualizes.
-    wl_region *empty = wl_compositor_create_region(m_compositor);
-    wl_surface_set_input_region(m_surface, empty);
-    wl_region_destroy(empty);
-    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS)) {
-        fail(QStringLiteral("no answer from the compositor: ") + WaylandUtil::displayError(m_display));
+    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS) || m_surfaceSize.isEmpty() || !m_set.buffers[0].handle) {
+        fail(m_error.isEmpty() ? QStringLiteral("the compositor reported no output size for the touch overlay")
+                               : m_error);
         return false;
     }
     m_notifier = new QSocketNotifier(wl_display_get_fd(m_display), QSocketNotifier::Read, this);
@@ -193,14 +156,39 @@ bool TouchOverlay::initialize()
     return true;
 }
 
+void TouchOverlay::showSurface()
+{
+    m_surface = wl_compositor_create_surface(m_compositor);
+    m_role = wl_shell_get_shell_surface(m_shell, m_surface);
+    wl_shell_surface_add_listener(m_role, &shellListener, this);
+    wl_shell_surface_set_title(m_role, "Remote touch indicator");
+    wl_shell_surface_set_toplevel(m_role);
+    m_extended = qt_surface_extension_get_extended_surface(m_extension, m_surface);
+    sendCategory();
+
+    // Empty (not null) means no point is part of the input region. The marker can therefore never
+    // consume a physical touch or interfere with the event stream it visualizes.
+    wl_region *empty = wl_compositor_create_region(m_compositor);
+    wl_surface_set_input_region(m_surface, empty);
+    wl_region_destroy(empty);
+    m_alpha = 0.0;
+    render();
+    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS)) {
+        fail(QStringLiteral("no answer from the compositor: ") + WaylandUtil::displayError(m_display));
+    }
+}
+
 // Qt's own wire format for window properties (QWaylandExtendedSurface::updateGenericProperty);
 // Lipstick reads the category from it before the first commit decides how the window is treated.
-void TouchOverlay::sendOverlayCategory()
+// "notification" puts it above apps and the lock screen, out of the switcher. Not "overlay": Lipstick
+// connects each overlay surface to clipboard changes for good, and once the surface is gone (as at
+// every session end) a clipboard change reaches its freed resource and crashes Lipstick.
+void TouchOverlay::sendCategory()
 {
     QByteArray value;
     QDataStream stream(&value, QIODevice::WriteOnly);
     stream.setVersion(QDataStream::Qt_5_6);
-    stream << QVariant(QStringLiteral("overlay"));
+    stream << QVariant(QStringLiteral("notification"));
     wl_array array;
     wl_array_init(&array);
     void *copy = wl_array_add(&array, static_cast<size_t>(value.size()));
@@ -209,7 +197,7 @@ void TouchOverlay::sendOverlayCategory()
     wl_array_release(&array);
 }
 
-bool TouchOverlay::createBuffers()
+bool TouchOverlay::createBuffers(BufferSet *set)
 {
     const int width = m_surfaceSize.width();
     const int height = m_surfaceSize.height();
@@ -244,11 +232,12 @@ bool TouchOverlay::createBuffers()
         return false;
     }
     wl_shm_pool *pool = wl_shm_create_pool(m_shm, fd, static_cast<int32_t>(total));
-    m_data = static_cast<uchar *>(data);
-    m_dataSize = total;
+    set->data = static_cast<uchar *>(data);
+    set->size = total;
     for (int i = 0; i < 2; ++i) {
-        Buffer &buffer = m_buffers[i];
-        buffer.data = m_data + one * static_cast<size_t>(i);
+        Buffer &buffer = set->buffers[i];
+        buffer.owner = this;
+        buffer.data = set->data + one * static_cast<size_t>(i);
         buffer.handle = wl_shm_pool_create_buffer(pool, static_cast<int32_t>(one * static_cast<size_t>(i)),
                                                   width, height, stride, WL_SHM_FORMAT_ARGB8888);
         wl_buffer_add_listener(buffer.handle, &bufferListener, &buffer);
@@ -259,9 +248,9 @@ bool TouchOverlay::createBuffers()
     return true;
 }
 
-void TouchOverlay::destroyBuffers()
+void TouchOverlay::destroyBuffers(BufferSet *set)
 {
-    for (Buffer &buffer : m_buffers) {
+    for (Buffer &buffer : set->buffers) {
         if (buffer.handle) {
             wl_buffer_destroy(buffer.handle);
         }
@@ -269,11 +258,11 @@ void TouchOverlay::destroyBuffers()
         buffer.data = nullptr;
         buffer.busy = false;
     }
-    if (m_data) {
-        munmap(m_data, m_dataSize);
+    if (set->data) {
+        munmap(set->data, set->size);
     }
-    m_data = nullptr;
-    m_dataSize = 0;
+    set->data = nullptr;
+    set->size = 0;
 }
 
 QPoint TouchOverlay::surfacePoint() const
@@ -288,13 +277,14 @@ QPoint TouchOverlay::surfacePoint() const
     return QPoint(x, y);
 }
 
+// Between touches the frame is fully transparent; the surface is never unmapped while enabled.
 void TouchOverlay::render()
 {
-    if (!m_enabled || !m_surface || m_surfaceSize.isEmpty() || m_alpha <= 0.0) {
+    if (!m_surface || !available() || m_surfaceSize.isEmpty()) {
         return;
     }
     Buffer *target = nullptr;
-    for (Buffer &buffer : m_buffers) {
+    for (Buffer &buffer : m_set.buffers) {
         if (buffer.handle && !buffer.busy) {
             target = &buffer;
             break;
@@ -308,50 +298,33 @@ void TouchOverlay::render()
     QImage image(target->data, m_surfaceSize.width(), m_surfaceSize.height(), m_surfaceSize.width() * 4,
                  QImage::Format_ARGB32_Premultiplied);
     image.fill(Qt::transparent);
-    QPainter painter(&image);
-    painter.setRenderHint(QPainter::Antialiasing, true);
-    const int radius = qMax(12, qMin(m_surfaceSize.width(), m_surfaceSize.height()) / 36);
-    const int outline = qMax(2, radius / 7);
-    const QPoint center = surfacePoint();
-    const int fillAlpha = qRound((m_pressed ? 145.0 : 80.0) * m_alpha);
-    const int lineAlpha = qRound(230.0 * m_alpha);
-    painter.setBrush(QColor(255, 70, 45, fillAlpha));
-    painter.setPen(QPen(QColor(255, 255, 255, lineAlpha), outline));
-    painter.drawEllipse(center, radius, radius);
-    painter.end();
+    if (m_alpha > 0.0) {
+        QPainter painter(&image);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+        const int radius = qMax(12, qMin(m_surfaceSize.width(), m_surfaceSize.height()) / 36);
+        const int outline = qMax(2, radius / 7);
+        const int fillAlpha = qRound((m_pressed ? 145.0 : 80.0) * m_alpha);
+        const int lineAlpha = qRound(230.0 * m_alpha);
+        painter.setBrush(QColor(255, 70, 45, fillAlpha));
+        painter.setPen(QPen(QColor(255, 255, 255, lineAlpha), outline));
+        painter.drawEllipse(surfacePoint(), radius, radius);
+    }
 
     target->busy = true;
     wl_surface_attach(m_surface, target->handle, 0, 0);
     wl_surface_damage(m_surface, 0, 0, m_surfaceSize.width(), m_surfaceSize.height());
     wl_surface_commit(m_surface);
-    m_mapped = true;
     if (wl_display_flush(m_display) < 0 && errno != EAGAIN) {
         fail(QStringLiteral("the touch overlay compositor connection failed: ") + WaylandUtil::displayError(m_display));
     }
-}
-
-void TouchOverlay::hideSurface()
-{
-    m_fade.stop();
-    m_alpha = 0.0;
-    m_pressed = false;
-    m_renderPending = false;
-    if (m_surface && m_mapped) {
-        wl_surface_attach(m_surface, nullptr, 0, 0);
-        wl_surface_commit(m_surface);
-        if (m_display) {
-            wl_display_flush(m_display);
-        }
-    }
-    m_mapped = false;
 }
 
 void TouchOverlay::fade()
 {
     m_alpha -= 1.0 / FADE_STEPS;
     if (m_alpha <= 0.0) {
-        hideSurface();
-        return;
+        m_alpha = 0.0;
+        m_fade.stop();
     }
     render();
 }
@@ -374,6 +347,9 @@ void TouchOverlay::onReadable()
     wl_display_flush(m_display);
 }
 
+// Nothing is dispatched on a failed connection again (a timed-out roundtrip's callback still
+// points at that call's stack); it is closed once control is back in the event loop, as this may
+// run inside a Wayland callback.
 void TouchOverlay::fail(const QString &error)
 {
     if (m_broken) {
@@ -385,7 +361,68 @@ void TouchOverlay::fail(const QString &error)
     if (m_notifier) {
         m_notifier->setEnabled(false);
     }
-    hideSurface();
+    QTimer::singleShot(0, this, [this]() { disconnectDisplay(); });
+}
+
+void TouchOverlay::disconnectDisplay()
+{
+    m_fade.stop();
+    delete m_notifier; // before the display closes its fd
+    m_notifier = nullptr;
+    if (m_extended) {
+        qt_extended_surface_destroy(m_extended);
+    }
+    if (m_role) {
+        wl_shell_surface_destroy(m_role);
+    }
+    if (m_surface) {
+        wl_surface_destroy(m_surface);
+    }
+    m_extended = nullptr;
+    m_role = nullptr;
+    m_surface = nullptr;
+    destroyBuffers(&m_set);
+    if (m_dataDevice) {
+        wl_data_device_destroy(m_dataDevice);
+    }
+    if (m_dataManager) {
+        wl_data_device_manager_destroy(m_dataManager);
+    }
+    if (m_seat) {
+        wl_seat_destroy(m_seat);
+    }
+    if (m_extension) {
+        qt_surface_extension_destroy(m_extension);
+    }
+    if (m_shell) {
+        wl_shell_destroy(m_shell);
+    }
+    if (m_output) {
+        wl_output_destroy(m_output);
+    }
+    if (m_shm) {
+        wl_shm_destroy(m_shm);
+    }
+    if (m_compositor) {
+        wl_compositor_destroy(m_compositor);
+    }
+    if (m_registry) {
+        wl_registry_destroy(m_registry);
+    }
+    m_dataDevice = nullptr;
+    m_dataManager = nullptr;
+    m_seat = nullptr;
+    m_extension = nullptr;
+    m_shell = nullptr;
+    m_output = nullptr;
+    m_shm = nullptr;
+    m_compositor = nullptr;
+    m_registry = nullptr;
+    if (m_display) {
+        wl_display_flush(m_display);
+        wl_display_disconnect(m_display);
+    }
+    m_display = nullptr;
 }
 
 void TouchOverlay::onGlobal(void *data, wl_registry *registry, uint32_t name, const char *interface, uint32_t version)
@@ -404,6 +441,12 @@ void TouchOverlay::onGlobal(void *data, wl_registry *registry, uint32_t name, co
     } else if (std::strcmp(interface, "qt_surface_extension") == 0 && !overlay->m_extension) {
         overlay->m_extension = static_cast<qt_surface_extension *>(
             wl_registry_bind(registry, name, &qt_surface_extension_interface, 1));
+    } else if (std::strcmp(interface, "wl_seat") == 0 && !overlay->m_seat) {
+        // No listener: the overlay never takes input, it only needs the seat for its data device.
+        overlay->m_seat = static_cast<wl_seat *>(wl_registry_bind(registry, name, &wl_seat_interface, 1));
+    } else if (std::strcmp(interface, "wl_data_device_manager") == 0 && !overlay->m_dataManager) {
+        overlay->m_dataManager = static_cast<wl_data_device_manager *>(
+            wl_registry_bind(registry, name, &wl_data_device_manager_interface, 1));
     }
 }
 
@@ -462,23 +505,19 @@ bool TouchOverlay::resizeSurface(const QSize &size)
     if (size == m_surfaceSize) {
         return true;
     }
-    const qreal alpha = m_alpha;
-    const bool pressed = m_pressed;
-    const bool fading = m_fade.isActive();
-    hideSurface();
-    destroyBuffers();
+    // The old buffers go only after the new frame is committed, so the surface stays mapped.
+    const BufferSet old = m_set;
+    const QSize oldSize = m_surfaceSize;
+    m_set = BufferSet();
     m_surfaceSize = size;
-    if (!createBuffers()) {
+    if (!createBuffers(&m_set)) {
+        m_set = old;
+        m_surfaceSize = oldSize;
         return false;
     }
-    m_alpha = alpha;
-    m_pressed = pressed;
-    if (fading) {
-        m_fade.start();
-    }
-    if (m_enabled && alpha > 0.0) {
-        render();
-    }
+    render();
+    BufferSet retired = old;
+    destroyBuffers(&retired);
     return true;
 }
 
@@ -489,4 +528,31 @@ void TouchOverlay::onBufferRelease(void *data, wl_buffer *)
     if (buffer->owner->m_renderPending) {
         buffer->owner->render();
     }
+}
+
+// Clipboard and drag offers are never read, so each is destroyed as soon as it is announced; the
+// selection and drag events that follow then carry a null offer.
+void TouchOverlay::onDataOffer(void *, wl_data_device *, wl_data_offer *offer)
+{
+    wl_data_offer_destroy(offer);
+}
+
+void TouchOverlay::onDataEnter(void *, wl_data_device *, uint32_t, wl_surface *, int32_t, int32_t, wl_data_offer *)
+{
+}
+
+void TouchOverlay::onDataLeave(void *, wl_data_device *)
+{
+}
+
+void TouchOverlay::onDataMotion(void *, wl_data_device *, uint32_t, int32_t, int32_t)
+{
+}
+
+void TouchOverlay::onDataDrop(void *, wl_data_device *)
+{
+}
+
+void TouchOverlay::onDataSelection(void *, wl_data_device *, wl_data_offer *)
+{
 }
