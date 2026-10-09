@@ -18,8 +18,8 @@ class QImage;
 class QJsonObject;
 class Recorder;
 class QLocalSocket;
-class Settings;
-class StreamIndicator;
+class IndicatorLink;
+class PhoneSettings;
 class TouchOverlay;
 class VideoEncoder;
 class MirrorInput;
@@ -40,8 +40,8 @@ class MirrorStream : public QObject
     Q_OBJECT
 public:
     MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding = MirrorEncoding::Text,
-                 int window = 2, int leaseSeconds = 0, StreamIndicator *indicator = nullptr, bool adapt = false,
-                 int bitrateKbps = 0, bool inputRequested = false, const Settings *settings = nullptr,
+                 int window = 2, int leaseSeconds = 0, IndicatorLink *indicator = nullptr, bool adapt = false,
+                 int bitrateKbps = 0, bool inputRequested = false, const PhoneSettings *settings = nullptr,
                  bool phoneState = false);
     ~MirrorStream();
 
@@ -49,8 +49,7 @@ public:
     // disconnects and cleans up.
     void finish(const QString &error);
 
-    // The phone's settings (agent 1.9.0). Called synchronously from the Settings change, before
-    // the D-Bus reply: "screenView" off ends the stream; "control" and "touchIndicator" go to the
+    // The phone's settings (agent 1.9.0). Called for each change the daemon forwards: "screenView" off ends the stream; "control" and "touchIndicator" go to the
     // input hooks below and, when the request opted in with "phoneState":true, a "settings"
     // message tells the client (PLAN-settings-page.md section 7.3).
     void applySetting(const QString &key);
@@ -65,7 +64,7 @@ public:
     QString captureName() const; // "native", or "" before the recorder opened
 
 signals:
-    // The stream stopped or its capture path changed.
+    // The stream stopped, its capture path or its control state changed.
     void stateChanged();
 
 private slots:
@@ -155,7 +154,7 @@ private:
     int m_window;
     int m_leaseSeconds;
     QTimer m_lease;
-    QPointer<StreamIndicator> m_indicator;
+    QPointer<IndicatorLink> m_indicator;
     bool m_indicated; // streamStarted() was called, so cleanup() owes one streamStopped()
     QByteArray m_upstream;
     QList<qint64> m_pendingAcks;
@@ -164,7 +163,7 @@ private:
     QElapsedTimer m_captureClock;
     QString m_stopReason;
     // The phone's settings (agent 1.9.0).
-    const Settings *m_settings;
+    const PhoneSettings *m_settings;
     bool m_phoneState;     // the request asked for "settings" messages
     bool m_inputRequested; // the request asked for input
     qint64 m_startedAt;

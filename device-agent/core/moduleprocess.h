@@ -25,6 +25,9 @@ public:
     QJsonObject status() const { return m_status; }
     // An "end" was sent (it is ending, but may not have exited yet).
     bool ending() const { return m_ending; }
+    // It started the stream indicator and has not stopped it (the mirror).
+    bool indicated() const { return m_indicated; }
+    void setIndicated(bool on) { m_indicated = on; }
 
     void send(const QJsonObject &line);
     // Asks the module to end its stream with `reason` (sent to the client).
@@ -48,6 +51,7 @@ private:
     LineLink *m_link;
     QJsonObject m_status;
     bool m_ending;
+    bool m_indicated;
 };
 
 #endif

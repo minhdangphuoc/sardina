@@ -55,6 +55,15 @@ Requires:   %{name} = %{version}-%{release}
 Takes screenshots through lipstick for VS Code through the developer agent,
 while "Allow screen view" is on in Settings > System > Developer agent.
 
+%package mirror
+Summary:    Developer agent module: live screen mirror
+Requires:   %{name} = %{version}-%{release}
+
+%description mirror
+Streams a live view of the screen to VS Code through the developer agent:
+lipstick's Wayland recorder, JPEG images or VP8 video through libvpx. Runs
+only while a mirror panel is open and "Allow screen view" is on.
+
 %prep
 %setup -q -n %{name}-%{version}
 
@@ -141,6 +150,11 @@ if [ "$1" = "0" ]; then
     pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-screenshot( |$)' >/dev/null 2>&1 || :
 fi
 
+%preun mirror
+if [ "$1" = "0" ]; then
+    pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-mirror( |$)' >/dev/null 2>&1 || :
+fi
+
 %files
 %defattr(-,root,root,-)
 %{_bindir}/sailfish-devagent
@@ -167,3 +181,8 @@ fi
 %defattr(-,root,root,-)
 %dir %{_libexecdir}/sailfish-devagent
 %{_libexecdir}/sailfish-devagent/sailfish-devagent-screenshot
+
+%files mirror
+%defattr(-,root,root,-)
+%dir %{_libexecdir}/sailfish-devagent
+%{_libexecdir}/sailfish-devagent/sailfish-devagent-mirror

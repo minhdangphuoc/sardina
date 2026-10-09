@@ -28,6 +28,7 @@ ModuleProcess::ModuleProcess(const QString &module, const QString &client, pid_t
     , m_pid(pid)
     , m_link(nullptr)
     , m_ending(false)
+    , m_indicated(false)
 {
 }
 

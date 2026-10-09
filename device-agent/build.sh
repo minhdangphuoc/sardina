@@ -42,7 +42,8 @@ USAGE
 die() { echo "build.sh: $*" >&2; exit 1; }
 
 # One build gives the core and one package per module, all with the same version.
-packages="sailfish-devagent sailfish-devagent-logs sailfish-devagent-stats sailfish-devagent-screenshot"
+packages="sailfish-devagent sailfish-devagent-logs sailfish-devagent-stats sailfish-devagent-screenshot
+    sailfish-devagent-mirror"
 
 # collect_rpms DIR ARCH DEST: checks that DIR holds exactly the expected RPMs of ARCH (release 1,
 # debuginfo ignored) and, unless DEST is empty, replaces the RPMs in DEST with them.

@@ -1,7 +1,6 @@
 #include "modules.h"
 #include "childlink.h"
 #include "paths.h"
-#include "mirrorinput.h"
 
 #include <QDateTime>
 #include <QFileInfo>
@@ -41,8 +40,8 @@ QString executable(const QString &name)
 
 bool installed(const QString &name)
 {
-    if (name == QLatin1String("mirror") || name == QLatin1String("input")) {
-        return true; // still inside the daemon
+    if (name == QLatin1String("input")) {
+        return installed(QStringLiteral("mirror")); // still inside the mirror process
     }
     const QFileInfo info(executable(name));
     return info.isFile() && info.isExecutable();
@@ -61,19 +60,9 @@ QStringList installedNames()
 
 QJsonObject keypadInfo()
 {
-    const MirrorKeypadInfo inProcess = MirrorInput::keypadInfo();
-    if (!inProcess.model.isEmpty()) {
-        return QJsonObject{ { QStringLiteral("model"), inProcess.model },
-                            { QStringLiteral("keys"), QJsonArray::fromStringList(inProcess.keys) } };
-    }
-    return QJsonObject();
-}
-
-QJsonObject keypadProbe()
-{
     static QDateTime probedVersion;
     static QJsonObject cached;
-    const QFileInfo info(executable(QStringLiteral("input")));
+    const QFileInfo info(executable(QStringLiteral("mirror")));
     if (!info.isFile() || !info.isExecutable()) {
         return QJsonObject();
     }

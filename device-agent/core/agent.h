@@ -4,19 +4,16 @@
 #include <QObject>
 #include <QJsonObject>
 #include <QList>
-#include <QPointer>
 #include <QTimer>
 #include <QVariantMap>
 
 #include "notice.h"
 #include "requestreader.h"
 
-class MirrorStream;
 class ModuleProcess;
 class Settings;
 class SettingsService;
 class StreamIndicator;
-struct ModuleSpec;
 
 // The daemon: a Unix socket in the user's runtime directory, one JSON request per connection, a
 // fixed set of commands. It answers ping and refusals itself and hands every other request, after
@@ -56,26 +53,36 @@ private slots:
     // Ends every stream once Developer Mode is off.
     void checkDeveloperMode();
     void onChildEvent(ModuleProcess *child, const QJsonObject &line);
+    void onControlShown();
 
 private:
+    struct PendingMirror {
+        int fd = -1;
+        QJsonObject request;
+        QString client;
+    };
+
     QJsonObject pingReply() const;
-    void startModule(const ModuleSpec &spec, int fd, const QJsonObject &request, const QString &client);
+    ModuleProcess *startModule(const QString &module, int fd, const QJsonObject &request, const QString &client);
     void startMirror(int fd, const QJsonObject &request, const QString &client);
+    void spawnMirror(int fd, const QJsonObject &request, const QString &client);
+    ModuleProcess *mirrorChild() const;
     QList<ModuleProcess *> children(const QString &module) const;
+    void sendInputShown(ModuleProcess *mirror, bool shown);
     void setMirrorRestarting(bool on);
 
     HandoffServer m_server;
     QTimer m_retry;
     QTimer m_developerModeCheck; // runs while a stream does
     QTimer m_restartTimer;       // single shot: gives up waiting for the mirror to come back
+    QTimer m_replaceTimer;       // single shot: kills a replaced mirror that did not end in time
     bool m_mirrorRestarting;
     Settings *m_settings;         // a child of this, created first: the others read it
     StreamIndicator *m_indicator; // a child of this, so it outlives the streams
     SettingsService *m_service;   // a child of this
     StartNotice m_notice;
     QList<ModuleProcess *> m_children; // children of this, removed once reaped
-    QPointer<MirrorStream> m_mirror;
-    QString m_mirrorClient;
+    PendingMirror m_pendingMirror; // a mirror request waiting for the replaced one to exit
 };
 
 #endif

@@ -1,11 +1,10 @@
 #include "mirror.h"
 #include "displaystate.h"
 #include "idleplan.h"
-#include "indicator.h"
+#include "indicatorlink.h"
 #include "mirrorinput.h"
-#include "paths.h"
+#include "phonesettings.h"
 #include "recorder.h"
-#include "settings.h"
 #include "touchoverlay.h"
 #include "videoencoder.h"
 
@@ -98,8 +97,8 @@ bool jsonClampedInteger(const QJsonValue &v, int min, int max, int *value)
 }
 
 MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality, MirrorEncoding encoding,
-                           int window, int leaseSeconds, StreamIndicator *indicator, bool adapt, int bitrateKbps,
-                           bool inputRequested, const Settings *settings, bool phoneState)
+                           int window, int leaseSeconds, IndicatorLink *indicator, bool adapt, int bitrateKbps,
+                           bool inputRequested, const PhoneSettings *settings, bool phoneState)
     : QObject(socket)
     , m_socket(socket)
     , m_fps(fps)
@@ -215,7 +214,7 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
         m_inputLease.setInterval(INPUT_FOCUS_LEASE_MS);
         connect(&m_inputLease, &QTimer::timeout, this, &MirrorStream::onInputLeaseExpired);
         if (m_indicator) {
-            connect(m_indicator, &StreamIndicator::inputReady, this, [this]() {
+            connect(m_indicator, &IndicatorLink::inputReady, this, [this]() {
                 if (!m_cleaned) {
                     setInputActive(true);
                 }
@@ -524,10 +523,6 @@ void MirrorStream::handleUpstreamLine(const QByteArray &line)
     if (keepalive.isDouble() && m_leaseSeconds > 0) {
         const double d = keepalive.toDouble();
         if (d >= 0 && d <= 9e15 && d == static_cast<qint64>(d)) {
-            if (!Paths::developerModeOn()) {
-                finish(QStringLiteral("developer mode is off"));
-                return;
-            }
             m_lease.start();
             writeMessage("{\"pong\":" + QByteArray::number(static_cast<qint64>(d)) + ",\"ts\":"
                          + QByteArray::number(QDateTime::currentMSecsSinceEpoch()) + "}");
@@ -552,6 +547,7 @@ void MirrorStream::setInputActive(bool active)
         m_input->cancel();
         sendPhoneSettings(inputFields());
         fprintf(stderr, "sailfish-devagent: mirror input inactive\n");
+        emit stateChanged();
         return;
     }
     if (!m_inputEnabled) {
@@ -571,6 +567,7 @@ void MirrorStream::setInputActive(bool active)
     applyTouchIndicatorSetting(m_settings && m_settings->touchIndicator());
     sendPhoneSettings(inputFields());
     fprintf(stderr, "sailfish-devagent: mirror input active\n");
+    emit stateChanged();
 }
 
 void MirrorStream::onInputLeaseExpired()
@@ -645,10 +642,6 @@ void MirrorStream::handleInput(const QJsonObject &input)
     }
     if (type == QLatin1String("active")) {
         if (active.isBool()) {
-            if (!Paths::developerModeOn()) {
-                finish(QStringLiteral("developer mode is off"));
-                return;
-            }
             const qint64 now = m_streamClock.elapsed();
             // Duplicate activation heartbeats are accepted at most ten times per second; the
             // extension sends one per second.

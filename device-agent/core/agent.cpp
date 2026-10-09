@@ -1,8 +1,6 @@
 #include "agent.h"
 #include "idleplan.h"
 #include "indicator.h"
-#include "mirror.h"
-#include "mirrorinput.h"
 #include "moduleprocess.h"
 #include "modules.h"
 #include "paths.h"
@@ -12,7 +10,6 @@
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
-#include <QLocalSocket>
 #include <QStringList>
 #include <cstdio>
 #include <unistd.h>
@@ -20,23 +17,6 @@
 namespace {
 
 const int RETRY_MS = 2000;
-const int MIRROR_DEFAULT_FPS = 4;
-const int MIRROR_DEFAULT_WIDTH = 360;
-const int MIRROR_DEFAULT_QUALITY = 60;
-const int MIRROR_MAX_WIDTH = 2160;
-const int MIRROR_MIN_WIDTH = 90;
-const int MIRROR_DEFAULT_WINDOW = 2;
-const int MIRROR_DEFAULT_LEASE = 60;
-const int MIRROR_MAX_FPS = 10;
-const int MIRROR_VIDEO_DEFAULT_FPS = 30;
-const int MIRROR_VIDEO_DEFAULT_BITRATE = 2000;
-const int MIRROR_VIDEO_MIN_BITRATE = 100;
-const int MIRROR_VIDEO_MAX_BITRATE = 20000;
-const int MIRROR_VIDEO_WINDOW = 4;
-const int MIRROR_VIDEO_FAST_WINDOW = 8;
-const int MIRROR_MIN_LEASE = 10;
-const int MIRROR_MAX_LEASE = 300;
-
 const int DEVELOPER_MODE_CHECK_MS = 3000;
 // An idle mode or frame rate limit change ends the mirror with a reason from restartReason
 // (idleplan.h; the extension matches it and connects again once); the Settings page waits for the
@@ -44,6 +24,8 @@ const int DEVELOPER_MODE_CHECK_MS = 3000;
 const int MIRROR_RESTART_MS = 10000;
 const char *const DEVELOPER_MODE_OFF = "developer mode is off";
 const char *const STOPPED_FROM_PHONE = "stopped from the phone";
+// A replaced mirror gets this long to end before it is killed and the new one starts.
+const int MIRROR_REPLACE_MS = 2000;
 
 // The "client" request field (agent 1.9.0): informational only, shown on the Settings page.
 // Anything outside [A-Za-z0-9 ._-] is dropped, then the text is cut to 64 characters.
@@ -63,14 +45,6 @@ QString clientName(const QJsonValue &value)
         }
     }
     return out.left(CLIENT_MAX_CHARS).trimmed();
-}
-
-int mirrorLease(const QJsonValue &requested, bool required)
-{
-    if (requested.isUndefined() || (requested.isDouble() && requested.toDouble() < 1)) {
-        return required ? MIRROR_DEFAULT_LEASE : 0;
-    }
-    return qBound(MIRROR_MIN_LEASE, requested.toInt(MIRROR_DEFAULT_LEASE), MIRROR_MAX_LEASE);
 }
 
 QJsonObject errorReply(const QString &message)
@@ -95,13 +69,20 @@ Agent::Agent(QObject *parent)
     m_service = new SettingsService(m_settings, this, this);
     // Direct connection: a change reaches the running sessions inside the Set* call.
     connect(m_settings, &Settings::changed, this, &Agent::onSettingChanged);
-    connect(m_indicator, &StreamIndicator::controlChanged, this, &Agent::onSessionChanged);
+    connect(m_indicator, &StreamIndicator::controlChanged, this, &Agent::onControlShown);
     m_retry.setInterval(RETRY_MS);
     m_retry.setSingleShot(true);
     connect(&m_retry, &QTimer::timeout, this, &Agent::tryListen);
     m_restartTimer.setSingleShot(true);
     m_restartTimer.setInterval(MIRROR_RESTART_MS);
     connect(&m_restartTimer, &QTimer::timeout, this, [this]() { setMirrorRestarting(false); });
+    m_replaceTimer.setSingleShot(true);
+    m_replaceTimer.setInterval(MIRROR_REPLACE_MS);
+    connect(&m_replaceTimer, &QTimer::timeout, this, [this]() {
+        if (ModuleProcess *mirror = mirrorChild()) {
+            mirror->kill();
+        }
+    });
     m_developerModeCheck.setInterval(DEVELOPER_MODE_CHECK_MS);
     connect(&m_developerModeCheck, &QTimer::timeout, this, &Agent::checkDeveloperMode);
     connect(&m_server, &HandoffServer::connection, this, &Agent::onConnection);
@@ -159,10 +140,12 @@ void Agent::stop()
     m_retry.stop();
     m_developerModeCheck.stop();
     m_service->stop();
-    // Streams that end during shutdown must not call back into a half-destroyed agent.
-    if (m_mirror) {
-        m_mirror->disconnect(this);
+    m_replaceTimer.stop();
+    if (m_pendingMirror.fd >= 0) {
+        close(m_pendingMirror.fd);
+        m_pendingMirror.fd = -1;
     }
+    // Streams that end during shutdown must not call back into a half-destroyed agent.
     for (ModuleProcess *child : m_children) {
         child->disconnect(this);
         child->terminate();
@@ -201,13 +184,29 @@ void Agent::reapChildren()
         ModuleProcess *child = m_children.at(i);
         if (child->reap()) {
             m_children.removeAt(i);
+            if (child->indicated()) {
+                m_indicator->streamStopped(); // it crashed or was killed before saying so
+            }
             child->deleteLater();
             changed = true;
         }
     }
-    if (changed) {
-        onSessionChanged();
+    if (!changed) {
+        return;
     }
+    if (m_pendingMirror.fd >= 0 && !mirrorChild()) {
+        m_replaceTimer.stop();
+        const PendingMirror next = m_pendingMirror;
+        m_pendingMirror.fd = -1;
+        spawnMirror(next.fd, next.request, next.client);
+    }
+    onSessionChanged();
+}
+
+ModuleProcess *Agent::mirrorChild() const
+{
+    const QList<ModuleProcess *> mirrors = children(QStringLiteral("mirror"));
+    return mirrors.isEmpty() ? nullptr : mirrors.first();
 }
 
 QList<ModuleProcess *> Agent::children(const QString &module) const
@@ -243,13 +242,22 @@ void Agent::onSettingChanged(const QString &key)
     // connecting once more, and the new stream starts with the new value.
     const QByteArray keyName = key.toUtf8();
     const char *restart = restartReason(keyName.constData());
-    if (restart && m_mirror && m_mirror->active()) {
+    ModuleProcess *mirror = mirrorChild();
+    if (mirror && mirror->ending()) {
+        mirror = nullptr;
+    }
+    if (restart && mirror) {
         fprintf(stderr, "sailfish-devagent: settings: %s changed, restarting the mirror\n", keyName.constData());
         m_mirrorRestarting = true;
         m_restartTimer.start();
-        m_mirror->finish(QString::fromLatin1(restart));
-    } else if (m_mirror) {
-        m_mirror->applySetting(key); // screenView off ends it; control/touchIndicator go to its hooks
+        mirror->end(QString::fromLatin1(restart));
+    } else if (mirror && key == QLatin1String("screenView") && !m_settings->screenView()) {
+        mirror->end(QStringLiteral("screen view disabled on the phone"));
+    } else if (mirror) {
+        // control and touchIndicator go to the stream's hooks
+        mirror->send(QJsonObject{ { QStringLiteral("setting"),
+                                    QJsonObject{ { QStringLiteral("key"), key },
+                                                 { QStringLiteral("value"), QJsonValue::fromVariant(m_settings->toMap().value(key)) } } } });
     }
     if (key == QLatin1String("logs") && !m_settings->logs()) {
         for (ModuleProcess *child : children(QStringLiteral("logs"))) {
@@ -292,10 +300,40 @@ void Agent::checkDeveloperMode()
 
 void Agent::onChildEvent(ModuleProcess *child, const QJsonObject &line)
 {
-    Q_UNUSED(child);
     if (line.contains(QStringLiteral("status"))) {
         onSessionChanged();
     }
+    const QJsonValue indicator = line.value(QStringLiteral("indicator"));
+    if (indicator.isString()) {
+        const bool started = indicator.toString() == QLatin1String("started");
+        if (started != child->indicated()) {
+            child->setIndicated(started);
+            if (started) {
+                m_indicator->streamStarted();
+            } else {
+                m_indicator->streamStopped();
+            }
+        }
+    } else if (indicator.isObject() && child->indicated()) {
+        const bool input = indicator.toObject().value(QStringLiteral("input")).toBool(false);
+        if (m_indicator->setInputActive(input) && input) {
+            sendInputShown(child, true);
+        }
+    }
+}
+
+void Agent::sendInputShown(ModuleProcess *mirror, bool shown)
+{
+    mirror->send(QJsonObject{ { QStringLiteral("indicator"), QJsonObject{ { QStringLiteral("inputShown"), shown } } } });
+}
+
+// The entry switched between "viewed" and "controlled": control waits for that answer.
+void Agent::onControlShown()
+{
+    if (ModuleProcess *mirror = mirrorChild()) {
+        sendInputShown(mirror, m_indicator->showingInput());
+    }
+    onSessionChanged();
 }
 
 QVariantMap Agent::statusMap() const
@@ -304,13 +342,15 @@ QVariantMap Agent::statusMap() const
     m.insert(QStringLiteral("version"), QStringLiteral(AGENT_VERSION));
     m.insert(QStringLiteral("developerMode"), Paths::developerModeOn());
     m.insert(QStringLiteral("modules"), Modules::installedNames());
-    const bool mirrorActive = m_mirror && m_mirror->active();
+    const ModuleProcess *mirror = mirrorChild();
+    const QJsonObject status = mirror ? mirror->status() : QJsonObject();
+    const bool mirrorActive = status.value(QStringLiteral("mirrorActive")).toBool(false);
     m.insert(QStringLiteral("mirrorActive"), mirrorActive);
     m.insert(QStringLiteral("mirrorRestarting"), m_mirrorRestarting);
-    m.insert(QStringLiteral("mirrorSince"), mirrorActive ? m_mirror->startedAt() : qint64(0));
-    m.insert(QStringLiteral("mirrorControl"), mirrorActive && m_mirror->inputActive());
-    m.insert(QStringLiteral("mirrorEncoding"), mirrorActive ? m_mirror->encodingName() : QString());
-    m.insert(QStringLiteral("mirrorCapture"), mirrorActive ? m_mirror->captureName() : QString());
+    m.insert(QStringLiteral("mirrorSince"), mirrorActive ? qint64(status.value(QStringLiteral("mirrorSince")).toDouble()) : qint64(0));
+    m.insert(QStringLiteral("mirrorControl"), mirrorActive && status.value(QStringLiteral("mirrorControl")).toBool(false));
+    m.insert(QStringLiteral("mirrorEncoding"), mirrorActive ? status.value(QStringLiteral("mirrorEncoding")).toString() : QString());
+    m.insert(QStringLiteral("mirrorCapture"), mirrorActive ? status.value(QStringLiteral("mirrorCapture")).toString() : QString());
     const QList<ModuleProcess *> logs = children(QStringLiteral("logs"));
     QString logClient;
     for (ModuleProcess *log : logs) {
@@ -320,7 +360,7 @@ QVariantMap Agent::statusMap() const
     }
     m.insert(QStringLiteral("logStreams"), logs.size());
     m.insert(QStringLiteral("monitorStreams"), children(QStringLiteral("stats")).size());
-    m.insert(QStringLiteral("client"), mirrorActive && !m_mirrorClient.isEmpty() ? m_mirrorClient : logClient);
+    m.insert(QStringLiteral("client"), mirrorActive && !mirror->client().isEmpty() ? mirror->client() : logClient);
     return m;
 }
 
@@ -328,10 +368,6 @@ int Agent::stopSessions()
 {
     int stopped = 0;
     const QString reason = QLatin1String(STOPPED_FROM_PHONE);
-    if (m_mirror && m_mirror->active()) {
-        m_mirror->finish(reason);
-        ++stopped;
-    }
     for (ModuleProcess *child : m_children) {
         if (child->module() != QLatin1String("screenshot") && !child->ending()) {
             child->end(reason);
@@ -433,12 +469,11 @@ void Agent::onRequest(RequestReader *reader, const QJsonObject &request)
         startMirror(fd, request, client);
         return;
     }
-    startModule(*spec, fd, request, client);
+    startModule(module, fd, request, client);
 }
 
-void Agent::startModule(const ModuleSpec &spec, int fd, const QJsonObject &request, const QString &client)
+ModuleProcess *Agent::startModule(const QString &module, int fd, const QJsonObject &request, const QString &client)
 {
-    const QString module = QLatin1String(spec.name);
     QJsonObject control;
     control.insert(QStringLiteral("request"), request);
     control.insert(QStringLiteral("client"), client);
@@ -448,57 +483,40 @@ void Agent::startModule(const ModuleSpec &spec, int fd, const QJsonObject &reque
     if (!child) {
         fprintf(stderr, "sailfish-devagent: cannot start the %s module: %s\n", qPrintable(module), qPrintable(error));
         RequestReader::replyAndClose(fd, errorReply(QStringLiteral("cannot start the %1 module").arg(module)));
-        return;
+        return nullptr;
     }
     close(fd);
     m_children << child;
     connect(child, &ModuleProcess::event, this, &Agent::onChildEvent);
     onSessionChanged();
+    return child;
 }
 
-// The mirror still runs inside the daemon (until it becomes a module process).
+// One mirror per daemon: a running one ends with "replaced" (in its own encoding) and the new one
+// starts once it has exited, so lipstick never sees two recorders of ours.
 void Agent::startMirror(int fd, const QJsonObject &request, const QString &client)
 {
-    QLocalSocket *socket = new QLocalSocket(this);
-    if (!socket->setSocketDescriptor(fd, QLocalSocket::ConnectedState, QIODevice::ReadWrite)) {
-        close(fd);
-        delete socket;
+    ModuleProcess *running = mirrorChild();
+    if (!running) {
+        spawnMirror(fd, request, client);
         return;
     }
-    connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-    // Anything but "binary" or "vp8" is text, like the other clamped arguments.
-    const QString encodingName = request.value(QStringLiteral("encoding")).toString();
-    const MirrorEncoding encoding = encodingName == QLatin1String("binary") ? MirrorEncoding::Binary
-        : encodingName == QLatin1String("vp8")                              ? MirrorEncoding::Vp8
-                                                                            : MirrorEncoding::Text;
-    const bool video = encoding == MirrorEncoding::Vp8;
-    int fps = request.value(QStringLiteral("fps")).toInt(video ? MIRROR_VIDEO_DEFAULT_FPS : MIRROR_DEFAULT_FPS);
-    fps = video ? videoFps(fps, m_settings->maxFps()) : qBound(1, fps, MIRROR_MAX_FPS);
-    int width = request.value(QStringLiteral("width")).toInt(MIRROR_DEFAULT_WIDTH);
-    if (width <= 0) {
-        width = 0; // native size
-    } else {
-        width = qBound(MIRROR_MIN_WIDTH, width, MIRROR_MAX_WIDTH);
+    if (m_pendingMirror.fd >= 0) {
+        RequestReader::replyAndClose(m_pendingMirror.fd, errorReply(QStringLiteral("replaced")));
     }
-    const int quality = qBound(1, request.value(QStringLiteral("quality")).toInt(MIRROR_DEFAULT_QUALITY), 100);
-    const int lease = mirrorLease(request.value(QStringLiteral("lease")), encoding != MirrorEncoding::Text);
-    // One mirror per daemon: the older stream is told (in its own encoding) and closed first.
-    if (m_mirror) {
-        m_mirror->finish(QStringLiteral("replaced"));
-        delete m_mirror.data();
+    m_pendingMirror.fd = fd;
+    m_pendingMirror.request = request;
+    m_pendingMirror.client = client;
+    if (!running->ending()) {
+        running->end(QStringLiteral("replaced"));
     }
-    const bool adapt = request.value(QStringLiteral("adapt")).toBool(false);
-    const int bitrate = video ? qBound(MIRROR_VIDEO_MIN_BITRATE,
-                                       request.value(QStringLiteral("bitrate")).toInt(MIRROR_VIDEO_DEFAULT_BITRATE),
-                                       MIRROR_VIDEO_MAX_BITRATE)
-                              : 0;
-    const bool input = request.value(QStringLiteral("input")).toBool(false);
-    const bool phoneState = request.value(QStringLiteral("phoneState")).toBool(false);
-    m_mirrorClient = client;
+    if (!m_replaceTimer.isActive()) {
+        m_replaceTimer.start();
+    }
+}
+
+void Agent::spawnMirror(int fd, const QJsonObject &request, const QString &client)
+{
     setMirrorRestarting(false);
-    m_mirror = new MirrorStream(socket, fps, width, quality, encoding,
-                                video ? (fps > 30 ? MIRROR_VIDEO_FAST_WINDOW : MIRROR_VIDEO_WINDOW) : MIRROR_DEFAULT_WINDOW, lease, m_indicator, adapt,
-                                bitrate, input, m_settings, phoneState);
-    connect(m_mirror.data(), &MirrorStream::stateChanged, this, &Agent::onSessionChanged);
-    onSessionChanged();
+    startModule(QStringLiteral("mirror"), fd, request, client);
 }

@@ -2,12 +2,8 @@ TEMPLATE = app
 TARGET = sailfish-devagent
 include(../common/common.pri)
 
-# QtGui is for QImage (frame scaling, JPEG).
-QT = core dbus network gui
-# Native mirror capture through lipstick's Wayland recorder, VP8 through libvpx.
-PKGCONFIG += wayland-client vpx
-
-INCLUDEPATH += ../mirror ../input
+# The resident daemon links no QtGui, Wayland or libvpx: those live in the mirror's process.
+QT = core dbus network
 
 SOURCES += \
     main.cpp \
@@ -19,14 +15,7 @@ SOURCES += \
     requestreader.cpp \
     modules.cpp \
     moduleprocess.cpp \
-    notice.cpp \
-    ../mirror/mirror.cpp \
-    ../mirror/recorder.cpp \
-    ../mirror/videoencoder.cpp \
-    ../mirror/displaystate.cpp \
-    ../input/mirrorinput.cpp \
-    ../input/touchoverlay.cpp \
-    ../common/waylandutil.cpp
+    notice.cpp
 
 HEADERS += \
     agent.h \
@@ -39,20 +28,7 @@ HEADERS += \
     moduleprocess.h \
     notice.h \
     ../common/firstline.h \
-    ../common/idleplan.h \
-    ../common/waylandutil.h \
-    ../mirror/mirror.h \
-    ../mirror/pacer.h \
-    ../mirror/yuvrows.h \
-    ../mirror/retrybudget.h \
-    ../mirror/recorder.h \
-    ../mirror/videoencoder.h \
-    ../mirror/displaystate.h \
-    ../input/mirrorinput.h \
-    ../input/touchoverlay.h
-
-WAYLAND_CLIENT_PROTOCOLS = ../mirror/protocol/lipstick-recorder.xml ../input/protocol/alien-manager.xml
-include(../common/wayland.pri)
+    ../common/idleplan.h
 
 target.path = /usr/bin
 
