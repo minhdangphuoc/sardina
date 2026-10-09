@@ -114,8 +114,18 @@ export function makefileBuildType(makefile: string): BuildType | undefined {
  * type. qmake's Makefiles do not make objects depend on the flags, so `sfdk build` would reuse them.
  */
 export function staleBuildType(makefile: string | undefined, nextType: BuildType): boolean {
-  const previous = makefile === undefined ? undefined : makefileBuildType(makefile);
+  if (makefile === undefined) return false;
+  if (lacksQmlDebug(makefile)) return true;
+  const previous = makefileBuildType(makefile);
   return previous !== undefined && previous !== nextType;
+}
+
+/** Older Debug builds lacked `-DQT_QML_DEBUG`; their objects would be reused without QML debugging. */
+const DEBUG_FLAGS_WITHOUT_QML = DEBUG_GLOBAL_CFLAGS.replace(' -DQT_QML_DEBUG', '');
+
+function lacksQmlDebug(makefile: string): boolean {
+  const flags = /^CXXFLAGS[ \t]*=(.*)$/m.exec(makefile)?.[1] ?? '';
+  return flags.includes(DEBUG_FLAGS_WITHOUT_QML) && !flags.includes(DEBUG_GLOBAL_CFLAGS);
 }
 
 /** Marker prefix for the device item: debug session -> `$(debug)`, other sessions -> `$(pulse)`. */

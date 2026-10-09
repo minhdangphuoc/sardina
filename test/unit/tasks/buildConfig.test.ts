@@ -67,6 +67,8 @@ describe('buildConfig status bar selectors', () => {
     assert.strictEqual(staleBuildType(debugMakefile, 'release'), true);
     assert.strictEqual(staleBuildType(releaseMakefile, 'release'), false);
     assert.strictEqual(staleBuildType(debugMakefile, 'debug'), false);
+    const olderDebug = debugMakefile.replace(' -DQT_QML_DEBUG', '');
+    assert.strictEqual(staleBuildType(olderDebug, 'debug'), true, 'Debug build from before QML debugging');
     assert.strictEqual(staleBuildType(undefined, 'debug'), false, 'never built');
     assert.strictEqual(staleBuildType('CXXFLAGS = -O3\n', 'release'), false, 'unknown flags never force a clean');
   });
