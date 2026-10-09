@@ -48,6 +48,7 @@ import {
   AGENT_SESSION_KINDS,
   CLEANUP_ARGS,
   CLEANUP_SCRIPT,
+  MODULE_CLEANUP_ARGS,
   RESTART_HOME_SCREEN_ARGV,
   restartHomeScreenAsk,
   restartHomeScreenConfirm,
@@ -55,6 +56,7 @@ import {
   modulesToErase,
   parseCleanupReport,
   sessionKindsOf,
+  moduleCleanupScript,
   uninstallModulesScript,
   uninstallSummary,
 } from './uninstallCore';
@@ -411,11 +413,13 @@ async function stopAgentSessions(services: Services, device: string, kinds: read
 
 /**
  * After `rpm -e`: removes what the device user may remove and checks that nothing else is left
- * (CLEANUP_SCRIPT, fixed text, paths as positional arguments), then one notification sums it up.
+ * (CLEANUP_SCRIPT or moduleCleanupScript, fixed text, paths as positional arguments), then one
+ * notification sums it up. `modules` set: only those modules were removed.
  */
-async function cleanUpAfterUninstall(services: Services, device: string): Promise<void> {
+async function cleanUpAfterUninstall(services: Services, device: string, modules?: AgentModule[]): Promise<void> {
+  const script = modules ? ['sh', '-c', moduleCleanupScript(modules), 'sh', ...MODULE_CLEANUP_ARGS] : ['sh', '-c', CLEANUP_SCRIPT, 'sh', ...CLEANUP_ARGS];
   const result = await services.runner.run({
-    args: ['device', 'exec', '--', 'sh', '-c', CLEANUP_SCRIPT, 'sh', ...CLEANUP_ARGS],
+    args: ['device', 'exec', '--', ...script],
     device,
     timeoutMs: REQUEST_TIMEOUT_MS,
   });
@@ -425,7 +429,11 @@ async function cleanUpAfterUninstall(services: Services, device: string): Promis
   for (const p of report.left) services.output.log('warn', `uninstall: still on "${device}": ${p}`);
   for (const p of report.unchecked) services.output.log('warn', `uninstall: could not check ${p} on "${device}"`);
   if (!report.complete) services.output.log('warn', `uninstall: the check on "${device}" did not finish (exit ${result.exitCode})`);
-  const summary = uninstallSummary(device, report);
+  const summary = uninstallSummary(device, report, modules);
+  if (modules) {
+    void (summary.level === 'information' ? services.prompts.showInformationMessage(summary.message) : services.prompts.showWarningMessage(summary.message));
+    return;
+  }
   const message = `${summary.message} ${restartHomeScreenAsk(device, true)}`;
   const shown =
     summary.level === 'information'
@@ -501,10 +509,8 @@ function uninstallAgent(services: Services) {
       void services.prompts.showErrorMessage(
         `Sailfish: removing ${what} from "${device}" failed (exit ${exitCode}). Check the password, and the Sailfish OS output channel for rpm's message.`,
       );
-    } else if (modules) {
-      void services.prompts.showInformationMessage(`Sailfish: removed ${what} from "${device}".`);
     } else {
-      await cleanUpAfterUninstall(services, device);
+      await cleanUpAfterUninstall(services, device, modules);
     }
   };
 }

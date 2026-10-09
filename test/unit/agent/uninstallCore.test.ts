@@ -9,6 +9,9 @@ import {
   AGENT_SESSION_KINDS,
   CLEANUP_ARGS,
   CLEANUP_SCRIPT,
+  MODULE_CLEANUP_ARGS,
+  MODULE_RUNTIME_FILES,
+  moduleCleanupScript,
   RESTART_HOME_SCREEN_ARGV,
   restartHomeScreenAsk,
   restartHomeScreenConfirm,
@@ -51,6 +54,10 @@ describe('uninstallCore scripts', () => {
     assert.ok(UNINSTALL_SCRIPT.startsWith('if rpm -q sailfish-devagent >/dev/null 2>&1; then m=; for n in sailfish-devagent-logs sailfish-devagent-stats sailfish-devagent-screenshot sailfish-devagent-mirror sailfish-devagent-input; do'));
     assert.ok(UNINSTALL_SCRIPT.includes('rpm -e sailfish-devagent$m || exit $?; fi;'), 'modules leave with the core');
     assert.ok(UNINSTALL_SCRIPT.includes('rm -rf /var/lib/sailfish-devagent'));
+    assert.ok(
+      UNINSTALL_SCRIPT.includes('rm -rf /tmp/systemd-private-*-sailfish-devagent.service-* /var/tmp/systemd-private-*-sailfish-devagent.service-*;'),
+      'the unit\'s PrivateTmp folders',
+    );
     assert.ok(UNINSTALL_SCRIPT.includes('rm -f /tmp/sailfish-devagent.rpm;'), 'the copy of extensions before 0.1.9');
     assert.ok(
       UNINSTALL_SCRIPT.includes('[ -L /etc/systemd/system/multi-user.target.wants/sailfish-devagent.service ] && rm -f /etc/systemd/system/multi-user.target.wants/sailfish-devagent.service'),
@@ -70,7 +77,7 @@ describe('uninstallCore scripts', () => {
 
   it('CLEANUP_SCRIPT takes its paths as positional arguments and removes nothing outside them', () => {
     assert.deepStrictEqual(CLEANUP_ARGS, ['/tmp/sailfish-devagent.rpm', '/run/user']);
-    assert.ok(!CLEANUP_SCRIPT.includes('/tmp/'), 'the legacy RPM copy is $1');
+    assert.ok(!CLEANUP_SCRIPT.includes('/tmp/sailfish-devagent.rpm'), 'the legacy RPM copy is $1');
     // Every removal names an argument or a sailfish-devagent / sailfish-tools path.
     for (const m of CLEANUP_SCRIPT.matchAll(/(?:gone|rm -f|rmdir) ("[^"]+"|\S+)/g)) {
       assert.ok(/^"\$1"$|^"\$(p|f)"$|sailfish-devagent|sailfish-tools|^"\$s"$|^"\$d/.test(m[1]) || m[1].startsWith('"$h/') || m[1].startsWith('"$r/'), m[1]);
@@ -79,6 +86,24 @@ describe('uninstallCore scripts', () => {
     assert.ok(!/devel-su|sudo|runuser/.test(CLEANUP_SCRIPT), 'runs with the login user only');
     assert.ok(CLEANUP_SCRIPT.includes(AGENT_DBUS_NAME));
     assert.ok(CLEANUP_SCRIPT.trimEnd().endsWith('echo "sfdev-clean:done"'));
+    assert.ok(CLEANUP_SCRIPT.includes(' /tmp/systemd-private-*-sailfish-devagent.service-* /var/tmp/systemd-private-*-sailfish-devagent.service-*; do'), 'checks PrivateTmp');
+  });
+
+  it('moduleCleanupScript touches only the removed modules\' own file names and checks only them', () => {
+    assert.deepStrictEqual(MODULE_CLEANUP_ARGS, ['/run/user']);
+    const logs = moduleCleanupScript(['logs']);
+    assert.ok(!/gone "\$p"|rm -f|rmdir/.test(logs), 'logs has no files of its own');
+    assert.ok(logs.includes('for n in sailfish-devagent-logs; do rpm -q $n'));
+    assert.ok(logs.includes('for p in /usr/libexec/sailfish-devagent/sailfish-devagent-logs; do'));
+    assert.ok(logs.includes("-f '^/usr/libexec/sailfish-devagent/sailfish-devagent-(logs)( |$)'"));
+    const mirror = moduleCleanupScript(['mirror', 'input']);
+    assert.ok(mirror.includes('for p in "$d"/recorder-* "$d"/touch-overlay-*; do gone "$p"; done'), mirror);
+    assert.ok(!mirror.includes('shot-'), 'screenshots belong to the screenshot module');
+    assert.ok(moduleCleanupScript(['screenshot']).includes('"$s"/shot-*.png'), 'and its staging folder');
+    for (const script of [logs, mirror]) {
+      assert.ok(!/\/var\/lib|sailfish-tools|devel-su|sudo|`/.test(script), script);
+      assert.ok(script.endsWith('echo "sfdev-clean:done"'));
+    }
   });
 
   it('the home screen restart is a fixed user-level argv behind a confirmation text', () => {
@@ -254,6 +279,155 @@ describe('CLEANUP_SCRIPT under sh', function () {
   });
 });
 
+/** Runs moduleCleanupScript with sh, a fake HOME and runtime base, and a stub rpm that reports `installed`. */
+describe('moduleCleanupScript under sh', () => {
+  let dir: string;
+  let home: string;
+  let run: string;
+  let agentRun: string;
+  let bin: string;
+  const uid = os.userInfo().uid;
+
+  beforeEach(() => {
+    dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sfdev-modclean-'));
+    home = path.join(dir, 'home');
+    run = path.join(dir, 'run');
+    agentRun = path.join(run, String(uid), 'sailfish-devagent');
+    bin = path.join(dir, 'bin');
+    for (const d of [bin, home, agentRun]) fs.mkdirSync(d, { recursive: true });
+    fs.writeFileSync(path.join(bin, 'rpm'), '#!/bin/sh\n[ "$2" = "$SFDEV_INSTALLED" ]\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(bin, 'pgrep'), '#!/bin/sh\nexit 1\n', { mode: 0o755 });
+    for (const f of ['agent.sock', 'shot-1.png', 'recorder-AbC123', 'touch-overlay-XyZ789']) fs.writeFileSync(path.join(agentRun, f), 'x');
+  });
+
+  afterEach(() => fs.rmSync(dir, { recursive: true, force: true }));
+
+  const runScript = (modules: Parameters<typeof moduleCleanupScript>[0], installed = ''): CleanupReport =>
+    parseCleanupReport(
+      execFileSync('sh', ['-c', moduleCleanupScript(modules), 'sh', run], {
+        encoding: 'utf8',
+        env: { ...process.env, HOME: home, PATH: `${bin}:${process.env.PATH ?? ''}`, SFDEV_INSTALLED: installed },
+      }),
+    );
+
+  it('removes the mirror and input buffers and keeps the core\'s socket and the screenshots', () => {
+    const r = runScript(['mirror', 'input']);
+    assert.deepStrictEqual(r, report({ removed: [path.join(agentRun, 'recorder-AbC123'), path.join(agentRun, 'touch-overlay-XyZ789')] }));
+    assert.deepStrictEqual(fs.readdirSync(agentRun).sort(), ['agent.sock', 'shot-1.png']);
+  });
+
+  it('removes unfetched screenshots and the staging folder with the screenshot module', () => {
+    fs.mkdirSync(path.join(home, 'sailfish-devagent'));
+    fs.writeFileSync(path.join(home, 'sailfish-devagent', 'shot-2.png'), 'x');
+    const r = runScript(['screenshot']);
+    assert.ok(r.complete);
+    assert.deepStrictEqual(r.removed.sort(), [path.join(agentRun, 'shot-1.png'), path.join(home, 'sailfish-devagent'), path.join(home, 'sailfish-devagent', 'shot-2.png')].sort());
+    assert.ok(!fs.existsSync(path.join(home, 'sailfish-devagent')));
+  });
+
+  it('does not follow a symlinked runtime directory, and reports a package still installed', () => {
+    const elsewhere = path.join(dir, 'elsewhere');
+    fs.renameSync(agentRun, elsewhere);
+    fs.symlinkSync(elsewhere, agentRun);
+    const r = runScript(['mirror'], 'sailfish-devagent-mirror');
+    assert.ok(fs.existsSync(path.join(elsewhere, 'recorder-AbC123')));
+    assert.deepStrictEqual(r, report({ left: ['package sailfish-devagent-mirror'] }));
+  });
+});
+
+/** The spec's scriptlets: erase-only removal, kept in sync with the extension's lists. */
+describe('sailfish-devagent.spec scriptlets', () => {
+  const spec = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', '..', 'device-agent', 'rpm', 'sailfish-devagent.spec'), 'utf8');
+
+  /** The body of `%<name> [pkg]` up to the next section. */
+  function scriptlet(name: string, pkg = ''): string {
+    const header = pkg ? `%${name} ${pkg}\n` : `%${name}\n`;
+    const start = spec.indexOf(header);
+    assert.ok(start >= 0, header);
+    const rest = spec.slice(start + header.length);
+    const end = rest.search(/^%(?!\{)/m);
+    return end < 0 ? rest : rest.slice(0, end);
+  }
+
+  it('removes only on erase and only the agent\'s own paths', () => {
+    for (const [name, pkg] of [['postun', ''], ['postun', 'screenshot'], ['postun', 'mirror'], ['postun', 'input']]) {
+      const body = scriptlet(name, pkg);
+      const guard = body.indexOf('if [ "$1" = "0" ]; then');
+      assert.ok(guard >= 0, `${name} ${pkg}`);
+      for (const m of body.matchAll(/^\s*(rm -r?f|rmdir) (.+)$/gm)) {
+        assert.ok(m.index > guard, `${name} ${pkg}: ${m[0]} runs on upgrade too`);
+        assert.ok(/sailfish-devagent|\$devagent_run/.test(m[2]), m[0]);
+      }
+    }
+    assert.match(scriptlet('postun'), /rm -rf \/tmp\/systemd-private-\*-sailfish-devagent\.service-\* \/var\/tmp\/systemd-private-\*-sailfish-devagent\.service-\*\n/);
+  });
+
+  it('each module\'s %postun removes exactly its MODULE_RUNTIME_FILES', () => {
+    for (const [module, files] of Object.entries(MODULE_RUNTIME_FILES)) {
+      const removed = spec.includes(`%postun ${module}\n`) ? [...scriptlet('postun', module).matchAll(/rm -f "\$devagent_run"\/(\S+)/g)].map((m) => m[1]) : [];
+      assert.deepStrictEqual(removed, files, module);
+    }
+  });
+
+  it('every installed path is in the leftover check', () => {
+    const files = spec
+      .split('\n')
+      .filter((l) => /^(%dir |%ghost |%attr|\/|%\{_)/.test(l))
+      .map((l) => l.replace(/^(%dir |%ghost |%attr\([^)]*\) )*/, '').replace('%{_bindir}', '/usr/bin').replace('%{_libexecdir}', '/usr/libexec'))
+      .filter((l) => l.startsWith('/'));
+    assert.ok(files.length >= 10, JSON.stringify(files));
+    for (const f of files) {
+      assert.ok(CLEANUP_SCRIPT.split(/\s+/).some((p) => f === p || f.startsWith(`${p}/`)), f);
+    }
+  });
+
+  it('the device check script looks for every path the extension\'s check does', () => {
+    const check = fs.readFileSync(path.resolve(__dirname, '..', '..', '..', '..', 'device-agent', 'tools', 'emulator', 'uninstall-check.sh'), 'utf8');
+    const roots = /for p in (.+); do \{/.exec(CLEANUP_SCRIPT)?.[1].split(' ') ?? [];
+    assert.ok(roots.length >= 10, JSON.stringify(roots));
+    for (const p of roots) assert.ok(check.includes(p.split('sailfish-devagent').join('$P')), p);
+    for (const p of ['$P.rpm', '/run/user/*/$P', '$h/$P', '$h/.cache/sailfish-tools', 'rpm -qa', 'GetNotifications', 'SailfishDevAgent']) assert.ok(check.includes(p), p);
+  });
+
+  it('module %postun runs under sh: removes its files on erase, keeps them on upgrade, never through a link', () => {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'sfdev-spec-'));
+    try {
+      const bin = path.join(dir, 'bin');
+      const home = path.join(dir, 'home');
+      const agentRun = path.join(dir, 'run', '4242', 'sailfish-devagent');
+      for (const d of [bin, home, agentRun]) fs.mkdirSync(d, { recursive: true });
+      fs.writeFileSync(path.join(bin, 'id'), '#!/bin/sh\necho 4242\n', { mode: 0o755 });
+      fs.writeFileSync(path.join(bin, 'getent'), `#!/bin/sh\necho "defaultuser:x:4242:4242::${home}:/bin/sh"\n`, { mode: 0o755 });
+      const run = (pkg: string, arg: string): void => {
+        const body = scriptlet('postun', pkg).split('/run/user/').join(`${dir}/run/`);
+        execFileSync('sh', ['-c', body, 'sh', arg], { env: { ...process.env, PATH: `${bin}:${process.env.PATH ?? ''}` } });
+      };
+      const files = ['agent.sock', 'shot-1.png', 'recorder-a', 'touch-overlay-b'];
+      for (const f of files) fs.writeFileSync(path.join(agentRun, f), 'x');
+      for (const pkg of ['screenshot', 'mirror', 'input']) run(pkg, '1');
+      assert.deepStrictEqual(fs.readdirSync(agentRun).sort(), [...files].sort(), 'an upgrade keeps everything');
+      fs.mkdirSync(path.join(home, 'sailfish-devagent'));
+      fs.writeFileSync(path.join(home, 'sailfish-devagent', 'shot-2.png'), 'x');
+      run('mirror', '0');
+      run('input', '0');
+      assert.deepStrictEqual(fs.readdirSync(agentRun).sort(), ['agent.sock', 'shot-1.png']);
+      run('screenshot', '0');
+      assert.deepStrictEqual(fs.readdirSync(agentRun), ['agent.sock']);
+      assert.ok(!fs.existsSync(path.join(home, 'sailfish-devagent')));
+
+      const elsewhere = path.join(dir, 'elsewhere');
+      fs.mkdirSync(elsewhere);
+      fs.writeFileSync(path.join(elsewhere, 'recorder-c'), 'x');
+      fs.rmSync(agentRun, { recursive: true });
+      fs.symlinkSync(elsewhere, agentRun);
+      run('mirror', '0');
+      assert.ok(fs.existsSync(path.join(elsewhere, 'recorder-c')));
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
 describe('parseCleanupReport', () => {
   it('reads marked lines only, ignores noise and bad ids, and needs the done line', () => {
     const r = parseCleanupReport(
@@ -280,6 +454,15 @@ describe('parseCleanupReport', () => {
 });
 
 describe('uninstallSummary', () => {
+  it('names the removed modules', () => {
+    assert.strictEqual(uninstallSummary('Jolla', report(), ['logs']).message, 'Sailfish: removed the logs module from "Jolla". Nothing of it is left.');
+    const s = uninstallSummary('Jolla', report({ removed: ['/r'], left: ['package sailfish-devagent-input'] }), ['mirror', 'input']);
+    assert.strictEqual(s.level, 'warning');
+    assert.strictEqual(
+      s.message,
+      'Sailfish: removed the mirror, input modules from "Jolla". Also removed 1 leftover item. Still on the device: package sailfish-devagent-input (see the Sailfish OS output; root-owned items need "devel-su").',
+    );
+  });
   it('clean: one information line', () => {
     const s = uninstallSummary('Jolla', report());
     assert.strictEqual(s.level, 'information');
