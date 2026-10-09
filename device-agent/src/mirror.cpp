@@ -1332,7 +1332,7 @@ void MirrorStream::notePaceArrival(qint64 at)
 void MirrorStream::notePaceCost(double ms, qint64 now)
 {
     if (m_pacer.addCost(ms, now)) {
-        fprintf(stderr, "sailfish-devagent: mirror: pace %.1f fps (convert + encode %.0f ms per frame)\n",
+        fprintf(stderr, "sailfish-devagent: mirror: pace %.1f fps (%.0f ms per frame: convert + encode or capture)\n",
                 1000.0 / paceInterval(), m_pacer.changeCostMs());
     }
 }

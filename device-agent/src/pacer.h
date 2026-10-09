@@ -7,13 +7,17 @@
 // The slot is one of the steps 60, 45, 30, 20, 15, 10 and 7.5 fps, starting at the stream's frame
 // rate (at most 60, the phone's "Frame rate limit"); a rate above 30 that is not in the table is its
 // own first step. At 30 fps the steps are 1, 1.5, 2, 3 and 4 frame intervals as before agent 1.10.7.
-// The cost is the median convert + encode time of the latest delta frames; the next frame is captured
-// while this one is encoded, so a cost up to the slot keeps up. The slot moves one step at a time and only after
+// The cost is the larger of the median convert + encode time of the latest delta frames and the
+// capture cycle; the next frame is captured while this one is encoded, so a cost up to the slot
+// keeps up. The pace settles at the fastest step whose slot holds the cost (within SLOWER_FIT).
+// Only one request is in flight and the compositor fills it at a display frame, so a capture takes
+// whole display frames: a readback just over one (17 ms on the Jolla Phone) allows 30 fps, not 45. The slot moves one step at a time and only after
 // a condition held for HOLD_MS, so a burst of load does not drop the pace at once. Samples are
 // forgotten at every change because a longer slot has larger frame changes, which cost more to
 // encode; the periodic probe keeps such an inflated cost from trapping the pace.
 
 #include <algorithm>
+#include <cmath>
 #include <vector>
 
 class Pacer
@@ -24,6 +28,7 @@ public:
     static constexpr double SLOWER_FIT = 1.1;  // a longer slot once the cost passes this share of the slot
     static constexpr double FASTER_FIT = 0.85; // a shorter slot once the cost is under this share of it
     static constexpr double PROBE_FIT = 1.25;  // ... or, every PROBE_MS, once it is under this share
+                                               // (a longer slot inflates the encode cost)
     static const long long HOLD_MS = 2000;     // how long a condition must last
     static const long long PROBE_MS = 10000;   // how long a lengthened pace lasts before it is tried shorter
     static const long long WARMUP_MS = 1000;   // costs right after the encoder opens (cold caches) do not count
@@ -84,6 +89,15 @@ public:
         const double lead = DISPLAY_FRAME_MS + std::max(0.0, m_readback);
         return std::max(slot / 2, std::min(slot, lead));
     }
+    // Request to arrival with one request in flight: the display frames the readback spans, 0 before
+    // the first readback.
+    double captureCycleMs() const
+    {
+        if (m_readback < 0) {
+            return 0;
+        }
+        return DISPLAY_FRAME_MS * std::max(1.0, std::ceil(m_readback / DISPLAY_FRAME_MS - 1e-6));
+    }
     // The median cost in ms, -1 before enough samples since the last change.
     double costMs() const { return m_cost; }
     // The median that caused the last change of slot.
@@ -123,7 +137,7 @@ public:
         }
         std::vector<double> sorted = m_costs;
         std::sort(sorted.begin(), sorted.end());
-        m_cost = sorted[sorted.size() / 2];
+        m_cost = std::max(sorted[sorted.size() / 2], captureCycleMs());
 
         const bool slower = m_step + 1 < m_steps && m_cost > SLOWER_FIT * slotMs(m_step);
         const bool faster = m_step > 0 && m_cost < FASTER_FIT * slotMs(m_step - 1);

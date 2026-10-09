@@ -334,6 +334,54 @@ int main()
         check(fast.step() == 0, "60 fps", "12 ms per frame keeps 60 fps");
         check(slowest <= 2 && slow.step() >= 1, "60 fps", "25 ms per frame: 45 or 30 fps, never slower");
     }
+    // 11b. 60 fps limit, the fastest step whose slot holds the per-frame cost, never a slower one.
+    //      The Jolla Phone at 1.10.7: convert + encode 19 to 23 ms (median 21) and a 17 ms readback,
+    //      just over a display frame, so a capture takes two (33 ms): 30 fps, where 45 only looked
+    //      possible from the encode time. With a 10 ms readback the same encode settles at 45, and
+    //      12 ms at 60.
+    {
+        struct Settle {
+            int step;
+            int changesAfter;  // changes of step after the first 10 s
+            int slowestAfter;  // the slowest step after the first 10 s
+        };
+        auto settle = [](double readbackMs, double costBase) {
+            Pacer p(60);
+            p.encoderOpened(0);
+            double t = 0;
+            int frames = 0;
+            Settle r = { 0, 0, 0 };
+            int last = p.step();
+            while (t < 120000) {
+                const double c = costBase - 2 + (frames * 7) % 5;
+                p.addReadback(readbackMs);
+                t += std::max(std::max(p.intervalMs(), c), p.captureCycleMs());
+                p.addCost(c, static_cast<long long>(t));
+                if (t > 10000) {
+                    r.changesAfter += p.step() != last;
+                    r.slowestAfter = std::max(r.slowestAfter, p.step());
+                }
+                last = p.step();
+                ++frames;
+            }
+            r.step = p.step();
+            return r;
+        };
+        const Settle phone = settle(17, 21);
+        const Settle quick = settle(10, 21);
+        const Settle fast = settle(10, 12);
+        std::printf("     60 fps limit: phone (21 ms, readback 17) ends at %.0f fps, readback 10 at %.0f, 12 ms at %.0f\n",
+                    Pacer(60).stepFps(phone.step), Pacer(60).stepFps(quick.step), Pacer(60).stepFps(fast.step));
+        check(phone.step == 2 && phone.slowestAfter == 2 && phone.changesAfter == 0, "60 fps, phone",
+              "settles at 30 fps and stays");
+        check(quick.step == 1 && quick.slowestAfter == 1 && quick.changesAfter == 0, "60 fps, readback 10",
+              "settles at 45 fps and stays");
+        check(fast.step == 0 && fast.changesAfter == 0, "60 fps, 12 ms", "keeps 60 fps");
+        Pacer q(60);
+        check(q.captureCycleMs() == 0, "capture cycle", "0 before a readback");
+        q.addReadback(16);
+        check(std::fabs(q.captureCycleMs() - 1000.0 / 60) < 1e-9, "capture cycle", "16 ms readback: one display frame");
+    }
     // 12. The capture lead: half a slot without readback samples (as before), the display frame plus
     //     the median readback, at most a whole slot (the request then goes out at the arrival).
     {
