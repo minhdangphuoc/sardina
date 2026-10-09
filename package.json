@@ -3,7 +3,7 @@
   "displayName": "Sailfish OS Tools",
   "description": "Build, deploy, run and manage Sailfish OS applications from VS Code.",
   "publisher": "sailfish-tools-dev",
-  "version": "0.1.9",
+  "version": "0.1.10",
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
