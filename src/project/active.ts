@@ -5,7 +5,7 @@ import { prompts } from '../ui/prompts';
 
 /**
  * FR-2.5: resolves the "active" project for commands that need exactly one —
- * (a) the active editor's workspace folder, (b) the single SFOS project,
+ * (a) the active editor's workspace folder, (b) the single Sailfish OS project,
  * (c) a QuickPick when there is more than one, (d) undefined otherwise.
  */
 export async function resolveActiveProject(registry: ProjectRegistry): Promise<ProjectDescriptor | undefined> {
@@ -31,7 +31,7 @@ export async function resolveActiveProject(registry: ProjectRegistry): Promise<P
 
   const picked = await prompts.showQuickPick(
     projects.map((p) => ({ label: p.name, description: p.folder.name, project: p })),
-    { placeHolder: 'Select the SFOS project' },
+    { placeHolder: 'Select the Sailfish OS project' },
   );
   return picked?.project;
 }

@@ -31,7 +31,7 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     // This test host only reliably supports adding a workspace folder once
     // past the initial folder-mode -> multi-root transition (see
     // project.test.ts's own note): when project.test.ts's suite already ran
-    // (the normal full-suite case), reuse the non-SFOS folder it leaves
+    // (the normal full-suite case), reuse the non-Sailfish OS folder it leaves
     // behind at index 1 instead of adding a second one, which would fail.
     const existing = vscode.workspace.workspaceFolders?.find((f, i) => i > 0 && !services.projects.forFolder(f));
     if (existing) {
@@ -165,7 +165,7 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     this.timeout(15000);
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'expected the qml-app root workspace folder');
-    assert.ok(services.projects.forFolder(folder), 'expected the root folder to be a detected SFOS project');
+    assert.ok(services.projects.forFolder(folder), 'expected the root folder to be a detected Sailfish OS project');
 
     stubQtQmlPresent();
     const { store, targetViolations } = stubQtQmlConfig();
@@ -180,7 +180,7 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     assert.deepStrictEqual(targetViolations, []);
   });
 
-  test('a non-SFOS folder is left untouched', async function () {
+  test('a non-Sailfish OS folder is left untouched', async function () {
     this.timeout(15000);
     if (!nonSfosFolder) {
       this.skip();
@@ -194,7 +194,7 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     await new Promise((r) => setTimeout(r, 500));
 
     assert.strictEqual(services.projects.forFolder(folder), undefined, 'expected not-sailfish to not be detected');
-    assert.strictEqual(store.has(folder.uri.toString()), false, 'expected no qt-qml config writes for a non-SFOS folder');
+    assert.strictEqual(store.has(folder.uri.toString()), false, 'expected no qt-qml config writes for a non-Sailfish OS folder');
   });
 
   test('when qt-qml is absent, a single one-time informational notice is shown across the whole run (no error)', async function () {

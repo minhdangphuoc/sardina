@@ -18,7 +18,7 @@ flowchart LR
   CLI["sfdk command line"]
   ENG["Build engine<br/>VirtualBox VM or Docker"]
   EMU["Emulator<br/>VirtualBox VM"]
-  DEV["Phone or emulator<br/>SFOS"]
+  DEV["Phone or emulator<br/>Sailfish OS"]
   subgraph ONDEV["On the device"]
     AG["sailfish-devagent core<br/>systemd service"]
     MOD["Module processes, one per stream:<br/>logs, stats, screenshot, mirror, input"]
@@ -203,10 +203,10 @@ flowchart LR
 | Folder | What it owns |
 |---|---|
 | `src/extension.ts` | Activation: creates the services and activates every module in a fixed order. |
-| `src/core/` | `services.ts` (the container), `output.ts` (the **SFOS** channel), `contextKeys.ts`, `deviceSessions.ts` (what runs on which device), external tool checks. |
+| `src/core/` | `services.ts` (the container), `output.ts` (the **Sailfish OS** channel), `contextKeys.ts`, `deviceSessions.ts` (what runs on which device), external tool checks. |
 | `src/settings/` | The `sardina.*` settings, their defaults and change dispatch. |
 | `src/sfdk/` | Finding the SDK, running `sfdk` (`runner.ts`), parsing its output, **Download SDK**. |
-| `src/project/` | Detecting SFOS projects and reading the `.spec` file. |
+| `src/project/` | Detecting Sailfish OS projects and reading the `.spec` file. |
 | `src/targets/` | The target picker and the status bar item. |
 | `src/tasks/` | Build, deploy, run, package and clean tasks, the build and run commands, signing, argument building, path mapping, the build log, the build and device status bar items. |
 | `src/build/` | The **Build** view and the shared build state. |
@@ -215,7 +215,7 @@ flowchart LR
 | `src/agent/` | Installing and talking to the device agent; the mirror (`mirror*.ts`, `sshForward*.ts`). |
 | `src/monitor/` | The Device Monitor: panel, sources, models and `webview/` page code. |
 | `src/qml/` | QML completion, hover and error checks: parsers for `qmldir`, `*.qmltypes` and `.qml`, the lazy type index of the build target, `features.ts` (no VS Code) and `index.ts` (providers). |
-| `src/wizard/`, `src/walkthrough/`, `src/qtqml/`, `src/ui/` | New Project, the getting-started walkthrough, turning off `qmlls` in SFOS projects, prompt helpers. |
+| `src/wizard/`, `src/walkthrough/`, `src/qtqml/`, `src/ui/` | New Project, the getting-started walkthrough, turning off `qmlls` in Sailfish OS projects, prompt helpers. |
 | `media/` | The icon, the walkthrough text and the agent RPMs in `media/agent/<arch>/`. |
 
 Most folders keep the logic that needs no VS Code in `*Core.ts` files, so the

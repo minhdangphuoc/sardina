@@ -18,7 +18,7 @@ export interface DetectedProject extends SpecSummary {
   appBinaryPath: string;
 }
 
-/** Detects a single folder per FR-2.2, returning `undefined` when it is not an SFOS project. */
+/** Detects a single folder per FR-2.2, returning `undefined` when it is not a Sailfish OS project. */
 export async function detectProjectAt(folderPath: string, io: DetectIO): Promise<DetectedProject | undefined> {
   const specs = await io.findSpecFiles(folderPath);
   if (specs.length === 0) {

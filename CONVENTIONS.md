@@ -91,7 +91,7 @@ Rules:
   implemented.
 - `src/core/output.ts`:
   `class Output { log(level, msg); logInvocation(argv, exitCode, durationMs); show(); readonly channel }` —
-  implemented; channel name is **SFOS**.
+  implemented; channel name is **Sailfish OS**.
 
 Everything else not yet implemented throws `new Error('not implemented: Task X')`
 from its non-activation methods; each module's `activateX` registers its

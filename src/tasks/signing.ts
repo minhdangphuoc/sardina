@@ -109,7 +109,7 @@ async function createKey(ctx: vscode.ExtensionContext, services: Services): Prom
 async function setupSigning(ctx: vscode.ExtensionContext, services: Services): Promise<void> {
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sardina: open an SFOS project first; the signing settings are saved per project folder.');
+    void services.prompts.showWarningMessage('Sardina: open a Sailfish OS project first; the signing settings are saved per project folder.');
     return;
   }
 

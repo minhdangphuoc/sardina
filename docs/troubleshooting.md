@@ -5,7 +5,7 @@
 
 | What you see | Cause | Fix |
 |---|---|---|
-| `The command needs to be used under SFOS SDK workspace` | The project is outside the SDK workspace. | Move it into your home directory, or change the workspace in Qt Creator's options. |
+| `The command needs to be used under Sailfish SDK workspace` | The project is outside the SDK workspace. | Move it into your home directory, or change the workspace in Qt Creator's options. |
 | `Cannot find real …` from the build engine | The project path contains a space. | Rename the folders so the path has no spaces. |
 | `nothing provides 'libQt5Core.so.5'` | The package holds files built for another architecture. | **Sardina: Clean**, then build again. |
 | `The required configuration option 'device' is not set` | No deploy device selected. | Click the device item in the status bar. |
@@ -54,7 +54,7 @@
 - Close Qt Creator before **Add Device** or **Remove Device**. The extension
   refuses to change the device list while Qt Creator runs, because Qt Creator
   would overwrite the change.
-- As of SDK 3.13.5 there is no SFOS 5.2 build target; use 5.1.0.11.
+- As of SDK 3.13.5 there is no Sailfish OS 5.2 build target; use 5.1.0.11.
 - The device agent's open points are listed in
   [What is not verified yet](device-agent.md#what-is-not-verified-yet).
 
@@ -64,8 +64,8 @@
   Silica QML are planned for a later version; they will read the build target
   installed on your machine, and Silica's own API data will never be bundled
   with this extension. For now the extension turns off the Qt QML extension's
-  `qmlls` language server (`qt-qml.qmlls.enabled`) in each SFOS project
-  folder: `qmlls` needs Qt 6.8 or newer while SFOS targets ship Qt 5.6,
+  `qmlls` language server (`qt-qml.qmlls.enabled`) in each Sailfish OS project
+  folder: `qmlls` needs Qt 6.8 or newer while Sailfish OS targets ship Qt 5.6,
   so it only reports false errors against Silica QML. Set
   `sardina.qtqml.silenceQmlls` to `false` to keep it on.
 - **No QML or JavaScript debugging**, only C++.

@@ -191,7 +191,7 @@ async function verifyDeviceRegistered(services: Services, deviceName: string): P
 function showFallbackDialog(services: Services, attemptedXml: string): void {
   void services.prompts
     .showWarningMessage(
-      'Sardina: the device did not appear in `sfdk device list` after writing devices.xml. Register it in Qt Creator instead (Tools → Options → Devices → Add → SFOS Device).',
+      'Sardina: the device did not appear in `sfdk device list` after writing devices.xml. Register it in Qt Creator instead (Tools → Options → Devices → Add → Sailfish OS Device).',
       OPEN_QTC_INSTEAD,
       REVEAL_XML,
     )
@@ -250,7 +250,7 @@ export function addDevice(services: Services, ctx: vscode.ExtensionContext) {
     });
     if (!portStr) return;
     const user = await services.prompts.showInputBox({
-      prompt: "Username (defaultuser on SFOS >= 3.4.0; hint: use 'nemo' on older releases)",
+      prompt: "Username (defaultuser on Sailfish OS >= 3.4.0; hint: use 'nemo' on older releases)",
       value: 'defaultuser',
     });
     if (!user) return;

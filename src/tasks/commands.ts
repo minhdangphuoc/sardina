@@ -39,7 +39,7 @@ const CONFIRM_ON_DEVICE_RE = /Please confirm installation on device/i;
 async function activeProjectOrWarn(services: Services): Promise<ProjectDescriptor | undefined> {
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no Sailfish OS project found in this workspace.');
   }
   return project;
 }

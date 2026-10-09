@@ -4,14 +4,14 @@
 
 | Term | Meaning |
 |---|---|
-| **SFOS SDK** | The SFOS SDK, Jolla's toolkit for building SFOS apps. It installs into `~/SailfishOS`. |
+| **Sailfish SDK** | The Sailfish SDK, Jolla's toolkit for building Sailfish OS apps. It installs into `~/SailfishOS`. |
 | **`sfdk`** | The SDK's command-line tool. The extension runs it for you; you can also run it in a terminal. |
 | **Build engine** | A virtual machine (VirtualBox) or container (Docker) where the SDK compiles your app. It starts by itself when needed. |
-| **Build target** | The SFOS version and processor type you compile for, e.g. `SailfishOS-5.1.0.11-aarch64`. |
+| **Build target** | The Sailfish OS version and processor type you compile for, e.g. `SailfishOS-5.1.0.11-aarch64`. |
 | **Architecture** | The end of a target name: `aarch64` (64-bit ARM phones), `armv7hl` (32-bit ARM phones) or `i486` (the emulator). |
-| **Emulator** | An SFOS phone running as a VirtualBox virtual machine on your computer. |
+| **Emulator** | A Sailfish OS phone running as a VirtualBox virtual machine on your computer. |
 | **Device** | A phone or the emulator that the SDK installs your app on. |
-| **RPM** | The package format SFOS installs apps from. A build puts `.rpm` files in the project's `RPMS/` folder. |
+| **RPM** | The package format Sailfish OS installs apps from. A build puts `.rpm` files in the project's `RPMS/` folder. |
 | **SDK workspace** | The folder the build engine can see, by default your home directory. Projects must be inside it. |
 | **Device agent** | `sailfish-devagent`, a small service this extension can install on a device for screenshots, logs and the mirror. |
 
@@ -23,7 +23,7 @@
 | Free disk space | about 15 GB | For the SDK with its default components. |
 | Memory | 4 GB or more | Recommended by the SDK. |
 | [VirtualBox](https://www.virtualbox.org/wiki/Downloads) | 6.1 or newer | **Install before the SDK.** Needed for the emulator, and for the build engine unless you choose Docker. Tested with 7.2.20. |
-| [SFOS SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/) | 3.10 or newer | Tested with **3.13.5**. Older versions are not blocked; a warning goes to the **Sardina** output channel. |
+| [Sailfish SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/) | 3.10 or newer | Tested with **3.13.5**. Older versions are not blocked; a warning goes to the **Sardina** output channel. |
 | [VS Code](https://code.visualstudio.com/) | 1.94 or newer | |
 | [Qt QML](https://marketplace.visualstudio.com/items?itemName=theqtcompany.qt-qml) extension | any | Installed together with this extension (needs access to the Marketplace; VSCodium users install it from Open VSX first). |
 | OpenSSH client | 8.4 or newer | `ssh`, `ssh-keygen` and `ssh-copy-id`, for **Add Device** and the fast screen mirror. The extension checks for them at start and shows a notice if any is missing. |
@@ -43,7 +43,7 @@ and the device agent.
    distribution; Ubuntu and elementary OS can use Oracle's `.deb`).
 2. **Check:** `VBoxManage --version` prints a version such as `7.2.20r175154`.
 
-### Part 2: Install the SFOS SDK
+### Part 2: Install the Sailfish SDK
 
 1. Download the Linux installer from
    <https://docs.sailfishos.org/Tools/Sailfish_SDK/#latest-sdk-release>, named
@@ -90,8 +90,8 @@ VS Code, or the `SAILFISH_SDK_ROOT` environment variable, to that folder.
 2. Build and install the extension:
 
    ```sh
-   git clone https://github.com/minhdangphuoc/vscode-sailfish.git
-   cd vscode-sailfish
+   git clone https://github.com/minhdangphuoc/sardina.git
+   cd sardina
    npm ci                                         # install build tools
    npm run build                                  # compile into dist/
    npx vsce package                               # creates sardina-<version>.vsix
@@ -109,7 +109,7 @@ To update later: `git pull`, then repeat the last four commands.
 
 1. Projects must be inside the SDK workspace (your home directory by default).
    Outside it, every `sfdk` command fails with "The command needs to be used
-   under SFOS SDK workspace". The path must not contain spaces either; the
+   under Sailfish SDK workspace". The path must not contain spaces either; the
    extension warns if it does.
 2. Create a project, either in VS Code with **Ctrl+Shift+P** (**Cmd+Shift+P**
    on macOS) → **Sardina: New Project**, or in a terminal:
@@ -119,11 +119,11 @@ To update later: `git pull`, then repeat the last four commands.
    sfdk init -t qtquick2app
    ```
 
-   App names start with `harbour-` by SFOS convention.
+   App names start with `harbour-` by Sailfish OS convention.
 3. Open the folder in VS Code (**File → Open Folder**) and choose **Yes, I
    trust the authors**. In Restricted Mode the extension stays off.
 4. **Check:** a Sardina icon appears in the activity bar on the left, and the
-   status bar shows the items in Part 5. A folder counts as an SFOS project
+   status bar shows the items in Part 5. A folder counts as a Sailfish OS project
    only if it contains `rpm/*.spec`.
 
 ### Part 5: The status bar
@@ -164,9 +164,9 @@ target with a different architecture, the extension asks to clean first;
 answer **Clean**. Set `sardina.build.cleanOnArchChange` to `true` to clean
 without asking.
 
-**OS versions:** a target may be older than the phone's SFOS; this is
+**OS versions:** a target may be older than the phone's Sailfish OS; this is
 normal. As of SDK 3.13.5 the newest targets are 5.1.0.11, and their apps run on
-SFOS 5.2 phones.
+Sailfish OS 5.2 phones.
 
 ### Part 6: Run on the emulator
 
@@ -182,7 +182,7 @@ The **SDK** view in the same sidebar shows the SDK version and location, the
 `sfdk` path, the build engine (with start and stop buttons) and the installed
 targets, with ✓ on the selected one. It does not update by itself when
 something changes outside VS Code, such as the engine starting during a build;
-press the view's **Refresh** button. If no SDK is found, it shows **SFOS
+press the view's **Refresh** button. If no SDK is found, it shows **Sailfish OS
 SDK not found**; click it to open the install guide.
 
 ### Part 7: Run on a phone

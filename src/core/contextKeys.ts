@@ -36,7 +36,7 @@ export class ContextKeys {
 /**
  * The workspace folder `sardina.target`/`sardina.device` (resource scope)
  * should be evaluated for: the active editor's project folder, else the
- * single SFOS project. Unlike FR-2.5's resolveActiveProject this never
+ * single Sailfish OS project. Unlike FR-2.5's resolveActiveProject this never
  * prompts — background context refresh must not pop a QuickPick.
  */
 function scopeFolder(services: Services): vscode.WorkspaceFolder | undefined {

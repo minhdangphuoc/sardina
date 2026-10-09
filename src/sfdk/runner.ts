@@ -139,7 +139,7 @@ export class SfdkRunner {
     if (!bin) {
       return Promise.resolve({
         stdout: '',
-        stderr: 'SFOS SDK not found; commands are disabled until an SDK is configured.',
+        stderr: 'Sailfish SDK not found; commands are disabled until an SDK is configured.',
         exitCode: -1,
         argv: ['sfdk', ...argv],
         durationMs: 0,

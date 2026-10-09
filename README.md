@@ -1,17 +1,17 @@
 # Sardina
 
-Build, run and debug SFOS apps from VS Code.
+Build, run and debug Sailfish OS apps from VS Code.
 
 > **Independent project.** This is a personal hobby project. It is not
 > affiliated with, endorsed by or made for Jolla or any other company.
-> SFOS is a trademark of Jolla; the name is used here only to say
+> Sailfish OS is a trademark of Jolla; the name is used here only to say
 > which platform the extension works with.
 
 ![Debugging on a Jolla Phone with the screen mirror and Device Monitor](media/screenshots/debug-mirror-monitor.png)
 
 ## What it does
 
-A VS Code extension that connects to the SFOS SDK so you can develop
+A VS Code extension that connects to the Sailfish SDK so you can develop
 on a device or the emulator without leaving the editor.
 
 - Build, deploy, run and debug your app with status bar buttons.
@@ -26,10 +26,10 @@ on a device or the emulator without leaving the editor.
 ## Quick start
 
 1. Install [VirtualBox](https://www.virtualbox.org/wiki/Downloads) and the
-   [SFOS SDK (SFOS SDK)](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/)
+   [Sailfish SDK (Sailfish SDK)](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/)
    (3.10+). VS Code 1.94+ on Linux (macOS untested).
 2. Install the extension from its `.vsix` file (see [Setup](docs/setup.md)).
-3. Open an SFOS project folder.
+3. Open a Sailfish OS project folder.
 4. Pick a build target and a device in the status bar.
 5. Click **Run** (Ctrl+Alt+R) or **Debug**.
 

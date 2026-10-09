@@ -263,7 +263,7 @@ function openSsh(services: Services) {
     }
     const sfdkPath = services.sdk.current()?.sfdkPath;
     if (!sfdkPath) {
-      notifyError(services, 'SFOS SDK not found; commands are disabled until an SDK is configured.');
+      notifyError(services, 'Sailfish SDK not found; commands are disabled until an SDK is configured.');
       return;
     }
     const launch = buildSshLaunch(device, sfdkPath);
@@ -302,7 +302,7 @@ function connectWlan(services: Services) {
       return;
     }
     const usernameChoice = await services.prompts.showQuickPick(['nemo', 'defaultuser', CUSTOM_USERNAME], {
-      placeHolder: 'Device username (nemo on SFOS < 3.4.0, defaultuser on newer)',
+      placeHolder: 'Device username (nemo on Sailfish OS < 3.4.0, defaultuser on newer)',
     });
     if (!usernameChoice) {
       return;

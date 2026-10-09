@@ -1,6 +1,6 @@
-# Install and detect the SFOS SDK
+# Install and detect the Sailfish SDK
 
-Install the SFOS SDK from [docs.sailfishos.org](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/)
+Install the Sailfish SDK from [docs.sailfishos.org](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/)
 if you haven't already.
 
 Once it's installed, this extension looks for it in the usual locations

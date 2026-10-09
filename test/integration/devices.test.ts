@@ -226,7 +226,7 @@ suite('devices (FR-6, AC-1.8/1.9)', () => {
       await refreshAndWait(p);
       const emulatorChildren = await p.getChildren((await p.getChildren())![0]);
       const target = emulatorChildren!.find((c) => deviceOf(c))!;
-      // The fake emulator's endpoint is 127.0.0.1:2223, the real SFOS emulator's SSH port. When that
+      // The fake emulator's endpoint is 127.0.0.1:2223, the real Sailfish OS emulator's SSH port. When that
       // emulator runs on this machine, the reachability probe marks the fake one running and start is
       // (correctly) skipped as "already running". Drop the endpoint so this checks argv and refresh only.
       const startItem = { device: { ...deviceOf(target)!, host: undefined, port: undefined } };

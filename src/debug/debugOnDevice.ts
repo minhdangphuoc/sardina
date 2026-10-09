@@ -267,7 +267,7 @@ export async function debugOnDevice(services: Services): Promise<void> {
   if (!(await ensureCppTools(services))) return;
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no Sailfish OS project found in this workspace.');
     return;
   }
   const gdbserver = await ensureGdbserver(services, project.folder);
@@ -287,7 +287,7 @@ export async function debugInstalled(services: Services): Promise<void> {
   if (!(await ensureCppTools(services))) return;
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no Sailfish OS project found in this workspace.');
     return;
   }
   const gdbserver = await ensureGdbserver(services, project.folder);

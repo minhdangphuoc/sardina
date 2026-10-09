@@ -14,7 +14,7 @@ const DELETE = 'Delete';
 export async function cleanProjectBuild(services: Services): Promise<boolean> {
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sardina: no SFOS project found in this workspace.');
+    void services.prompts.showWarningMessage('Sardina: no Sailfish OS project found in this workspace.');
     return false;
   }
   if (buildState.running) {

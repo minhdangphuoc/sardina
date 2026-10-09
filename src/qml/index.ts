@@ -160,7 +160,7 @@ class QmlFeatures {
   }
 }
 
-/** Completion, hover and diagnostics for QML in SFOS projects, read from the build target. */
+/** Completion, hover and diagnostics for QML in Sailfish OS projects, read from the build target. */
 export function activateQmlFeatures(ctx: vscode.ExtensionContext, services: Services): QmlFeaturesTestApi {
   const features = new QmlFeatures(services);
   features.register(ctx);

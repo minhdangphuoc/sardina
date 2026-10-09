@@ -9,4 +9,4 @@ You can also run each stage on its own with **Sardina: Build**,
 just one part of the cycle.
 
 See [docs.sailfishos.org](https://docs.sailfishos.org/Tools/Sailfish_SDK/Deploying_packages/)
-for details on how SFOS builds and packages applications.
+for details on how Sailfish OS builds and packages applications.

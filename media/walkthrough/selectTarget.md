@@ -1,10 +1,10 @@
 # Select a build target
 
-Run **Sardina: Select Target** to choose which SFOS build target
+Run **Sardina: Select Target** to choose which Sailfish OS build target
 (architecture and OS version, e.g. `SailfishOS-4.4.0.58-aarch64`) your project
 builds against.
 
-Build targets come from your SFOS SDK installation; see
+Build targets come from your Sailfish SDK installation; see
 [docs.sailfishos.org](https://docs.sailfishos.org/Tools/Sailfish_SDK/Building_packages/)
 for how to install additional ones.
 

@@ -86,7 +86,7 @@ function findSdkCandidate(services: Services): SdkCandidate | undefined {
 }
 
 /**
- * Locates and version-gates the SFOS SDK per FR-1.1 (setting > env > home >
+ * Locates and version-gates the Sailfish SDK per FR-1.1 (setting > env > home >
  * PATH), FR-1.2 (version gate) and FR-1.7 (Windows gate).
  */
 export class SdkLocator {
@@ -114,7 +114,7 @@ export class SdkLocator {
     this.notFoundWarned = true;
     void this.services.prompts
       .showWarningMessage(
-        'Sardina: could not find the SFOS SDK. Set the SDK path to enable Sardina commands.',
+        'Sardina: could not find the Sailfish SDK. Set the SDK path to enable Sardina commands.',
         DOWNLOAD_ACTION,
         SET_SDK_PATH_ACTION,
         INSTALL_ACTION,
@@ -172,12 +172,12 @@ export class SdkLocator {
     if (parsed && compareSemverLike(parsed, MIN_VERSION) < 0) {
       this.services.output.log(
         'warn',
-        `SFOS SDK ${version} is older than the minimum supported version ${MIN_VERSION.raw}; some features may not work as expected.`,
+        `Sailfish SDK ${version} is older than the minimum supported version ${MIN_VERSION.raw}; some features may not work as expected.`,
       );
     } else if (!parsed) {
       this.services.output.log(
         'warn',
-        'Could not determine the SFOS SDK version from sfdk --version output; skipping the version gate.',
+        'Could not determine the Sailfish SDK version from sfdk --version output; skipping the version gate.',
       );
     }
 
@@ -198,7 +198,7 @@ async function pickSdkPath(services: Services): Promise<void> {
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
-    openLabel: 'Select SFOS SDK root',
+    openLabel: 'Select Sailfish SDK root',
     defaultUri: current ? vscode.Uri.file(current) : undefined,
   });
   const picked = uris?.[0];

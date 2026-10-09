@@ -1,6 +1,6 @@
 [Unit]
 Description=Sailfish developer agent (screenshots and system logs for VS Code)
-Documentation=https://github.com/minhdangphuoc/vscode-sailfish
+Documentation=https://github.com/minhdangphuoc/sardina
 # The socket lives in the user's runtime directory and screenshots need the session bus.
 After=user@100000.service
 Wants=user@100000.service

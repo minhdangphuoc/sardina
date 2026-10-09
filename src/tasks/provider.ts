@@ -40,7 +40,7 @@ function applyGroupAndMatchers(task: vscode.Task, command: SardinaTaskDefinition
   }
 }
 
-/** FR-5.2: the fixed task list offered for each SFOS project. */
+/** FR-5.2: the fixed task list offered for each Sailfish OS project. */
 function tasksForProject(services: Services, project: ProjectDescriptor): vscode.Task[] {
   const build = makeTask(services, project, { command: 'build' }, 'build');
   applyGroupAndMatchers(build, 'build');

@@ -112,7 +112,7 @@ async function selectTarget(services: Services, statusBar: TargetStatusBar | und
   const shown = visibleTargets(services, outcome.targets);
   if (shown.length === 0) {
     const choice = await services.prompts.showInformationMessage(
-      'Sardina: no SFOS targets found. Install one via the SFOS SDK Maintenance Tool.',
+      'Sardina: no Sailfish OS targets found. Install one via the Sailfish SDK Maintenance Tool.',
       OPEN_DOCS_ACTION,
     );
     if (choice === OPEN_DOCS_ACTION) {
@@ -122,7 +122,7 @@ async function selectTarget(services: Services, statusBar: TargetStatusBar | und
   }
 
   const picked = await services.prompts.showQuickPick(shown.map(toQuickPickItem), {
-    placeHolder: 'Select an SFOS build target',
+    placeHolder: 'Select a Sailfish OS build target',
   });
   if (!picked) {
     return;
@@ -154,7 +154,7 @@ async function setSfdkDefaultTarget(services: Services): Promise<void> {
   const shown = visibleTargets(services, outcome.targets);
   if (shown.length === 0) {
     const choice = await services.prompts.showInformationMessage(
-      'Sardina: no SFOS targets found. Install one via the SFOS SDK Maintenance Tool.',
+      'Sardina: no Sailfish OS targets found. Install one via the Sailfish SDK Maintenance Tool.',
       OPEN_DOCS_ACTION,
     );
     if (choice === OPEN_DOCS_ACTION) {

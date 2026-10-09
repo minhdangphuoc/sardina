@@ -119,7 +119,7 @@ export class SdkRootItem extends vscode.TreeItem {
 
 export class SdkNotFoundItem extends vscode.TreeItem {
   constructor() {
-    super('SFOS SDK not found', vscode.TreeItemCollapsibleState.None);
+    super('Sailfish SDK not found', vscode.TreeItemCollapsibleState.None);
     this.description = 'click to install';
     this.contextValue = 'sdk-not-found';
     this.iconPath = new vscode.ThemeIcon('warning');

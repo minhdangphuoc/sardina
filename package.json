@@ -1,7 +1,7 @@
 {
   "name": "sardina",
-  "displayName": "Sardina — SFOS Dev Kit",
-  "description": "Unofficial community extension for building, deploying, and managing SFOS apps via sfdk and QML.",
+  "displayName": "Sardina — Sailfish OS Dev Kit",
+  "description": "Unofficial community extension for building, deploying, and managing Sailfish OS apps via sfdk and QML.",
   "keywords": [
     "sfos",
     "sfdk",
@@ -15,7 +15,7 @@
   "license": "GPL-3.0-or-later",
   "repository": {
     "type": "git",
-    "url": "https://github.com/minhdangphuoc/vscode-sailfish.git"
+    "url": "https://github.com/minhdangphuoc/sardina.git"
   },
   "engines": {
     "vscode": "^1.94.0"
@@ -419,7 +419,7 @@
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Absolute path to the SFOS SDK installation root. Leave empty to auto-detect via environment and default locations."
+          "markdownDescription": "Absolute path to the Sailfish SDK installation root. Leave empty to auto-detect via environment and default locations."
         },
         "sardina.devicesXmlPath": {
           "type": "string",
@@ -524,7 +524,7 @@
           "type": "string",
           "default": "",
           "scope": "resource",
-          "markdownDescription": "Path to a file (mode 600) holding the key's passphrase, passed to sfdk as `package.signing-passphrase-file`. sfdk only reads the first line, and the file must be under the SFOS SDK workspace (your home directory by default). Leave empty to use the value from `sfdk config`. The passphrase itself is never stored in settings."
+          "markdownDescription": "Path to a file (mode 600) holding the key's passphrase, passed to sfdk as `package.signing-passphrase-file`. sfdk only reads the first line, and the file must be under the Sailfish SDK workspace (your home directory by default). Leave empty to use the value from `sfdk config`. The passphrase itself is never stored in settings."
         },
         "sardina.build.cleanOnArchChange": {
           "type": "boolean",
@@ -582,7 +582,7 @@
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this SFOS project folder. SFOS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
+          "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this Sailfish OS project folder. Sailfish OS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
         },
         "sardina.qml.languageFeatures": {
           "type": "boolean",
@@ -1091,13 +1091,13 @@
     "walkthroughs": [
       {
         "id": "sardina.gettingStarted",
-        "title": "Get started with SFOS",
-        "description": "Set up the SFOS SDK, create a project, and build, deploy and run it.",
+        "title": "Get started with Sailfish OS",
+        "description": "Set up the Sailfish SDK, create a project, and build, deploy and run it.",
         "steps": [
           {
             "id": "installSdk",
-            "title": "Install and detect the SFOS SDK",
-            "description": "Install the SFOS SDK and point the extension at it.\n[Set SDK Path](command:sardina.setSdkPath)",
+            "title": "Install and detect the Sailfish SDK",
+            "description": "Install the Sailfish SDK and point the extension at it.\n[Set SDK Path](command:sardina.setSdkPath)",
             "media": {
               "markdown": "media/walkthrough/installSdk.md"
             },
@@ -1108,7 +1108,7 @@
           {
             "id": "createProject",
             "title": "Create a project",
-            "description": "Create a new SFOS application from a template.\n[New Project](command:sardina.newProject)",
+            "description": "Create a new Sailfish OS application from a template.\n[New Project](command:sardina.newProject)",
             "media": {
               "markdown": "media/walkthrough/createProject.md"
             },
@@ -1119,7 +1119,7 @@
           {
             "id": "selectTarget",
             "title": "Select a build target",
-            "description": "Choose which SFOS build target to use.\n[Select Target](command:sardina.selectTarget)",
+            "description": "Choose which Sailfish OS build target to use.\n[Select Target](command:sardina.selectTarget)",
             "media": {
               "markdown": "media/walkthrough/selectTarget.md"
             },
@@ -1130,7 +1130,7 @@
           {
             "id": "startEmulator",
             "title": "Start the emulator",
-            "description": "Start the SFOS emulator to deploy and test your app.\n[Start Emulator](command:sardina.emulator.start)",
+            "description": "Start the Sailfish OS emulator to deploy and test your app.\n[Start Emulator](command:sardina.emulator.start)",
             "media": {
               "markdown": "media/walkthrough/startEmulator.md"
             },
