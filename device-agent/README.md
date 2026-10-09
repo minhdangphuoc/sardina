@@ -5,11 +5,29 @@ grants permission once, when installing it; after that VS Code can take screensh
 system log, and show and control a live view of the screen, without asking for the developer-mode
 password each time. It only serves while Developer Mode is on.
 
-It is plain Qt (`core`, `dbus`, `network`, `gui`), with no Silica. One binary has two modes:
+It is plain Qt, with no Silica. Since 1.11.0 it is one small core and one package per feature,
+all with the same version:
 
-- `sailfish-devagent --daemon` is the systemd service.
-- `sailfish-devagent --request <cmd>` is the client. It connects to the daemon's socket, sends the
-  request and copies the reply to stdout. The extension runs it through `sfdk device exec`.
+- `sailfish-devagent` (core) is the systemd service (`--daemon`, links only QtCore, QtDBus and
+  QtNetwork) and the client (`--request <cmd>`, which connects to the daemon's socket, sends the
+  request and copies the reply to stdout; the extension runs it through `sfdk device exec`). It owns
+  the socket, the Developer Mode and phone-switch checks, the settings, the notifications and the
+  Settings page.
+- Five module packages, each one executable in `/usr/libexec/sailfish-devagent/` that the core
+  starts for one request or stream and that ends with it: `-logs`, `-stats`, `-screenshot`,
+  `-mirror` (QtGui, Wayland, libvpx) and `-input` (requires `-mirror`). Nothing of a module is
+  loaded while it is not in use, and a crash ends one stream, not the daemon.
+
+| Folder | Package | Aarch64 RPM |
+|---|---|---|
+| `core/` (with `common/`) | `sailfish-devagent` | 98 KB |
+| `logs/` | `sailfish-devagent-logs` | 38 KB |
+| `stats/` | `sailfish-devagent-stats` | 42 KB |
+| `screenshot/` | `sailfish-devagent-screenshot` | 37 KB |
+| `mirror/` | `sailfish-devagent-mirror` | 101 KB |
+| `input/` | `sailfish-devagent-input` | 60 KB |
+
+`rpm -e sailfish-devagent` with modules installed is refused by rpm; erase them in one transaction.
 
 ## Building the RPMs
 
@@ -36,7 +54,7 @@ device-agent/build.sh
 For each architecture the script runs `sfdk -c target=SailfishOS-5.1.0.11-<arch> -c no-fix-version
 build` (without `no-fix-version`, sfdk stamps the repository's git tag as the package version),
 cleans the tree between architectures, and copies the result to
-`media/agent/<arch>/sailfish-devagent-<version>-<release>.<arch>.rpm`. Set `SFDK` to use an sfdk
+`media/agent/<arch>/sailfish-devagent[-<module>]-<version>-<release>.<arch>.rpm` (six files). Set `SFDK` to use an sfdk
 other than `~/SailfishOS/bin/sfdk`. The RPMs are unsigned and are shipped inside the VSIX; rebuild
 them by hand whenever the agent changes.
 
@@ -130,7 +148,12 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
 
 ## Protocol
 
-One request per connection: one JSON line in, then the reply. Current version: **1.8.1**. 1.1.0
+One request per connection: one JSON line in, then the reply. Current version: **1.11.0**. 1.11.0
+splits the agent into modules: `ping` adds `"modules":["logs",…]` (the installed ones), the capability
+fields below appear only with the module that serves them (`logFormats` with logs, `stats` with stats,
+`mirrorEncodings` with mirror, `mirrorInput` and `keypad` with input), and a request for a missing
+module gets `{"ok":false,"error":"<module> module not installed"}`. A mirror request with `"input":true`
+and no input module streams view-only. 1.1.0
 added `mirror`; 1.2.0 added the binary mirror encoding, acks and the lease (see
 `PLAN-mirror-forward.md`, §1.2); 1.3.0 changes only how mirror frames are captured (below), not the
 protocol; 1.4.0 adds opt-in adaptive quality to binary mirror streams; 1.5.0 adds the `capture` and
@@ -190,7 +213,7 @@ link is behind, raw captures are dropped and the next capture is taken when the 
 Frame pacing and the idle screen (1.8.0, VP8 only; older clients ignore the new fields): frames are
 requested on a steady grid of slots anchored on their arrival, half a slot early, so the frame
 interval stays even instead of following the compositor's timing. The slot is 1, 1.5, 2, 3 or 4
-frame intervals (30, 20, 15, 10 or 7.5 fps at 30 fps; `src/pacer.h`, 1.8.1). It grows by one step
+frame intervals (30, 20, 15, 10 or 7.5 fps at 30 fps; `mirror/pacer.h`, 1.8.1). It grows by one step
 when the median convert + encode time of the last delta frames (at least 8, at most 15) stays over
 110 % of the slot for 2 s, and shrinks by one step when it stays under 85 % of the shorter slot for
 2 s; every 10 s at a longer slot it tries the shorter one while the median is under 125 % of it. The
@@ -243,7 +266,7 @@ Capture path (1.5.0): every image frame, binary header or text line, carries `"c
 (the compositor recorder). Since 1.10.5 the mirror never takes screenshots: when the recorder cannot
 be opened, the stream ends with the fatal reply `native screen capture unavailable: <reason>` (for
 example `no answer from the compositor: ...`) and the same text goes to the journal; a recorder that
-breaks mid-stream is reopened up to 3 times within 5 s (`src/retrybudget.h`) before the stream ends
+breaks mid-stream is reopened up to 3 times within 5 s (`mirror/retrybudget.h`) before the stream ends
 that way. Before 1.10.5 a frame could carry `"capture":"screenshot"` and `"captureReason"`. `same`
 and `error` records are unchanged. The `screenshot` request still uses `saveScreenshot`.
 

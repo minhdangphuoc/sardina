@@ -128,7 +128,8 @@ flowchart LR
   EMU["Emulator<br/>VirtualBox VM"]
   DEV["Phone or emulator<br/>Sailfish OS"]
   subgraph ONDEV["On the device"]
-    AG["sailfish-devagent<br/>systemd service"]
+    AG["sailfish-devagent core<br/>systemd service"]
+    MOD["Module processes, one per stream:<br/>logs, stats, screenshot, mirror, input"]
     SOCK["Unix socket agent.sock"]
     DBUS["D-Bus settings service<br/>on the session bus"]
     SET["Settings page<br/>Settings, System, Developer agent"]
@@ -143,6 +144,7 @@ flowchart LR
   EMU --- DEV
   DEV --- AG
   AG --- SOCK
+  AG -->|"starts, after the checks"| MOD
   EXT -->|"ssh -L unix socket"| SOCK
   CLI -->|"sailfish-devagent --request"| SOCK
   AG --- DBUS
@@ -157,6 +159,9 @@ flowchart LR
   shell, and starts the build engine when a command needs it.
 - `core/deviceSessions.ts` remembers what runs on each device. Changing the
   selected device, or **Stop Sessions on Device**, stops those sessions.
+- On the device the agent is one small core plus one package per feature (a
+  module). The core owns the socket, the checks and the Settings page; a module
+  runs as its own short-lived process, only while its request or stream runs.
 - The agent is reached two ways: one-shot requests run
   `sfdk device exec -- sailfish-devagent --request <cmd>`; the mirror uses a
   direct `ssh -N -L` forward to the agent's Unix socket. The phone's Settings
@@ -323,17 +328,19 @@ flowchart LR
 Most folders keep the logic that needs no VS Code in `*Core.ts` files, so the
 unit tests run them without a VS Code window.
 
-| In `device-agent/` | What it does |
-|---|---|
-| `src/main.cpp`, `agent.*` | The binary: `--daemon` (the service and its socket) or `--request <cmd>` (the client, in `client.*`). Request parsing and the Developer Mode check. |
-| `src/screenshot.*`, `logs.*`, `stats.*` | Screenshots through Lipstick, `journalctl` streaming, and per-app `/proc` statistics. |
-| `src/mirror.*`, `recorder.*`, `capture.*`, `videoencoder.*`, `pacer.h` | The mirror stream: Lipstick recorder, capture path, VP8 and JPEG encoding, frame pacing. |
-| `src/mirrorinput.*`, `touchoverlay.*` | Tap and swipe injection and the touch indicator. |
-| `src/indicator.*` | The notification shown while the screen is viewed or controlled. |
-| `src/settings.*`, `settingsservice.*` | The phone's own settings file and the D-Bus service the Settings page uses. |
-| `settings/DeveloperAgentPage.qml` | The **Developer agent** page in Settings, System. |
-| `sailfish-devagent.service`, `rpm/`, `sailfish-devagent.pro` | The systemd unit and the RPM spec. |
-| `build.sh` | Builds the RPMs for `aarch64`, `armv7hl` and `i486` and copies them to `media/agent/`. |
+| In `device-agent/` | Package | What it does |
+|---|---|---|
+| `core/`, `common/` | `sailfish-devagent` (98 KB) | The resident service and the `--request` client: socket, request parsing, Developer Mode and phone-switch checks, starting module processes, the phone's settings and their D-Bus service, notifications, the stream indicator. Links only QtCore, QtDBus and QtNetwork. |
+| `logs/` | `-logs` (38 KB) | `journalctl` streaming. |
+| `stats/` | `-stats` (42 KB) | Per-app `/proc` statistics for the Device Monitor. |
+| `screenshot/` | `-screenshot` (37 KB) | One screenshot through Lipstick. |
+| `mirror/` | `-mirror` (101 KB) | The mirror stream: Lipstick recorder, VP8 and JPEG encoding, frame pacing. The only module that loads QtGui, Wayland and libvpx. |
+| `input/` | `-input` (60 KB) | Tap, swipe and key injection and the touch indicator; needs `-mirror`. |
+| `settings/DeveloperAgentPage.qml` | core | The **Developer agent** page in Settings, System. |
+| `sailfish-devagent.service`, `rpm/`, `sailfish-devagent.pro` | | The systemd unit, the one RPM spec for all six packages, the qmake project. |
+| `build.sh` | | Builds the six RPMs for `aarch64`, `armv7hl` and `i486` and copies them to `media/agent/`. |
+
+RPM sizes are for `aarch64`.
 
 ## Words used below
 
@@ -660,15 +667,19 @@ clear message (gpg matches names as substrings, so `Jane Doe` also matches
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.10.8**.
+emulator. This extension includes agent **1.11.0**, a small core plus modules
+you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
+`mirror`).
 
 1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
    on.
 2. **Install the agent.** **Ctrl+Shift+P** → **Sailfish: Install Device
-   Agent** (also in the device's right-click menu). Read the dialog, confirm,
+   Agent** (also in the device's right-click menu). Tick the modules you want
+   (all are ticked on a new phone; on a phone that has the agent, the installed
+   ones), read the dialog, which lists only what those modules can do, confirm,
    and enter the developer-mode password once.
-   **Check:** **Sailfish: Device Agent Status** reports agent 1.10.0 running,
-   with Developer Mode on.
+   **Check:** **Sailfish: Device Agent Status** reports agent 1.11.0 running
+   with the installed modules, and which are not installed.
 3. **Take a screenshot.** **Sailfish: Take Device Screenshot**, or the camera
    button on the device in the Devices view. Choose where to save
    the PNG (the dialog remembers the folder). The picture opens in VS Code, and
@@ -705,8 +716,10 @@ emulator. This extension includes agent **1.10.8**.
    circle marks where you touch: on the phone itself, or (agent 1.10.4, when
    the phone cannot show it) in the mirror. The ⓘ details show `Touch
    indicator: on phone`, `in mirror` or `off`.
-7. **Remove the agent.** **Sailfish: Uninstall Device Agent** (one password
-   prompt) first stops the mirror, device logs and app monitor of that device,
+7. **Remove the agent or one module.** **Sailfish: Uninstall Device Agent**
+   asks what to remove: **Device agent and all modules** or one installed
+   module (removing `mirror` also removes `input`). A module removal stops only
+   that module's sessions and erases only its package. Removing everything first stops the mirror, device logs and app monitor of that device,
    then removes the package, its service, socket, settings and notifications,
    the extension's leftovers in the device user's home (`~/.cache/sailfish-tools`,
    staged screenshots, an RPM copy), and checks that nothing is left; one
@@ -718,13 +731,16 @@ emulator. This extension includes agent **1.10.8**.
    Palette. The SDK
    tools (`rsync`, `sdk-deploy-rpm`, `gdb-gdbserver`) are not touched.
 
-If the agent is missing, **Take Device Screenshot** and **Show Device Logs**
-offer to install it.
+If the agent or the module a command needs is missing, **Take Device
+Screenshot**, **Show Device Logs** and **Mirror Device Screen** offer to install
+just that (one prompt, one password). A mirror without the `input` module is
+view only; the strip says `Control needs the input module` with **Install**.
 
 **Updating the agent.** When the device has an older agent than this
 extension includes, the mirror still opens, and VS Code shows a notice once per
 device per session with **Update Device Agent**. **Device Agent Status** shows
-the same. Updating asks for the password once and restarts the agent: a running
+the same. Updating installs the core and the modules the device has (an agent before
+1.11.0 gets all of them) and asks for the password once. It restarts the agent: a running
 log stream ends, and an open mirror shows `connecting: the agent is being
 updated` and reconnects by itself. The mirror needs agent 1.1.0, the SSH
 forward 1.2.0, VP8 video 1.6.0 and control 1.7.0.
@@ -755,6 +771,7 @@ is behind ⓘ.
 | `Reduced for phone` | The phone could not encode fast enough, so only the size went down. |
 | `Reduced for link` | A slow link made the mirror lower bitrate and size. Both reductions go back by themselves, which takes about half a minute; the level changes only while the picture changes. |
 | `N dropped` | Frames skipped because VS Code was still drawing the previous one. |
+| `Control needs the input module` | The phone has the mirror module but not `input`; **Install** adds it. |
 | `Control` / `Control off on phone` | Control is active; or the phone's Settings page turned it off. |
 | `Paused`, `Connecting…`, `Disconnected: <reason>` | The tab is hidden, starting, or ended (press **Reconnect**). |
 
