@@ -30,6 +30,8 @@ public:
     void start();
     // Removes the socket and the runtime directory.
     void stop();
+    // SIGCHLD: collects the module processes that exited.
+    void reapChildren();
 
     // Closes every notification the agent posted (the start notice and a stream indicator). Run as
     // the device user by the package's %preun on uninstall; returns the exit code.

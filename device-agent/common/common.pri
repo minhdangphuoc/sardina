@@ -6,5 +6,5 @@ CONFIG += c++11 console link_pkgconfig
 CONFIG -= app_bundle
 
 INCLUDEPATH += $$PWD
-HEADERS += $$PWD/paths.h
-SOURCES += $$PWD/paths.cpp
+HEADERS += $$PWD/paths.h $$PWD/childlink.h $$PWD/linebuffer.h $$PWD/signalpipe.h
+SOURCES += $$PWD/paths.cpp $$PWD/childlink.cpp $$PWD/signalpipe.cpp

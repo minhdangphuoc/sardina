@@ -16,6 +16,7 @@ SOURCES += \
     settingsservice.cpp \
     indicator.cpp \
     client.cpp \
+    requestreader.cpp \
     ../logs/logs.cpp \
     ../stats/stats.cpp \
     ../screenshot/screenshot.cpp \
@@ -34,6 +35,7 @@ HEADERS += \
     settingsservice.h \
     indicator.h \
     client.h \
+    requestreader.h \
     ../common/firstline.h \
     ../common/idleplan.h \
     ../common/waylandutil.h \

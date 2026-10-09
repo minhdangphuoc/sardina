@@ -227,6 +227,11 @@ void Agent::stop()
     }
 }
 
+void Agent::reapChildren()
+{
+    // No module processes yet.
+}
+
 namespace {
 
 const char *const START_SUMMARY = "Developer agent is running";

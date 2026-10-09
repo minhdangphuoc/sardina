@@ -1,12 +1,11 @@
 #include "agent.h"
 #include "client.h"
+#include "signalpipe.h"
 
 #include <QCoreApplication>
-#include <QSocketNotifier>
 #include <QStringList>
 #include <csignal>
 #include <cstdio>
-#include <unistd.h>
 
 namespace {
 
@@ -25,33 +24,19 @@ int usage()
     return 2;
 }
 
-// Self-pipe: SIGTERM/SIGINT become a Qt event so the daemon can remove its socket and directory.
-int signalPipe[2] = { -1, -1 };
-
-void onSignal(int)
-{
-    const char byte = 1;
-    const ssize_t ignored = write(signalPipe[1], &byte, 1);
-    (void)ignored;
-}
-
 int runDaemon(QCoreApplication &app)
 {
-    if (pipe(signalPipe) != 0) {
-        perror("pipe");
-        return 1;
-    }
     Agent agent;
-    QSocketNotifier notifier(signalPipe[0], QSocketNotifier::Read);
-    QObject::connect(&notifier, &QSocketNotifier::activated, &app, [&](int) {
-        char byte;
-        const ssize_t ignored = read(signalPipe[0], &byte, 1);
-        (void)ignored;
+    // SIGTERM/SIGINT become a Qt event so the daemon can remove its socket and directory.
+    SignalPipe signalPipe(QList<int>() << SIGTERM << SIGINT << SIGCHLD);
+    QObject::connect(&signalPipe, &SignalPipe::received, &app, [&](int number) {
+        if (number == SIGCHLD) {
+            agent.reapChildren();
+            return;
+        }
         agent.stop();
         app.quit();
     });
-    signal(SIGTERM, onSignal);
-    signal(SIGINT, onSignal);
     signal(SIGPIPE, SIG_IGN); // a client vanishing mid-reply must not kill the daemon
     agent.start();
     return app.exec();
