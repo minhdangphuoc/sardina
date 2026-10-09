@@ -94,8 +94,8 @@ VS Code, or the `SAILFISH_SDK_ROOT` environment variable, to that folder.
    cd vscode-sailfish
    npm ci                                         # install build tools
    npm run build                                  # compile into dist/
-   npx vsce package                               # creates sailfish-tools-0.1.7.vsix
-   code --install-extension sailfish-tools-0.1.7.vsix
+   npx vsce package                               # creates sailfish-tools-<version>.vsix
+   code --install-extension sailfish-tools-*.vsix
    ```
 
    The last command also installs the Qt QML extension. The package includes
