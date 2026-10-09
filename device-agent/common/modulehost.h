@@ -26,6 +26,8 @@ public:
     // The client connection (fd 3); null without one.
     QLocalSocket *socket() const { return m_socket; }
     void sendEvent(const QJsonObject &event);
+    // Writes the one-line reply of a request (screenshot, a refusal) and finishes.
+    void replyAndFinish(const QJsonObject &reply);
     // Tells the daemon why the stream ended, lets the socket's pending bytes go out and quits.
     void finish(const QString &reason);
 

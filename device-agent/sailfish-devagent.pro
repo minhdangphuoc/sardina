@@ -1,5 +1,5 @@
 TEMPLATE = subdirs
-SUBDIRS = core
+SUBDIRS = core logs stats screenshot
 
 OTHER_FILES += \
     common/common.pri \

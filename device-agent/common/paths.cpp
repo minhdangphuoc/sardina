@@ -44,6 +44,11 @@ QString noticeShownPath()
     return QStringLiteral("/var/lib/sailfish-devagent/notice-shown");
 }
 
+QString moduleDir()
+{
+    return QStringLiteral("/usr/libexec/sailfish-devagent");
+}
+
 bool lipstickWritesJpeg()
 {
     return false;

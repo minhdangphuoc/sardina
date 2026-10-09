@@ -1,39 +1,25 @@
 #include "agent.h"
 #include "idleplan.h"
-#include "paths.h"
-#include "screenshot.h"
-#include "logs.h"
-#include "stats.h"
-#include "statsmath.h"
 #include "indicator.h"
 #include "mirror.h"
 #include "mirrorinput.h"
+#include "moduleprocess.h"
+#include "modules.h"
+#include "paths.h"
 #include "settings.h"
 #include "settingsservice.h"
 
-#include <QCoreApplication>
 #include <QDir>
 #include <QFile>
 #include <QJsonArray>
-#include <QJsonDocument>
 #include <QLocalSocket>
-#include <QPair>
-#include <QDBusConnection>
-#include <QDBusArgument>
-#include <QDBusMessage>
-#include <QVariantList>
-#include <QVariantMap>
 #include <QStringList>
-#include <algorithm>
 #include <cstdio>
+#include <unistd.h>
 
 namespace {
 
 const int RETRY_MS = 2000;
-const int REQUEST_MAX_BYTES = 4096;
-const int REQUEST_TIMEOUT_MS = 5000;
-const int LOGS_DEFAULT_LINES = 100;
-const int LOGS_MAX_LINES = 10000;
 const int MIRROR_DEFAULT_FPS = 4;
 const int MIRROR_DEFAULT_WIDTH = 360;
 const int MIRROR_DEFAULT_QUALITY = 60;
@@ -41,33 +27,23 @@ const int MIRROR_MAX_WIDTH = 2160;
 const int MIRROR_MIN_WIDTH = 90;
 const int MIRROR_DEFAULT_WINDOW = 2;
 const int MIRROR_DEFAULT_LEASE = 60;
-// VP8 video (1.6.0): up to 30 fps (60 since 1.10.7, capped by the phone's frame rate limit), a
-// target bitrate in kbit/s, and a deeper ack window (about 130 ms, 4 frames at 30 fps and 8 above),
-// since frames are small and come often.
 const int MIRROR_MAX_FPS = 10;
 const int MIRROR_VIDEO_DEFAULT_FPS = 30;
 const int MIRROR_VIDEO_DEFAULT_BITRATE = 2000;
 const int MIRROR_VIDEO_MIN_BITRATE = 100;
 const int MIRROR_VIDEO_MAX_BITRATE = 20000;
 const int MIRROR_VIDEO_WINDOW = 4;
-const int MIRROR_VIDEO_FAST_WINDOW = 8; // above 30 fps: the same 133 ms in flight as 4 frames at 30
+const int MIRROR_VIDEO_FAST_WINDOW = 8;
 const int MIRROR_MIN_LEASE = 10;
 const int MIRROR_MAX_LEASE = 300;
 
-const int NOTIFY_TIMEOUT_MS = 1500;
 const int DEVELOPER_MODE_CHECK_MS = 3000;
 // An idle mode or frame rate limit change ends the mirror with a reason from restartReason
 // (idleplan.h; the extension matches it and connects again once); the Settings page waits for the
 // new stream for at most this long.
 const int MIRROR_RESTART_MS = 10000;
 const char *const DEVELOPER_MODE_OFF = "developer mode is off";
-
-QDBusMessage notificationsCall(const QString &method)
-{
-    return QDBusMessage::createMethodCall(QStringLiteral("org.freedesktop.Notifications"),
-                                          QStringLiteral("/org/freedesktop/Notifications"),
-                                          QStringLiteral("org.freedesktop.Notifications"), method);
-}
+const char *const STOPPED_FROM_PHONE = "stopped from the phone";
 
 // The "client" request field (agent 1.9.0): informational only, shown on the Settings page.
 // Anything outside [A-Za-z0-9 ._-] is dropped, then the text is cut to 64 characters.
@@ -89,9 +65,6 @@ QString clientName(const QJsonValue &value)
     return out.left(CLIENT_MAX_CHARS).trimmed();
 }
 
-// The lease is always on for binary and VP8 streams, which travel over the SSH forward: a missing or
-// non-positive value gets the default. A text stream has one when it asks: "lease":0 (or less) or no
-// field means none, a value that is not a number means the default.
 int mirrorLease(const QJsonValue &requested, bool required)
 {
     if (requested.isUndefined() || (requested.isDouble() && requested.toDouble() < 1)) {
@@ -113,10 +86,10 @@ QJsonObject errorReply(const QString &message)
 Agent::Agent(QObject *parent)
     : QObject(parent)
     , m_mirrorRestarting(false)
-    , m_notified(false)
     , m_settings(new Settings(this))
     , m_indicator(new StreamIndicator(m_settings, this))
     , m_service(nullptr)
+    , m_notice(m_settings)
 {
     m_settings->load();
     m_service = new SettingsService(m_settings, this, this);
@@ -131,7 +104,7 @@ Agent::Agent(QObject *parent)
     connect(&m_restartTimer, &QTimer::timeout, this, [this]() { setMirrorRestarting(false); });
     m_developerModeCheck.setInterval(DEVELOPER_MODE_CHECK_MS);
     connect(&m_developerModeCheck, &QTimer::timeout, this, &Agent::checkDeveloperMode);
-    connect(&m_server, &QLocalServer::newConnection, this, &Agent::onNewConnection);
+    connect(&m_server, &HandoffServer::connection, this, &Agent::onConnection);
     // chmod 0600 on the socket: only the owning user may connect.
     m_server.setSocketOptions(QLocalServer::UserAccessOption);
 }
@@ -174,10 +147,10 @@ void Agent::tryListen()
         m_retry.start();
         return;
     }
-    fprintf(stderr, "sailfish-devagent %s: listening on %s\n", AGENT_VERSION, qPrintable(path));
-    LogStream::probeOutputFields(); // once: the result is cached
-    closeStaleStreamEntries();
-    notifyStarted();
+    fprintf(stderr, "sailfish-devagent %s: listening on %s (modules: %s)\n", AGENT_VERSION, qPrintable(path),
+            qPrintable(Modules::installedNames().join(QStringLiteral(", "))));
+    StartNotice::closeStaleStreamEntries();
+    m_notice.post();
     m_service->start();
 }
 
@@ -186,19 +159,13 @@ void Agent::stop()
     m_retry.stop();
     m_developerModeCheck.stop();
     m_service->stop();
-    // Sessions that end during shutdown must not call back into a half-destroyed agent.
+    // Streams that end during shutdown must not call back into a half-destroyed agent.
     if (m_mirror) {
         m_mirror->disconnect(this);
     }
-    for (const QPointer<LogStream> &log : m_logs) {
-        if (log) {
-            log->disconnect(this);
-        }
-    }
-    for (const QPointer<StatsStream> &stats : m_stats) {
-        if (stats) {
-            stats->disconnect(this);
-        }
+    for (ModuleProcess *child : m_children) {
+        child->disconnect(this);
+        child->terminate();
     }
     m_indicator->disconnect(this);
     m_indicator->closeNow();
@@ -207,8 +174,8 @@ void Agent::stop()
         m_server.close();
         // No entry of a stopped agent stays in the notification list (1.10.1): the start notice
         // goes too, and the next start posts it again silently (Paths::noticeShownPath()).
-        removeNotifications();
-        m_notified = false;
+        StartNotice::removeAll();
+        m_notice.forget();
     }
     QLocalServer::removeServer(Paths::socketPath());
     QDir dir(Paths::agentRuntimeDir());
@@ -229,185 +196,29 @@ void Agent::stop()
 
 void Agent::reapChildren()
 {
-    // No module processes yet.
-}
-
-namespace {
-
-const char *const START_SUMMARY = "Developer agent is running";
-const char *const START_BODY =
-    "VS Code can take screenshots, show and control the screen, and read system logs while Developer Mode is on.";
-
-// Lipstick's GetNotifications(owner) lists entries by their x-nemo-owner hint; the agent sets
-// none, so its entries are listed under "" (checked on 5.1.0.11), next to other apps' entries:
-// a(sussasa{sv}i) = app, id, icon, summary, body, actions, hints, expire. Returns the ids of the
-// agent's entries (id and body), sorted by id, optionally only those with `summary` (the
-// mirror's indicator uses the same app name with another summary).
-QList<QPair<uint, QString>> agentNotifications(QDBusConnection &bus, const QString &summary)
-{
-    QList<QPair<uint, QString>> ids;
-    QDBusMessage list = notificationsCall(QStringLiteral("GetNotifications"));
-    list.setArguments(QVariantList() << QString());
-    const QDBusMessage listed = bus.call(list, QDBus::Block, NOTIFY_TIMEOUT_MS);
-    if (listed.type() == QDBusMessage::ReplyMessage && !listed.arguments().isEmpty()
-        && listed.arguments().first().canConvert<QDBusArgument>()) {
-        const QDBusArgument arg = listed.arguments().first().value<QDBusArgument>();
-        arg.beginArray();
-        while (!arg.atEnd()) {
-            QString app;
-            uint id = 0;
-            QString icon;
-            QString entrySummary;
-            QString entryBody;
-            QStringList actions;
-            QVariantMap hints;
-            int expire = 0;
-            arg.beginStructure();
-            arg >> app >> id >> icon >> entrySummary >> entryBody >> actions >> hints >> expire;
-            arg.endStructure();
-            if (id != 0 && app == QLatin1String("sailfish-devagent")
-                && (summary.isEmpty() || entrySummary == summary)) {
-                ids << qMakePair(id, entryBody);
-            }
-        }
-        arg.endArray();
-    }
-    std::sort(ids.begin(), ids.end());
-    return ids;
-}
-
-void closeNotifications(QDBusConnection &bus, const QList<QPair<uint, QString>> &entries)
-{
-    for (const QPair<uint, QString> &entry : entries) {
-        QDBusMessage close = notificationsCall(QStringLiteral("CloseNotification"));
-        close.setArguments(QVariantList() << entry.first);
-        bus.call(close, QDBus::Block, NOTIFY_TIMEOUT_MS);
-    }
-}
-
-}
-
-namespace {
-
-void markNoticeShown()
-{
-    if (QFile::exists(Paths::noticeShownPath())) {
-        return;
-    }
-    QFile marker(Paths::noticeShownPath());
-    if (marker.open(QIODevice::WriteOnly)) {
-        marker.close();
-    }
-}
-
-}
-
-// Best effort: a visible notification on the phone while the agent runs ("Visible" in the
-// security model). There is only ever one such entry. Its banner shows once per installation (the
-// first notice writes Paths::noticeShownPath()); the daemon closes the entry when it stops (1.10.1),
-// so later starts post it again silently. An entry left by a daemon that did not stop cleanly is
-// kept when it says the same, else replaced silently, and extras left by agents before 1.3.0 are
-// closed. Uninstalling removes any that remain (removeNotifications(), run from %preun).
-void Agent::notifyStarted(bool silent)
-{
-    if (m_notified) {
-        return;
-    }
-    if (!m_settings->startNoticeAllowed()) {
-        fprintf(stderr, "sailfish-devagent: start notification muted\n");
-        return;
-    }
-    const QString connectionName = QStringLiteral("devagent-notify");
-    QDBusConnection bus = QDBusConnection::connectToBus(Paths::sessionBusAddress(), connectionName);
-    if (!bus.isConnected()) {
-        QDBusConnection::disconnectFromBus(connectionName);
-        return;
-    }
-    const QString summary = QLatin1String(START_SUMMARY);
-    const QString body = QLatin1String(START_BODY);
-
-    QList<QPair<uint, QString>> previous = agentNotifications(bus, summary);
-    const QPair<uint, QString> kept = previous.isEmpty() ? qMakePair(0u, QString()) : previous.takeLast();
-    closeNotifications(bus, previous);
-    const uint replaces = kept.first;
-
-    if (replaces != 0 && kept.second == body) {
-        // The entry from an earlier start is still there and says the same: leave it alone, so a
-        // restart shows nothing new.
-        m_notified = true;
-        markNoticeShown(); // an entry from before 1.10.1 counts as shown
-        fprintf(stderr, "sailfish-devagent: start notification kept (%u, closed %d older)\n", replaces,
-                previous.size());
-        QDBusConnection::disconnectFromBus(connectionName);
-        return;
-    }
-
-    // A new entry gets a banner. Updating an old one (other text, e.g. after an upgrade) must not:
-    // lipstick fills missing x-nemo-preview hints from summary and body, so they are sent empty,
-    // and with low urgency, which lipstick never previews (handleNotify and
-    // NotificationPreviewPresenter::notificationShouldBeShown in the lipstick tree).
-    // The banner is shown once per installation; later starts (the daemon closes the notice when it
-    // stops) post the entry silently.
-    const bool bannerShownBefore = QFile::exists(Paths::noticeShownPath());
-    const bool banner = replaces == 0 && !silent && !bannerShownBefore;
-    QVariantMap hints;
-    if (banner) {
-        hints.insert(QStringLiteral("x-nemo-preview-summary"), summary);
-        hints.insert(QStringLiteral("x-nemo-preview-body"), body);
-    } else {
-        hints.insert(QStringLiteral("x-nemo-preview-summary"), QString());
-        hints.insert(QStringLiteral("x-nemo-preview-body"), QString());
-        hints.insert(QStringLiteral("urgency"), QVariant::fromValue(uchar(0)));
-    }
-    QDBusMessage notify = notificationsCall(QStringLiteral("Notify"));
-    notify.setArguments(QVariantList() << QStringLiteral("sailfish-devagent") << replaces
-                                       << QStringLiteral("icon-m-developer-mode") << summary << body << QStringList()
-                                       << hints << int(-1));
-    const QDBusMessage result = bus.call(notify, QDBus::Block, NOTIFY_TIMEOUT_MS);
-    m_notified = result.type() == QDBusMessage::ReplyMessage;
-    if (m_notified) {
-        markNoticeShown();
-    }
-    fprintf(stderr, "sailfish-devagent: start notification %s (%s, closed %d older)\n",
-            m_notified ? "posted" : "not posted",
-            replaces ? qPrintable(QStringLiteral("updated %1 silently").arg(replaces))
-                     : banner ? "new, with banner" : "new, silently",
-            previous.size());
-    QDBusConnection::disconnectFromBus(connectionName);
-}
-
-// "Mute agent notifications" on the phone: the start notice goes away at once.
-void Agent::closeStartNotice()
-{
-    m_notified = false;
-    const QString connectionName = QStringLiteral("devagent-notify");
-    QDBusConnection bus = QDBusConnection::connectToBus(Paths::sessionBusAddress(), connectionName);
-    if (bus.isConnected()) {
-        const QList<QPair<uint, QString>> ids = agentNotifications(bus, QLatin1String(START_SUMMARY));
-        closeNotifications(bus, ids);
-        fprintf(stderr, "sailfish-devagent: start notification closed (muted, %d)\n", ids.size());
-    }
-    QDBusConnection::disconnectFromBus(connectionName);
-}
-
-// The stream entry cannot be swiped away (agent 1.9.0), so one left by a daemon that did not stop
-// cleanly (a crash, a kill) is closed when the next one starts; no stream runs at that point.
-void Agent::closeStaleStreamEntries()
-{
-    const QString connectionName = QStringLiteral("devagent-notify");
-    QDBusConnection bus = QDBusConnection::connectToBus(Paths::sessionBusAddress(), connectionName);
-    if (bus.isConnected()) {
-        int closed = 0;
-        for (const QString &summary : StreamIndicator::summaries()) {
-            const QList<QPair<uint, QString>> ids = agentNotifications(bus, summary);
-            closeNotifications(bus, ids);
-            closed += ids.size();
-        }
-        if (closed > 0) {
-            fprintf(stderr, "sailfish-devagent: closed %d stale stream notification(s)\n", closed);
+    bool changed = false;
+    for (int i = m_children.size() - 1; i >= 0; --i) {
+        ModuleProcess *child = m_children.at(i);
+        if (child->reap()) {
+            m_children.removeAt(i);
+            child->deleteLater();
+            changed = true;
         }
     }
-    QDBusConnection::disconnectFromBus(connectionName);
+    if (changed) {
+        onSessionChanged();
+    }
+}
+
+QList<ModuleProcess *> Agent::children(const QString &module) const
+{
+    QList<ModuleProcess *> out;
+    for (ModuleProcess *child : m_children) {
+        if (child->module() == module) {
+            out << child;
+        }
+    }
+    return out;
 }
 
 void Agent::setMirrorRestarting(bool on)
@@ -441,19 +252,16 @@ void Agent::onSettingChanged(const QString &key)
         m_mirror->applySetting(key); // screenView off ends it; control/touchIndicator go to its hooks
     }
     if (key == QLatin1String("logs") && !m_settings->logs()) {
-        const QList<QPointer<LogStream>> logs = m_logs; // ending one prunes m_logs
-        for (const QPointer<LogStream> &log : logs) {
-            if (log) {
-                log->endWithError(QStringLiteral("logs disabled on the phone"));
-            }
+        for (ModuleProcess *child : children(QStringLiteral("logs"))) {
+            child->end(QStringLiteral("logs disabled on the phone"));
         }
     } else if (key == QLatin1String("indicator")) {
         m_indicator->refresh();
     } else if (key == QLatin1String("muteNotifications")) {
         if (m_settings->muteNotifications()) {
-            closeStartNotice();
+            m_notice.close();
         } else {
-            notifyStarted(true);
+            m_notice.post(true);
         }
         m_indicator->refresh();
     }
@@ -462,17 +270,7 @@ void Agent::onSettingChanged(const QString &key)
 
 void Agent::onSessionChanged()
 {
-    for (int i = m_logs.size() - 1; i >= 0; --i) {
-        if (!m_logs.at(i) || !m_logs.at(i)->active()) {
-            m_logs.removeAt(i);
-        }
-    }
-    for (int i = m_stats.size() - 1; i >= 0; --i) {
-        if (!m_stats.at(i) || !m_stats.at(i)->active()) {
-            m_stats.removeAt(i);
-        }
-    }
-    if (m_logs.isEmpty() && m_stats.isEmpty()) {
+    if (m_children.isEmpty()) {
         m_developerModeCheck.stop();
     } else if (!m_developerModeCheck.isActive()) {
         m_developerModeCheck.start();
@@ -485,19 +283,18 @@ void Agent::checkDeveloperMode()
     if (Paths::developerModeOn()) {
         return;
     }
-    const QString reason = QLatin1String(DEVELOPER_MODE_OFF);
-    // Copies: ending a stream calls onSessionChanged(), which prunes the lists.
-    const QList<QPointer<LogStream>> logs = m_logs;
-    for (const QPointer<LogStream> &log : logs) {
-        if (log) {
-            log->endWithError(reason);
+    for (ModuleProcess *child : m_children) {
+        if (!child->ending()) {
+            child->end(QLatin1String(DEVELOPER_MODE_OFF));
         }
     }
-    const QList<QPointer<StatsStream>> stats = m_stats;
-    for (const QPointer<StatsStream> &stream : stats) {
-        if (stream) {
-            stream->endWithError(reason);
-        }
+}
+
+void Agent::onChildEvent(ModuleProcess *child, const QJsonObject &line)
+{
+    Q_UNUSED(child);
+    if (line.contains(QStringLiteral("status"))) {
+        onSessionChanged();
     }
 }
 
@@ -506,6 +303,7 @@ QVariantMap Agent::statusMap() const
     QVariantMap m = m_settings->toMap();
     m.insert(QStringLiteral("version"), QStringLiteral(AGENT_VERSION));
     m.insert(QStringLiteral("developerMode"), Paths::developerModeOn());
+    m.insert(QStringLiteral("modules"), Modules::installedNames());
     const bool mirrorActive = m_mirror && m_mirror->active();
     m.insert(QStringLiteral("mirrorActive"), mirrorActive);
     m.insert(QStringLiteral("mirrorRestarting"), m_mirrorRestarting);
@@ -513,24 +311,15 @@ QVariantMap Agent::statusMap() const
     m.insert(QStringLiteral("mirrorControl"), mirrorActive && m_mirror->inputActive());
     m.insert(QStringLiteral("mirrorEncoding"), mirrorActive ? m_mirror->encodingName() : QString());
     m.insert(QStringLiteral("mirrorCapture"), mirrorActive ? m_mirror->captureName() : QString());
-    int logStreams = 0;
+    const QList<ModuleProcess *> logs = children(QStringLiteral("logs"));
     QString logClient;
-    for (const QPointer<LogStream> &log : m_logs) {
-        if (log && log->active()) {
-            ++logStreams;
-            if (!log->client().isEmpty()) {
-                logClient = log->client();
-            }
+    for (ModuleProcess *log : logs) {
+        if (!log->client().isEmpty()) {
+            logClient = log->client();
         }
     }
-    m.insert(QStringLiteral("logStreams"), logStreams);
-    int monitorStreams = 0;
-    for (const QPointer<StatsStream> &stats : m_stats) {
-        if (stats && stats->active()) {
-            ++monitorStreams;
-        }
-    }
-    m.insert(QStringLiteral("monitorStreams"), monitorStreams);
+    m.insert(QStringLiteral("logStreams"), logs.size());
+    m.insert(QStringLiteral("monitorStreams"), children(QStringLiteral("stats")).size());
     m.insert(QStringLiteral("client"), mirrorActive && !m_mirrorClient.isEmpty() ? m_mirrorClient : logClient);
     return m;
 }
@@ -538,232 +327,178 @@ QVariantMap Agent::statusMap() const
 int Agent::stopSessions()
 {
     int stopped = 0;
-    const QString reason = QStringLiteral("stopped from the phone");
+    const QString reason = QLatin1String(STOPPED_FROM_PHONE);
     if (m_mirror && m_mirror->active()) {
         m_mirror->finish(reason);
         ++stopped;
     }
-    const QList<QPointer<LogStream>> logs = m_logs;
-    for (const QPointer<LogStream> &log : logs) {
-        if (log && log->active()) {
-            log->endWithError(reason);
-            ++stopped;
-        }
-    }
-    const QList<QPointer<StatsStream>> stats = m_stats;
-    for (const QPointer<StatsStream> &stream : stats) {
-        if (stream && stream->active()) {
-            stream->endWithError(reason);
+    for (ModuleProcess *child : m_children) {
+        if (child->module() != QLatin1String("screenshot") && !child->ending()) {
+            child->end(reason);
             ++stopped;
         }
     }
     return stopped;
 }
 
-int Agent::removeNotifications()
+void Agent::onConnection(int fd)
 {
-    const QString connectionName = QStringLiteral("devagent-remove");
-    QDBusConnection bus = QDBusConnection::connectToBus(Paths::sessionBusAddress(), connectionName);
-    if (!bus.isConnected()) {
-        fprintf(stderr, "sailfish-devagent: session bus not available\n");
-        QDBusConnection::disconnectFromBus(connectionName);
-        return 1;
-    }
-    const QList<QPair<uint, QString>> ids = agentNotifications(bus, QString());
-    closeNotifications(bus, ids);
-    fprintf(stderr, "sailfish-devagent: closed %d notification(s)\n", ids.size());
-    QDBusConnection::disconnectFromBus(connectionName);
-    return 0;
+    RequestReader *reader = new RequestReader(fd, this);
+    connect(reader, &RequestReader::request, this, &Agent::onRequest);
+    connect(reader, &RequestReader::failed, this, &Agent::onRequestFailed);
 }
 
-void Agent::onNewConnection()
+void Agent::onRequestFailed(RequestReader *reader, const QString &error)
 {
-    while (QLocalSocket *socket = m_server.nextPendingConnection()) {
-        connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
-        readRequest(socket);
+    if (!error.isEmpty()) {
+        RequestReader::replyAndClose(reader->takeFd(), errorReply(error));
     }
+    reader->deleteLater();
 }
 
-// One JSON object on one line, then the reply. Anything oversized, slow or malformed is refused.
-void Agent::readRequest(QLocalSocket *socket)
+QJsonObject Agent::pingReply() const
 {
-    QTimer *timeout = new QTimer(socket);
-    timeout->setSingleShot(true);
-    timeout->setInterval(REQUEST_TIMEOUT_MS);
-    connect(timeout, &QTimer::timeout, socket, [this, socket]() {
-        reply(socket, errorReply(QStringLiteral("request timeout")));
-    });
-    timeout->start();
-
-    connect(socket, &QLocalSocket::readyRead, socket, [this, socket, timeout]() {
-        if (!socket->canReadLine()) {
-            if (socket->bytesAvailable() > REQUEST_MAX_BYTES) {
-                reply(socket, errorReply(QStringLiteral("request too large")));
-            }
-            return;
-        }
-        timeout->stop();
-        disconnect(socket, &QLocalSocket::readyRead, nullptr, nullptr);
-        const QByteArray line = socket->readLine(REQUEST_MAX_BYTES);
-        QJsonParseError parseError;
-        const QJsonDocument doc = QJsonDocument::fromJson(line, &parseError);
-        if (parseError.error != QJsonParseError::NoError || !doc.isObject()) {
-            reply(socket, errorReply(QStringLiteral("malformed request")));
-            return;
-        }
-        dispatch(socket, doc.object());
-    });
-    if (socket->canReadLine()) {
-        emit socket->readyRead();
-    }
-}
-
-void Agent::dispatch(QLocalSocket *socket, const QJsonObject &request)
-{
-    const QString cmd = request.value(QStringLiteral("cmd")).toString();
-
-    if (cmd == QLatin1String("ping")) {
-        // Answers even with Developer Mode off, so VS Code can say why the rest is refused.
-        QJsonObject o;
-        o.insert(QStringLiteral("ok"), true);
-        o.insert(QStringLiteral("version"), QStringLiteral(AGENT_VERSION));
-        o.insert(QStringLiteral("developerMode"), Paths::developerModeOn());
-        o.insert(QStringLiteral("socket"), Paths::socketPath());
+    const QStringList modules = Modules::installedNames();
+    QJsonObject o;
+    o.insert(QStringLiteral("ok"), true);
+    o.insert(QStringLiteral("version"), QStringLiteral(AGENT_VERSION));
+    o.insert(QStringLiteral("developerMode"), Paths::developerModeOn());
+    o.insert(QStringLiteral("socket"), Paths::socketPath());
+    o.insert(QStringLiteral("modules"), QJsonArray::fromStringList(modules));
+    // The fields older extensions read, each only with the module that serves it.
+    if (modules.contains(QStringLiteral("mirror"))) {
         o.insert(QStringLiteral("mirrorEncodings"), QJsonArray{ QStringLiteral("text"), QStringLiteral("binary"), QStringLiteral("vp8") });
+    }
+    if (modules.contains(QStringLiteral("mirror")) && modules.contains(QStringLiteral("input"))) {
         QJsonArray mirrorInput{ QStringLiteral("tap"), QStringLiteral("swipe"), QStringLiteral("down"), QStringLiteral("move"),
                                 QStringLiteral("up") };
         // `key` and `keypad` only when a keypad device and a model name exist: the extension shows
         // the keypad by model, and key presses still pass the mirror's input lease and whitelist.
-        const MirrorKeypadInfo keypad = MirrorInput::keypadInfo();
-        if (!keypad.model.isEmpty() && !keypad.keys.isEmpty()) {
+        const QJsonObject keypad = Modules::keypadInfo();
+        if (!keypad.value(QStringLiteral("model")).toString().isEmpty()
+            && !keypad.value(QStringLiteral("keys")).toArray().isEmpty()) {
             mirrorInput.append(QStringLiteral("key"));
-            o.insert(QStringLiteral("keypad"), QJsonObject{ { QStringLiteral("model"), keypad.model },
-                                                            { QStringLiteral("keys"), QJsonArray::fromStringList(keypad.keys) } });
+            o.insert(QStringLiteral("keypad"), keypad);
         }
         o.insert(QStringLiteral("mirrorInput"), mirrorInput);
-        o.insert(QStringLiteral("settingsPage"), true);
+    }
+    o.insert(QStringLiteral("settingsPage"), true);
+    if (modules.contains(QStringLiteral("logs"))) {
         o.insert(QStringLiteral("logFormats"), QJsonArray{ QStringLiteral("text"), QStringLiteral("json") });
+    }
+    if (modules.contains(QStringLiteral("stats"))) {
         o.insert(QStringLiteral("stats"), true);
-        o.insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(m_settings->toMap()));
-        reply(socket, o);
+    }
+    o.insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(m_settings->toMap()));
+    return o;
+}
+
+// Gates in order: known command, Developer Mode, module installed, phone switch. Nothing of a
+// module runs before all of them passed.
+void Agent::onRequest(RequestReader *reader, const QJsonObject &request)
+{
+    reader->deleteLater();
+    const int fd = reader->takeFd();
+    const QString cmd = request.value(QStringLiteral("cmd")).toString();
+    if (cmd == QLatin1String("ping")) {
+        // Answers even with Developer Mode off, so VS Code can say why the rest is refused.
+        RequestReader::replyAndClose(fd, pingReply());
         return;
     }
-
-    static const QStringList gated = { QStringLiteral("screenshot"), QStringLiteral("logs"), QStringLiteral("mirror"),
-                                       QStringLiteral("stats") };
-    if (!gated.contains(cmd)) {
-        reply(socket, errorReply(QStringLiteral("unknown command")));
+    const ModuleSpec *spec = Modules::forCommand(cmd);
+    if (!spec) {
+        RequestReader::replyAndClose(fd, errorReply(QStringLiteral("unknown command")));
         return;
     }
-
     // Developer Mode gate: turning it off disables the agent without uninstalling it.
     if (!Paths::developerModeOn()) {
-        reply(socket, errorReply(QLatin1String(DEVELOPER_MODE_OFF)));
+        RequestReader::replyAndClose(fd, errorReply(QLatin1String(DEVELOPER_MODE_OFF)));
         return;
     }
-
-    // The phone's settings (agent 1.9.0), after the Developer Mode gate so its text wins.
-    // "Allow screen view" covers single screenshots too.
-    // Stats (agent 1.10.0) are gated by Developer Mode only: /proc is readable over the SSH login.
-    if (cmd != QLatin1String("logs") && cmd != QLatin1String("stats") && !m_settings->screenView()) {
-        reply(socket, errorReply(QStringLiteral("screen view disabled on the phone")));
+    const QString module = QLatin1String(spec->name);
+    if (!Modules::installed(module)) {
+        RequestReader::replyAndClose(fd, errorReply(module + QStringLiteral(" module not installed")));
         return;
     }
-    if (cmd == QLatin1String("logs") && !m_settings->logs()) {
-        reply(socket, errorReply(QStringLiteral("logs disabled on the phone")));
+    // The phone's settings (agent 1.9.0). "Allow screen view" covers single screenshots too.
+    if (spec->gate && !m_settings->toMap().value(QLatin1String(spec->gate)).toBool()) {
+        const QString refusal = QLatin1String(spec->gate) == QLatin1String("logs")
+            ? QStringLiteral("logs disabled on the phone")
+            : QStringLiteral("screen view disabled on the phone");
+        RequestReader::replyAndClose(fd, errorReply(refusal));
         return;
     }
     const QString client = clientName(request.value(QStringLiteral("client")));
-
-    if (cmd == QLatin1String("stats")) {
-        const QString exe = request.value(QStringLiteral("exe")).toString();
-        if (!statsmath::validExe(exe.toStdString())) {
-            reply(socket, errorReply(QStringLiteral("invalid exe")));
-            return;
-        }
-        const int interval = statsmath::clampInterval(
-            request.value(QStringLiteral("interval")).toInt(statsmath::INTERVAL_DEFAULT_MS));
-        StatsStream *stats = new StatsStream(socket, exe, interval, client);
-        m_stats << QPointer<StatsStream>(stats);
-        connect(stats, &StatsStream::ended, this, &Agent::onSessionChanged);
-        onSessionChanged();
+    if (module == QLatin1String("mirror")) {
+        startMirror(fd, request, client);
         return;
     }
+    startModule(*spec, fd, request, client);
+}
 
-    if (cmd == QLatin1String("screenshot")) {
-        Screenshot *shot = new Screenshot(socket);
-        connect(shot, &Screenshot::finished, socket, [this, socket](const QJsonObject &result) {
-            reply(socket, result);
-        });
-        shot->take();
+void Agent::startModule(const ModuleSpec &spec, int fd, const QJsonObject &request, const QString &client)
+{
+    const QString module = QLatin1String(spec.name);
+    QJsonObject control;
+    control.insert(QStringLiteral("request"), request);
+    control.insert(QStringLiteral("client"), client);
+    control.insert(QStringLiteral("settings"), QJsonObject::fromVariantMap(m_settings->toMap()));
+    QString error;
+    ModuleProcess *child = ModuleProcess::start(module, fd, control, client, &error, this);
+    if (!child) {
+        fprintf(stderr, "sailfish-devagent: cannot start the %s module: %s\n", qPrintable(module), qPrintable(error));
+        RequestReader::replyAndClose(fd, errorReply(QStringLiteral("cannot start the %1 module").arg(module)));
         return;
     }
-
-    if (cmd == QLatin1String("mirror")) {
-        // Anything but "binary" or "vp8" is text, like the other clamped arguments.
-        const QString encodingName = request.value(QStringLiteral("encoding")).toString();
-        const MirrorEncoding encoding = encodingName == QLatin1String("binary") ? MirrorEncoding::Binary
-            : encodingName == QLatin1String("vp8")                              ? MirrorEncoding::Vp8
-                                                                                : MirrorEncoding::Text;
-        const bool video = encoding == MirrorEncoding::Vp8;
-        int fps = request.value(QStringLiteral("fps")).toInt(video ? MIRROR_VIDEO_DEFAULT_FPS : MIRROR_DEFAULT_FPS);
-        fps = video ? videoFps(fps, m_settings->maxFps()) : qBound(1, fps, MIRROR_MAX_FPS);
-        int width = request.value(QStringLiteral("width")).toInt(MIRROR_DEFAULT_WIDTH);
-        if (width <= 0) {
-            width = 0; // native size
-        } else {
-            width = qBound(MIRROR_MIN_WIDTH, width, MIRROR_MAX_WIDTH);
-        }
-        const int quality = qBound(1, request.value(QStringLiteral("quality")).toInt(MIRROR_DEFAULT_QUALITY), 100);
-        const int lease = mirrorLease(request.value(QStringLiteral("lease")), encoding != MirrorEncoding::Text);
-        // One mirror per daemon: the older stream is told (in its own encoding) and closed first.
-        if (m_mirror) {
-            m_mirror->finish(QStringLiteral("replaced"));
-            delete m_mirror.data();
-        }
-        // Adaptive quality (1.4.0) is opt-in, so older clients get the 1.3.0 stream byte for byte.
-        const bool adapt = request.value(QStringLiteral("adapt")).toBool(false);
-        const int bitrate = video ? qBound(MIRROR_VIDEO_MIN_BITRATE,
-                                           request.value(QStringLiteral("bitrate")).toInt(MIRROR_VIDEO_DEFAULT_BITRATE),
-                                           MIRROR_VIDEO_MAX_BITRATE)
-                                  : 0;
-        const bool input = request.value(QStringLiteral("input")).toBool(false);
-        // The "settings" message (agent 1.9.0) is opt-in, so older clients get the 1.8.1 stream.
-        const bool phoneState = request.value(QStringLiteral("phoneState")).toBool(false);
-        m_mirrorClient = client;
-        setMirrorRestarting(false);
-        m_mirror = new MirrorStream(socket, fps, width, quality, encoding,
-                                    video ? (fps > 30 ? MIRROR_VIDEO_FAST_WINDOW : MIRROR_VIDEO_WINDOW) : MIRROR_DEFAULT_WINDOW, lease, m_indicator, adapt,
-                                    bitrate, input, m_settings, phoneState);
-        connect(m_mirror.data(), &MirrorStream::stateChanged, this, &Agent::onSessionChanged);
-        onSessionChanged();
-        return;
-    }
-
-    int lines = request.value(QStringLiteral("lines")).toInt(LOGS_DEFAULT_LINES);
-    if (lines < 1) {
-        lines = 1;
-    }
-    if (lines > LOGS_MAX_LINES) {
-        lines = LOGS_MAX_LINES;
-    }
-    // Streams raw journal lines until the client goes away; owned by the socket.
-    // "format":"json" (agent 1.10.0) is opt-in; anything else is text, byte for byte as before.
-    const bool json = request.value(QStringLiteral("format")).toString() == QLatin1String("json");
-    const QString after = request.value(QStringLiteral("after")).toString();
-    LogStream *log = new LogStream(socket, lines, client, json, json && LogStream::validCursor(after) ? after : QString());
-    m_logs << QPointer<LogStream>(log);
-    connect(log, &LogStream::ended, this, &Agent::onSessionChanged);
+    close(fd);
+    m_children << child;
+    connect(child, &ModuleProcess::event, this, &Agent::onChildEvent);
     onSessionChanged();
 }
 
-void Agent::reply(QLocalSocket *socket, const QJsonObject &object)
+// The mirror still runs inside the daemon (until it becomes a module process).
+void Agent::startMirror(int fd, const QJsonObject &request, const QString &client)
 {
-    if (socket->state() != QLocalSocket::ConnectedState) {
+    QLocalSocket *socket = new QLocalSocket(this);
+    if (!socket->setSocketDescriptor(fd, QLocalSocket::ConnectedState, QIODevice::ReadWrite)) {
+        close(fd);
+        delete socket;
         return;
     }
-    socket->write(QJsonDocument(object).toJson(QJsonDocument::Compact));
-    socket->write("\n");
-    socket->flush();
-    socket->disconnectFromServer();
+    connect(socket, &QLocalSocket::disconnected, socket, &QObject::deleteLater);
+    // Anything but "binary" or "vp8" is text, like the other clamped arguments.
+    const QString encodingName = request.value(QStringLiteral("encoding")).toString();
+    const MirrorEncoding encoding = encodingName == QLatin1String("binary") ? MirrorEncoding::Binary
+        : encodingName == QLatin1String("vp8")                              ? MirrorEncoding::Vp8
+                                                                            : MirrorEncoding::Text;
+    const bool video = encoding == MirrorEncoding::Vp8;
+    int fps = request.value(QStringLiteral("fps")).toInt(video ? MIRROR_VIDEO_DEFAULT_FPS : MIRROR_DEFAULT_FPS);
+    fps = video ? videoFps(fps, m_settings->maxFps()) : qBound(1, fps, MIRROR_MAX_FPS);
+    int width = request.value(QStringLiteral("width")).toInt(MIRROR_DEFAULT_WIDTH);
+    if (width <= 0) {
+        width = 0; // native size
+    } else {
+        width = qBound(MIRROR_MIN_WIDTH, width, MIRROR_MAX_WIDTH);
+    }
+    const int quality = qBound(1, request.value(QStringLiteral("quality")).toInt(MIRROR_DEFAULT_QUALITY), 100);
+    const int lease = mirrorLease(request.value(QStringLiteral("lease")), encoding != MirrorEncoding::Text);
+    // One mirror per daemon: the older stream is told (in its own encoding) and closed first.
+    if (m_mirror) {
+        m_mirror->finish(QStringLiteral("replaced"));
+        delete m_mirror.data();
+    }
+    const bool adapt = request.value(QStringLiteral("adapt")).toBool(false);
+    const int bitrate = video ? qBound(MIRROR_VIDEO_MIN_BITRATE,
+                                       request.value(QStringLiteral("bitrate")).toInt(MIRROR_VIDEO_DEFAULT_BITRATE),
+                                       MIRROR_VIDEO_MAX_BITRATE)
+                              : 0;
+    const bool input = request.value(QStringLiteral("input")).toBool(false);
+    const bool phoneState = request.value(QStringLiteral("phoneState")).toBool(false);
+    m_mirrorClient = client;
+    setMirrorRestarting(false);
+    m_mirror = new MirrorStream(socket, fps, width, quality, encoding,
+                                video ? (fps > 30 ? MIRROR_VIDEO_FAST_WINDOW : MIRROR_VIDEO_WINDOW) : MIRROR_DEFAULT_WINDOW, lease, m_indicator, adapt,
+                                bitrate, input, m_settings, phoneState);
+    connect(m_mirror.data(), &MirrorStream::stateChanged, this, &Agent::onSessionChanged);
+    onSessionChanged();
 }

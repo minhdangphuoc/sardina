@@ -1,5 +1,6 @@
 #include "agent.h"
 #include "client.h"
+#include "notice.h"
 #include "signalpipe.h"
 
 #include <QCoreApplication>
@@ -63,7 +64,7 @@ int main(int argc, char **argv)
         return Client::run(args.mid(2));
     }
     if (mode == QLatin1String("--remove-notifications")) {
-        return Agent::removeNotifications();
+        return StartNotice::removeAll();
     }
     if (mode == QLatin1String("--version")) {
         printf("%s\n", AGENT_VERSION);

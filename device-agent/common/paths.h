@@ -38,6 +38,9 @@ QString settingsPath();
 // upgrades) post the notice again silently. Removed with the folder on erase.
 QString noticeShownPath();
 
+// /usr/libexec/sailfish-devagent: the module executables (agent 1.11.0), one package each.
+QString moduleDir();
+
 // Developer Mode gate: jolla-developer-mode ships /usr/bin/devel-su.
 bool developerModeOn();
 

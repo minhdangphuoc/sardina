@@ -4,6 +4,7 @@
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
+#include <QJsonDocument>
 #include <QLocalSocket>
 #include <csignal>
 #include <cstdio>
@@ -92,6 +93,17 @@ void ModuleHost::sendEvent(const QJsonObject &event)
     if (m_link) {
         m_link->send(event);
     }
+}
+
+void ModuleHost::replyAndFinish(const QJsonObject &reply)
+{
+    if (m_socket && m_socket->state() == QLocalSocket::ConnectedState) {
+        m_socket->write(QJsonDocument(reply).toJson(QJsonDocument::Compact));
+        m_socket->write("\n");
+        m_socket->flush();
+        m_socket->disconnectFromServer();
+    }
+    finish(reply.value(QStringLiteral("ok")).toBool() ? QStringLiteral("done") : reply.value(QStringLiteral("error")).toString());
 }
 
 void ModuleHost::finish(const QString &reason)

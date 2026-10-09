@@ -7,7 +7,7 @@ QT = core dbus network gui
 # Native mirror capture through lipstick's Wayland recorder, VP8 through libvpx.
 PKGCONFIG += wayland-client vpx
 
-INCLUDEPATH += ../logs ../stats ../screenshot ../mirror ../input
+INCLUDEPATH += ../mirror ../input
 
 SOURCES += \
     main.cpp \
@@ -17,10 +17,9 @@ SOURCES += \
     indicator.cpp \
     client.cpp \
     requestreader.cpp \
-    ../logs/logs.cpp \
-    ../stats/stats.cpp \
-    ../screenshot/screenshot.cpp \
-    ../screenshot/capture.cpp \
+    modules.cpp \
+    moduleprocess.cpp \
+    notice.cpp \
     ../mirror/mirror.cpp \
     ../mirror/recorder.cpp \
     ../mirror/videoencoder.cpp \
@@ -36,14 +35,12 @@ HEADERS += \
     indicator.h \
     client.h \
     requestreader.h \
+    modules.h \
+    moduleprocess.h \
+    notice.h \
     ../common/firstline.h \
     ../common/idleplan.h \
     ../common/waylandutil.h \
-    ../logs/logs.h \
-    ../stats/stats.h \
-    ../stats/statsmath.h \
-    ../screenshot/screenshot.h \
-    ../screenshot/capture.h \
     ../mirror/mirror.h \
     ../mirror/pacer.h \
     ../mirror/yuvrows.h \

@@ -2,23 +2,25 @@
 #define AGENT_H
 
 #include <QObject>
-#include <QLocalServer>
 #include <QJsonObject>
 #include <QList>
 #include <QPointer>
 #include <QTimer>
 #include <QVariantMap>
 
-class QLocalSocket;
-class LogStream;
+#include "notice.h"
+#include "requestreader.h"
+
 class MirrorStream;
+class ModuleProcess;
 class Settings;
 class SettingsService;
-class StatsStream;
 class StreamIndicator;
+struct ModuleSpec;
 
-// The daemon: a Unix socket in the user's runtime directory, one JSON request
-// per connection, a fixed set of commands. Runs as defaultuser.
+// The daemon: a Unix socket in the user's runtime directory, one JSON request per connection, a
+// fixed set of commands. It answers ping and refusals itself and hands every other request, after
+// its gates, to the module's own process. Runs as defaultuser.
 class Agent : public QObject
 {
     Q_OBJECT
@@ -28,14 +30,10 @@ public:
 
     // Starts listening, or keeps retrying while /run/user/<uid> does not exist yet.
     void start();
-    // Removes the socket and the runtime directory.
+    // Ends the module processes, removes the socket and the runtime directory.
     void stop();
     // SIGCHLD: collects the module processes that exited.
     void reapChildren();
-
-    // Closes every notification the agent posted (the start notice and a stream indicator). Run as
-    // the device user by the package's %preun on uninstall; returns the exit code.
-    static int removeNotifications();
 
     // For the Settings page (agent 1.9.0, SettingsService): the GetStatus map, and "Stop all
     // sessions now" (returns how many were running).
@@ -48,38 +46,36 @@ public:
 
 private slots:
     void tryListen();
-    void onNewConnection();
+    void onConnection(int fd);
+    void onRequest(RequestReader *reader, const QJsonObject &request);
+    void onRequestFailed(RequestReader *reader, const QString &error);
     // A phone setting changed: applied to running sessions before the D-Bus call returns.
     void onSettingChanged(const QString &key);
-    // A mirror or log stream started or stopped, control or the capture path changed.
+    // A stream started or stopped, control or the capture path changed.
     void onSessionChanged();
-    // Ends the log and stats streams once Developer Mode is off: unlike the mirror they get no
-    // keepalives on which to recheck it.
+    // Ends every stream once Developer Mode is off.
     void checkDeveloperMode();
+    void onChildEvent(ModuleProcess *child, const QJsonObject &line);
 
 private:
-    void readRequest(QLocalSocket *socket);
-    void dispatch(QLocalSocket *socket, const QJsonObject &request);
-    void reply(QLocalSocket *socket, const QJsonObject &object);
-    // Posts the start notice unless muted; `silent` posts it without a banner (after an unmute).
-    void notifyStarted(bool silent = false);
-    void closeStartNotice();
-    void closeStaleStreamEntries();
+    QJsonObject pingReply() const;
+    void startModule(const ModuleSpec &spec, int fd, const QJsonObject &request, const QString &client);
+    void startMirror(int fd, const QJsonObject &request, const QString &client);
+    QList<ModuleProcess *> children(const QString &module) const;
     void setMirrorRestarting(bool on);
 
-    QLocalServer m_server;
+    HandoffServer m_server;
     QTimer m_retry;
-    QTimer m_developerModeCheck; // runs while a log or stats stream does
+    QTimer m_developerModeCheck; // runs while a stream does
     QTimer m_restartTimer;       // single shot: gives up waiting for the mirror to come back
     bool m_mirrorRestarting;
-    bool m_notified;
     Settings *m_settings;         // a child of this, created first: the others read it
-    StreamIndicator *m_indicator; // a child of this, so it outlives the sockets in m_server
+    StreamIndicator *m_indicator; // a child of this, so it outlives the streams
     SettingsService *m_service;   // a child of this
+    StartNotice m_notice;
+    QList<ModuleProcess *> m_children; // children of this, removed once reaped
     QPointer<MirrorStream> m_mirror;
     QString m_mirrorClient;
-    QList<QPointer<LogStream>> m_logs;
-    QList<QPointer<StatsStream>> m_stats; // agent 1.10.0: the monitor's stats streams
 };
 
 #endif
