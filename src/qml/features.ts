@@ -290,7 +290,7 @@ async function unknownProperties(env: FeatureEnv, path: ObjectPath, type: Indexe
   if (members.partial) return [];
   const known = new Set([...members.items.map((m) => m.name), ...obj.members.filter((m) => m.kind !== 'binding').map((m) => m.name)]);
   return obj.members
-    .filter((m) => m.kind === 'binding' && !m.name.includes('.') && m.name !== 'id' && !/^on[A-Z]/.test(m.name) && !known.has(m.name))
+    .filter((m) => m.kind === 'binding' && !m.name.includes('.') && m.name !== 'id' && !/^on[A-Z_]/.test(m.name) && !known.has(m.name))
     .map((m) => ({ ...nameSpanOf(env.text, m), message: `Unknown property "${m.name}" on "${obj.typeName}"` }));
 }
 

@@ -56,7 +56,7 @@ suite('QML language features', () => {
 
   test('an unknown type is reported and turning the setting off clears it', async function () {
     this.timeout(15000);
-    await waitFor(() => diagnostics().length > 0, 5000);
+    await waitFor(() => diagnostics().some((d) => d.message.includes('Lable')), 5000);
     assert.deepStrictEqual(diagnostics().map((d) => d.message), ['Unknown type "Lable"']);
     const config = vscode.workspace.getConfiguration('sailfish', doc.uri);
     await config.update('qml.languageFeatures', false, vscode.ConfigurationTarget.Workspace);

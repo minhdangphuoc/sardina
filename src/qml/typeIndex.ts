@@ -59,6 +59,8 @@ interface ModuleRecord {
   cpp: CppModule;
   qmldir: QmlDir;
   files: string[];
+  /** False for a plugin module whose C++ types are not described, so any name may be valid. */
+  described: boolean;
   signature: string;
   types: Map<string, IndexedType[]>;
 }
@@ -127,9 +129,9 @@ export class TypeIndex {
     return [...found.values()];
   }
 
-  /** Whether an import points at something that exists: a loadable module, a directory or a script. */
+  /** Whether an import is known completely: a described module, or an existing directory or script. */
   async importResolves(imp: OutlineImport, scope: Scope): Promise<boolean> {
-    if (imp.kind === 'module') return !!(await this.ensureLoaded(this.refOf(imp), new Set()));
+    if (imp.kind === 'module') return !!(await this.ensureLoaded(this.refOf(imp), new Set()))?.described;
     if (!scope.dir) return false;
     return !!(await this.io.stat(path.join(scope.dir, imp.target)));
   }
@@ -334,7 +336,7 @@ export class TypeIndex {
   private async readRecord(dir: string, module: string | undefined, fixedTypeinfo?: string): Promise<ModuleRecord> {
     const qmldirFile = path.join(dir, 'qmldir');
     const qmldir = module ? parseQmldir((await this.io.readFile(qmldirFile)) ?? '') : parseQmldir('');
-    const infoFiles = (fixedTypeinfo ? [fixedTypeinfo] : qmldir.typeinfo).map((f) => path.join(dir, f));
+    const infoFiles = (fixedTypeinfo ? [fixedTypeinfo] : declaredTypeinfo(qmldir)).map((f) => path.join(dir, f));
     const cpp: CppModule = { dependencies: [], components: [] };
     for (const file of infoFiles) {
       const parsed = parseQmltypes((await this.io.readFile(file)) ?? '');
@@ -347,6 +349,7 @@ export class TypeIndex {
       cpp,
       qmldir,
       files,
+      described: qmldir.plugins.length === 0 || cpp.components.length > 0,
       signature: await this.signatureOf(files),
       types: module ? typeTable(dir, module, qmldir, cpp) : new Map<string, IndexedType[]>(),
     };
@@ -413,6 +416,9 @@ export class TypeIndex {
     return walk(this.root, 0).then(() => [...found].map(([name, dir]) => ({ name, dir })));
   }
 }
+
+/** Qt tools also pick up a `plugins.qmltypes` that `qmldir` does not name. */
+const declaredTypeinfo = (qmldir: QmlDir): string[] => (qmldir.typeinfo.length ? qmldir.typeinfo : ['plugins.qmltypes']);
 
 function qmlType(name: string, module: string | undefined, file: string, major: number, minor: number, singleton: boolean): IndexedType {
   return { name, module, major, minor, singleton, creatable: !singleton, file };

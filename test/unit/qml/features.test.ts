@@ -164,6 +164,27 @@ describe('qml/features diagnostics', () => {
     }
   });
 
+  it('stays silent for a plugin module without type information, and reads an unnamed plugins.qmltypes', async () => {
+    const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'sf-qml-root-'));
+    try {
+      fs.cpSync(root, tmp, { recursive: true });
+      fs.mkdirSync(path.join(tmp, 'Opaque'));
+      fs.writeFileSync(path.join(tmp, 'Opaque', 'qmldir'), 'module Opaque\nplugin opaqueplugin\n');
+      const index = new TypeIndex(fsIndexIO, tmp, { parseComponent: (t) => toComponentOutline(parseQmlOutline(t)) });
+      const text = 'import QtQuick 2.0\nimport Opaque 1.0\nItem { Anything {} }';
+      assert.deepStrictEqual(await diagnose({ index, text, outline: parseQmlOutline(text) }), []);
+      fs.copyFileSync(path.join(root, 'QtQuick.2', 'plugins.qmltypes'), path.join(tmp, 'Opaque', 'plugins.qmltypes'));
+      const described = new TypeIndex(fsIndexIO, tmp, { parseComponent: (t) => toComponentOutline(parseQmlOutline(t)) });
+      assert.strictEqual((await diagnose({ index: described, text, outline: parseQmlOutline(text) })).length, 1);
+    } finally {
+      fs.rmSync(tmp, { recursive: true, force: true });
+    }
+  });
+
+  it('does not report underscore handlers', async () => {
+    assert.deepStrictEqual(await problems(`${HEAD}Page {\n  on_FooChanged: 1\n}`), []);
+  });
+
   it('resolves types of the same directory and directory imports', async () => {
     const dir = path.join(root, 'Fixture', 'Widgets');
     assert.deepStrictEqual(await problems('import QtQuick 2.0\nPanel { padding: 1 }', dir), []);
