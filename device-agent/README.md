@@ -154,8 +154,7 @@ fields below appear only with the module that serves them (`logFormats` with log
 `mirrorEncodings` with mirror, `mirrorInput` and `keypad` with input), and a request for a missing
 module gets `{"ok":false,"error":"<module> module not installed"}`. A mirror request with `"input":true`
 and no input module streams view-only. 1.1.0
-added `mirror`; 1.2.0 added the binary mirror encoding, acks and the lease (see
-`PLAN-mirror-forward.md`, §1.2); 1.3.0 changes only how mirror frames are captured (below), not the
+added `mirror`; 1.2.0 added the binary mirror encoding, acks and the lease; 1.3.0 changes only how mirror frames are captured (below), not the
 protocol; 1.4.0 adds opt-in adaptive quality to binary mirror streams; 1.5.0 adds the `capture` and
 `captureReason` fields; 1.6.0 adds VP8 video; 1.7.0 adds opt-in tap/swipe input; 1.8.0 paces VP8
 frames and reports an idle screen (optional header fields only); 1.8.1 corrects the pacing rule; 1.10.0 adds JSON log output with cursor resume and the `stats` stream
