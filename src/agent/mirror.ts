@@ -37,6 +37,7 @@ import {
   hasReasonText,
   MIRROR_RESTART_REASON,
   isRestartReason,
+  paceFpsOf,
   StageMeter,
   agentSupportsPhoneState,
   VIDEO_CODEC,
@@ -186,6 +187,8 @@ export class MirrorSession {
   private statusBitrate: number | undefined;
   /** The stream's requested frame rate (status line). */
   private statusFps: number | undefined;
+  /** The agent's current frame slot in ms (VP8 header `pace`, agent 1.8.0); undefined before one. */
+  private paceMs: number | undefined;
   /** The last VP8 frame's size and target bitrate, for the strip. */
   private video: { width: number; height: number; targetKbps?: number } | undefined;
   /** When the last image that showed a screen change arrived, and the last sign of an unchanged screen. */
@@ -579,6 +582,7 @@ export class MirrorSession {
     this.codec = undefined;
     this.statusBitrate = undefined;
     this.statusFps = undefined;
+    this.paceMs = undefined;
     this.video = undefined;
     this.videoInFlight = 0;
     this.videoSkipping = false;
@@ -869,6 +873,7 @@ export class MirrorSession {
     }
     if (f.cms !== undefined || f.ems !== undefined) this.frameMs = (f.cms ?? 0) + (f.ems ?? 0);
     if (video && f.stages) this.stageMeter.add(now, f.stages);
+    if (video && f.pace !== undefined) this.paceMs = f.pace;
     const offset = this.clock.offsetMs;
     if (this.transportKind === 'ssh' && offset !== undefined) {
       this.latencies.push({ at: now, ms: latencyMs(f.ts, now, offset) });
@@ -1024,7 +1029,7 @@ export class MirrorSession {
       reason: this.reason,
       controlOffReason: live ? this.controlOffReason : undefined,
       touchIndicatorPath: live ? this.effectiveTouchIndicatorPath() : 'off',
-      paceFps: live ? this.statusFps : undefined,
+      paceFps: live ? paceFpsOf(this.paceMs, this.statusFps) : undefined,
       softError: live ? this.softError : undefined,
       fps: live ? this.meter.rate(now) : undefined,
       idleMode: live ? this.phoneIdleMode : undefined,

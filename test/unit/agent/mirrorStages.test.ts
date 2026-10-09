@@ -2,6 +2,7 @@ import * as assert from 'assert';
 import {
   detailRows,
   isRestartReason,
+  paceFpsOf,
   hasReasonText,
   MIRROR_FPS_RESTART_REASON,
   MIRROR_RESTART_REASON,
@@ -13,6 +14,7 @@ import {
   type MirrorStatus,
 } from '../../../src/agent/mirrorCore';
 import { parsePhoneSettings } from '../../../src/agent/agentCore';
+import { MirrorRecordParser } from '../../../src/agent/mirrorWire';
 
 const VP8 = { frame: 7, ts: 1000, screen: [720, 1584], size: [720, 1584], format: 'vp8', key: false, pts: 5, bytes: 100, ems: 15, cvms: 6 };
 
@@ -92,5 +94,39 @@ describe('frame rate limit (agent 1.10.7)', () => {
     assert.ok(!isRestartReason('lease expired'));
     assert.ok(hasReasonText(MIRROR_FPS_RESTART_REASON));
     assert.deepStrictEqual(parseMirrorLine(`{"ok":false,"error":"${MIRROR_FPS_RESTART_REASON}"}`), { kind: 'fatal', error: MIRROR_FPS_RESTART_REASON });
+  });
+});
+
+describe('the pace the phone keeps (header pace, agent 1.10.7)', () => {
+  it('maps the whole-ms slot to the pacer step, at most the stream rate', () => {
+    assert.strictEqual(paceFpsOf(17, 60), 60);
+    assert.strictEqual(paceFpsOf(22, 60), 45);
+    assert.strictEqual(paceFpsOf(33, 60), 30);
+    assert.strictEqual(paceFpsOf(50, 30), 20);
+    assert.strictEqual(paceFpsOf(133, 30), 7.5);
+    assert.strictEqual(paceFpsOf(33, 30), 30);
+  });
+
+  it('keeps the stream rate before a header or for a slot that is no step', () => {
+    assert.strictEqual(paceFpsOf(undefined, 60), 60);
+    assert.strictEqual(paceFpsOf(0, 30), 30);
+    assert.strictEqual(paceFpsOf(40, 25), 25);
+    assert.strictEqual(paceFpsOf(undefined, undefined), undefined);
+  });
+});
+
+describe('stage fields in the real 1.10.7 record shape', () => {
+  it('a full VP8 header as the agent writes it yields stages through the record parser', () => {
+    const header = '{"frame":42,"ts":1760000000000,"screen":[720,1584],"size":[720,1584],"format":"vp8","key":false,"pts":12345,"bytes":3,"ems":21,"cvms":6,"capture":"native","pace":17,"hms":0,"wms":6,"rbms":17,"cnms":6,"enms":15,"sdms":0,"kbps":2000,"ticks":100,"skips":0,"rtt":5,"rttFrame":41}';
+    const status = Buffer.from('{"ok":true,"stream":"mirror","fps":60,"width":720,"quality":60,"encoding":"vp8","window":8,"bitrate":2000,"adapt":true,"lease":60}\n');
+    const len = Buffer.alloc(4);
+    len.writeUInt32BE(Buffer.byteLength(header));
+    const events: unknown[] = [];
+    const parser = new MirrorRecordParser();
+    for (const ev of [...parser.push(status), ...parser.push(Buffer.concat([len, Buffer.from(header), Buffer.from([1, 2, 3])]))]) events.push(ev);
+    const frame = events.find((e) => (e as { kind?: string }).kind === 'frame') as MirrorRecordHeader | undefined;
+    assert.ok(frame, JSON.stringify(events));
+    assert.deepStrictEqual(frame.stages, { hold: 0, wait: 6, readback: 17, convert: 6, encode: 15, send: 0 });
+    assert.strictEqual(frame.pace, 17);
   });
 });

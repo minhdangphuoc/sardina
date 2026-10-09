@@ -849,6 +849,22 @@ const STAGE_WORDS: readonly [keyof FrameStages, string][] = [
   ['hold', 'hold'], ['wait', 'capture'], ['readback', 'readback'], ['convert', 'convert'], ['encode', 'encode'], ['send', 'send'],
 ];
 
+/** The agent's pacer steps (agent 1.10.7; 30 fps and below as since 1.8.1). */
+const PACE_STEPS = [60, 45, 30, 20, 15, 10, 7.5];
+
+/**
+ * The rate the phone paces at: the step nearest to the `pace` slot of the latest VP8 header (whole
+ * ms, so 17 ms is 60 fps), at most the stream's rate; the stream's rate before a header or when the
+ * slot matches no step (another stream rate).
+ */
+export function paceFpsOf(paceMs: number | undefined, streamFps: number | undefined): number | undefined {
+  if (paceMs === undefined || paceMs <= 0) return streamFps;
+  const fps = 1000 / paceMs;
+  const steps = PACE_STEPS.filter((x) => streamFps === undefined || x <= streamFps);
+  const nearest = steps.reduce<number | undefined>((best, x) => (best === undefined || Math.abs(x - fps) < Math.abs(best - fps) ? x : best), undefined);
+  return nearest !== undefined && Math.abs(nearest - fps) / nearest < 0.05 ? nearest : streamFps;
+}
+
 /** `hold 17 · capture 30 · readback 25 · convert 6 · encode 9 · send 1 ms`; undefined without stages. */
 export function stagesText(st: FrameStages | undefined): string | undefined {
   if (!st) return undefined;
