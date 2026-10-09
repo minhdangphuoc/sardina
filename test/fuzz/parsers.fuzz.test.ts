@@ -8,6 +8,7 @@ import { parseAppStatsOutput, parseProcStat, parseStatsStreamLine } from '../../
 import { validatePageMessage } from '../../src/monitor/protocol';
 import { parseQmldir } from '../../src/qml/qmldir';
 import { parseQmltypes } from '../../src/qml/qmltypes';
+import { parseQmlOutline } from '../../src/qml/qmlOutline';
 import { classifyConnection, parseIpAddrOutput, parseOsRelease } from '../../src/monitor/overview';
 
 /**
@@ -225,6 +226,9 @@ const monitorSeeds: Record<string, string[]> = {
     '{"type":"resume","what":"all"}',
     '{"type":"ui.visible","on":true}',
   ],
+  qml: [
+    'import QtQuick 2.0\nimport "../lib" as L\nItem {\n  id: root\n  property int a: 1\n  signal s(int x)\n  function f(p) { return `${p}}` + "}" }\n  width: /[}]/.test(a) ? 1 : 2\n  Rectangle { anchors.fill: parent; Behavior on x { NumberAnimation {} } }\n}\n',
+  ],
   net: ['192.168.2.1 51234 192.168.2.15 22\n5: rndis0    inet 192.168.2.15/24 brd 192.168.2.255 scope global rndis0\n7: wlan0    inet 10.0.2.15/24 scope global wlan0'],
 };
 
@@ -253,6 +257,7 @@ const monitorTargets: { name: string; seeds: string[]; run: (input: string) => u
   },
   { name: 'parseQmltypes', seeds: ['QtQuick.2/plugins.qmltypes', 'Fixture/Widgets/plugins.qmltypes'].map(qmlSeed), run: parseQmltypes },
   { name: 'parseQmldir', seeds: ['Fixture/Widgets/qmldir', 'QtQuick.2/qmldir'].map(qmlSeed), run: parseQmldir },
+  { name: 'parseQmlOutline', seeds: monitorSeeds.qml, run: (s) => parseQmlOutline(s) },
   { name: 'parseOsRelease', seeds: monitorSeeds.os, run: (s) => parseOsRelease(s) },
   { name: 'classifyConnection', seeds: monitorSeeds.net, run: (s) => classifyConnection(s.split('\n')[0], s) && parseIpAddrOutput(s) },
 ];
