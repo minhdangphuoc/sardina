@@ -1,5 +1,6 @@
 #include "notice.h"
 #include "indicator.h"
+#include "modules.h"
 #include "paths.h"
 #include "settings.h"
 
@@ -36,8 +37,32 @@ StartNotice::StartNotice(const Settings *settings)
 namespace {
 
 const char *const START_SUMMARY = "Developer agent is running";
-const char *const START_BODY =
-    "VS Code can take screenshots, show and control the screen, and read system logs while Developer Mode is on.";
+
+// Says only what the installed modules can do, so the owner is never told of a power that is not there.
+QString startBody()
+{
+    const QStringList installed = Modules::installedNames();
+    QStringList can;
+    if (installed.contains(QStringLiteral("screenshot"))) {
+        can << QStringLiteral("take screenshots");
+    }
+    if (installed.contains(QStringLiteral("mirror"))) {
+        can << (installed.contains(QStringLiteral("input")) ? QStringLiteral("show and control the screen")
+                                                            : QStringLiteral("show the screen"));
+    }
+    if (installed.contains(QStringLiteral("logs"))) {
+        can << QStringLiteral("read system logs");
+    }
+    if (installed.contains(QStringLiteral("stats"))) {
+        can << QStringLiteral("read app CPU and memory");
+    }
+    if (can.isEmpty()) {
+        return QStringLiteral("No feature is installed yet.");
+    }
+    const QString last = can.takeLast();
+    const QString list = can.isEmpty() ? last : can.join(QStringLiteral(", ")) + QStringLiteral(", and ") + last;
+    return QStringLiteral("VS Code can ") + list + QStringLiteral(" while Developer Mode is on.");
+}
 
 // Lipstick's GetNotifications(owner) lists entries by their x-nemo-owner hint; the agent sets
 // none, so its entries are listed under "" (checked on 5.1.0.11), next to other apps' entries:
@@ -125,7 +150,7 @@ void StartNotice::post(bool silent)
         return;
     }
     const QString summary = QLatin1String(START_SUMMARY);
-    const QString body = QLatin1String(START_BODY);
+    const QString body = startBody();
 
     QList<QPair<uint, QString>> previous = agentNotifications(bus, summary);
     const QPair<uint, QString> kept = previous.isEmpty() ? qMakePair(0u, QString()) : previous.takeLast();
