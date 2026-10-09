@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.12
+
+- QML completion, hover and error checks for Sailfish projects, read from the selected build target (no new view or command). Completion offers types, properties and `on...` handlers of the object's type chain, `id.`, singletons, enum values, attached properties and `import` lines with module names and versions; hover shows the type chain and member owner. An unknown type or property is reported as an error only when the file parses cleanly, every `import` resolves and the type chain is complete. New setting `sailfish.qml.languageFeatures` (default on). Checked against the installed targets on this machine only; not on a phone.
+
 ## v0.1.11
 
 - The Devices view checks whether a device is reachable only while the view is visible, every 60 s (was 15 s, always), once right when it opens, and not for devices with a running session. It stops after the window has been unfocused for 5 minutes. This stops the constant connections that made the phone's sshd fork, log and wake from suspend.

@@ -85,6 +85,13 @@
 
 - 21 Silica QML snippets (`sfpage`, `sfdialog`, `sflistview`, `sfpulldown`,
   `sfcover` and more).
+- Completion, hover and error checks for QML in Sailfish projects, read from
+  the selected build target (`sailfish.target`; without one, the first
+  installed target): types, properties, `on...` handlers, `id.`, singletons
+  such as `Theme.`, enum values, attached properties and `import` lines.
+  An unknown type or property is an error, but only when the file parses
+  cleanly and every `import` resolves; otherwise there is nothing to report.
+  Turn it off with `sailfish.qml.languageFeatures`.
 - Turns off the Qt QML extension's `qmlls` language server in Sailfish
   projects, where it only reports false errors (see
   [What this is not (yet)](troubleshooting.md#what-this-is-not-yet)).

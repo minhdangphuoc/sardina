@@ -114,6 +114,26 @@ export class TypeIndex {
     return undefined;
   }
 
+  /** Types visible in `scope` under `qualifier` (none for unqualified), the nearest declaration of a name winning. */
+  async typesIn(scope: Scope, qualifier?: string): Promise<IndexedType[]> {
+    const found = new Map<string, IndexedType>();
+    if (qualifier === undefined && scope.dir) {
+      for (const [name, t] of await this.dirTypes(scope.dir)) found.set(name, t);
+    }
+    for (const imp of this.effectiveImports(scope)) {
+      if (imp.as !== qualifier || imp.kind === 'js') continue;
+      for (const t of await this.typesOfImportAll(imp, scope)) if (!found.has(t.name)) found.set(t.name, t);
+    }
+    return [...found.values()];
+  }
+
+  /** Whether an import points at something that exists: a loadable module, a directory or a script. */
+  async importResolves(imp: OutlineImport, scope: Scope): Promise<boolean> {
+    if (imp.kind === 'module') return !!(await this.ensureLoaded(this.refOf(imp), new Set()));
+    if (!scope.dir) return false;
+    return !!(await this.io.stat(path.join(scope.dir, imp.target)));
+  }
+
   async chainOf(type: IndexedType): Promise<Chain<IndexedType>> {
     const items: IndexedType[] = [];
     const seen = new Set<string>();
@@ -204,6 +224,21 @@ export class TypeIndex {
     const record = await this.ensureLoaded(this.refOf(imp), new Set());
     const candidates = (record?.types.get(name) ?? []).filter((t) => isVisible(t, imp));
     return candidates.sort((a, b) => b.major - a.major || b.minor - a.minor)[0];
+  }
+
+  private async typesOfImportAll(imp: OutlineImport, scope: Scope): Promise<IndexedType[]> {
+    if (imp.kind === 'dir') {
+      return scope.dir ? [...(await this.dirTypes(path.join(scope.dir, imp.target))).values()] : [];
+    }
+    const record = await this.ensureLoaded(this.refOf(imp), new Set());
+    const best = new Map<string, IndexedType>();
+    for (const list of record?.types.values() ?? []) {
+      for (const t of list.filter((x) => isVisible(x, imp))) {
+        const old = best.get(t.name);
+        if (!old || t.major > old.major || (t.major === old.major && t.minor > old.minor)) best.set(t.name, t);
+      }
+    }
+    return [...best.values()];
   }
 
   private async parentOf(type: IndexedType): Promise<IndexedType | undefined | 'end'> {

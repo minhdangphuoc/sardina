@@ -214,6 +214,7 @@ flowchart LR
 | `src/devices/` | The **Devices** view, Add Device, `devices.xml`, key push, reachability, SSH launch, clean-up on device change. |
 | `src/agent/` | Installing and talking to the device agent; the mirror (`mirror*.ts`, `sshForward*.ts`). |
 | `src/monitor/` | The Device Monitor: panel, sources, models and `webview/` page code. |
+| `src/qml/` | QML completion, hover and error checks: parsers for `qmldir`, `*.qmltypes` and `.qml`, the lazy type index of the build target, `features.ts` (no VS Code) and `index.ts` (providers). |
 | `src/wizard/`, `src/walkthrough/`, `src/qtqml/`, `src/ui/` | New Project, the getting-started walkthrough, turning off `qmlls` in Sailfish projects, prompt helpers. |
 | `media/` | The icon, the walkthrough text and the agent RPMs in `media/agent/<arch>/`. |
 

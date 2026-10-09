@@ -576,6 +576,12 @@
           "scope": "resource",
           "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this Sailfish project folder. Sailfish OS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
         },
+        "sailfish.qml.languageFeatures": {
+          "type": "boolean",
+          "default": true,
+          "scope": "resource",
+          "markdownDescription": "Completion, hover and diagnostics for QML, read from the selected build target."
+        },
         "sailfish.logLevel": {
           "type": "string",
           "enum": [
