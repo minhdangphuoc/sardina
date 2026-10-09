@@ -660,7 +660,7 @@ clear message (gpg matches names as substrings, so `Jane Doe` also matches
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.10.7**.
+emulator. This extension includes agent **1.10.8**.
 
 1. **Before you start:** the phone is registered (Part 7) and Developer Mode is
    on.

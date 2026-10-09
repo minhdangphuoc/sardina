@@ -10,7 +10,7 @@ PKGCONFIG += wayland-client
 # VP8 video for the mirror (src/videoencoder.cpp): libvpx-devel from the target's repositories.
 PKGCONFIG += vpx
 
-AGENT_VERSION = 1.10.7
+AGENT_VERSION = 1.10.8
 DEFINES += AGENT_VERSION=\\\"$$AGENT_VERSION\\\"
 
 SOURCES += \

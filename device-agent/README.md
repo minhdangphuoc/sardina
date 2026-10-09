@@ -70,7 +70,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.7-1), file list, owners and
+- The result matches the sfdk build: same version and release (1.10.8-1), file list, owners and
   modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
@@ -141,7 +141,8 @@ an explicit `"lease":0` mean no lease for text mirror streams and ends log and s
 Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts the `key` input; 1.10.4 adds
 `touchIndicatorPath` to the phone-settings message and the `contact` record (below); 1.10.5 adds the
 mirror request field `idle` and a faster return to the full pace after an idle screen; 1.10.7 allows VP8 up
-to 60 fps under the phone's `maxFps` setting, double-buffers the capture and adds per-frame stage times. All additions are
+to 60 fps under the phone's `maxFps` setting, double-buffers the capture and adds per-frame stage times;
+1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change). All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -194,6 +195,9 @@ when the median convert + encode time of the last delta frames (at least 8, at m
 110 % of the slot for 2 s, and shrinks by one step when it stays under 85 % of the shorter slot for
 2 s; every 10 s at a longer slot it tries the shorter one while the median is under 125 % of it. The
 samples start over after each change and the first second after the encoder opens does not count.
+Since 1.10.8 the cost is at least the capture cycle: with one request in flight the compositor fills
+it at a display frame, so a readback just over 16.7 ms (17 ms on the Jolla Phone) takes two display
+frames and the pace settles at 30 fps instead of 45.
 (1.8.0 grew at 85 %, jumped to the longest slot that fitted at once, and shrank only under 60 %.) Every VP8 header carries `"pace":<slot ms>`. When no new
 frame came for 300 ms, the last picture is encoded again up to twice (`"refresh":true`, a normal
 delta frame: the encoder sharpens what is shown), and then `{"frame":N,"ts":T,"same":true}` goes
@@ -228,8 +232,12 @@ stage times in ms, each only when measured: `hms` (the request was held for the 
 after the previous frame arrived), `wms` (request to the compositor's render, from lipstick's frame
 time), `rbms` (render to arrival: readback and delivery), `cnms` (convert), `enms` (encode) and
 `sdms` (the socket write of the previous frame). Re-encodes of the last picture carry none.
-Encoder settings: fixed real-time speed -6, single token partition, static threshold 100, half the
-cores for libvpx (at most 3) and for the conversion (at most 4), rate-control buffer 200/300/500 ms.
+Encoder settings: fixed real-time speed -6, static threshold 100, half the cores for libvpx (at most
+4 since 1.10.8, 3 before) with one token partition per thread (4, 2 or 1; one before 1.10.8) and for
+the conversion (at most 4), rate-control buffer 200/300/500 ms. Faster speeds were tried on the host
+(-8 saves about 15 % of the encode time but sends twice the target bitrate, -12 five times), so the
+speed stays. The full-size conversion (no scaling) has a vectorisable RGBX path since 1.10.8 (about
+twice as fast on the host, identical output).
 
 Capture path (1.5.0): every image frame, binary header or text line, carries `"capture":"native"`
 (the compositor recorder). Since 1.10.5 the mirror never takes screenshots: when the recorder cannot
