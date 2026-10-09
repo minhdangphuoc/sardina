@@ -338,6 +338,7 @@ function connectWlan(services: Services) {
 export function activateDevices(ctx: vscode.ExtensionContext, services: Services): DevicesTreeDataProvider {
   const provider = new DevicesTreeDataProvider(services);
   const sdkView = vscode.window.createTreeView('sailfish.sdk', { treeDataProvider: provider.section('sdk') });
+  const devicesView = vscode.window.createTreeView('sailfish.devices', { treeDataProvider: provider.section('devices') });
   const syncSdkDescription = (): void => {
     const info = services.sdk.current();
     sdkView.description = info ? sdkRootState(info, os.homedir()).description : undefined;
@@ -346,8 +347,10 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
   ctx.subscriptions.push(
     sdkView,
     services.sdk.onDidChange(syncSdkDescription),
-    vscode.window.registerTreeDataProvider('sailfish.devices', provider.section('devices')),
+    devicesView,
+    devicesView.onDidChangeVisibility((e) => provider.setViewVisible(e.visible)),
   );
+  provider.setViewVisible(devicesView.visible);
   ctx.subscriptions.push(provider);
   // The offline guard (tools check, Debug on Device) finds the device's endpoint through the view's lists.
   setDeviceDirectory(provider);

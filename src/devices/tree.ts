@@ -15,6 +15,7 @@ import {
 } from './listParsing';
 import { deviceSessions, SESSIONS_CONTEXT_SUFFIX, sessionDescription, type DeviceSessionInfo } from '../core/deviceSessions';
 import { RefreshDebouncer } from './refreshDebouncer';
+import { REACHABILITY_POLL_MS, shouldProbe, splitBySession, type ProbeCandidate } from './probeScheduleCore';
 import { endpointKey, isReachable, type Reachability } from './reachability';
 import { parseEngineStatus, type EngineRunningStatus } from '../sfdk/parsers/engineStatus';
 import { parseTargetList } from '../targets/parseTargetList';
@@ -28,7 +29,6 @@ import {
 } from './sdkTreeCore';
 
 /** How often the connected/offline state is re-checked while the view exists (TCP only, no sfdk). */
-const REACHABILITY_POLL_MS = 15_000;
 
 /** Devices & Emulators tree view (`sailfish.devices`, FR-6.2/FR-6.7). */
 
@@ -225,6 +225,8 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
   /** Last probe result per `host:port`; filled asynchronously after each list load. */
   private readonly reachability = new Map<string, Reachability>();
   private readonly pollTimer = setInterval(() => void this.probeReachability(), REACHABILITY_POLL_MS);
+  private viewVisible = false;
+  private unfocusedSince: number | undefined;
 
   constructor(private readonly services: Services) {
     this.settingsSubscriptions = [
@@ -234,7 +236,18 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
       services.sdk.onDidChange(() => this.refresh()),
       // Session labels live in the description: re-render at once, no `sfdk` list reload.
       deviceSessions.onDidChange(() => this.emitter.fire()),
+      vscode.window.onDidChangeWindowState((state) => {
+        this.unfocusedSince = state.focused ? undefined : Date.now();
+        if (state.focused) void this.probeReachability();
+      }),
     ];
+    this.unfocusedSince = vscode.window.state.focused ? undefined : Date.now();
+  }
+
+  /** Probing runs only while the Devices view shows; becoming visible probes at once. */
+  setViewVisible(visible: boolean): void {
+    this.viewVisible = visible;
+    if (visible) void this.probeReachability();
   }
 
   getTreeItem(element: DeviceOrRootItem): vscode.TreeItem {
@@ -291,24 +304,31 @@ export class DevicesTreeDataProvider implements vscode.TreeDataProvider<DeviceOr
     return (key && this.reachability.get(key)) || 'unknown';
   }
 
-  /** Probes every listed endpoint; redraws only when a state changed (the list cache is reused, so no sfdk runs). */
+  /** Probes listed endpoints without a live session; redraws only when a state changed (the list cache is reused, so no sfdk runs). */
   private async probeReachability(): Promise<void> {
-    if (!this.cache) return;
+    if (!this.cache || !shouldProbe({ viewVisible: this.viewVisible, unfocusedSince: this.unfocusedSince, now: Date.now() })) return;
     const { emulators, devices } = await this.cache;
     const listed = [...(emulators.ok ? emulators.value : []), ...(devices.ok ? devices.value : [])];
     const endpoints = new Map<string, { host: string; port: number }>();
+    const candidates: ProbeCandidate[] = [];
     for (const d of listed) {
       const key = endpointKey(d.host, d.port);
-      if (key && d.host && d.port && !d.flags.includes('available')) endpoints.set(key, { host: d.host, port: d.port });
+      if (!key || !d.host || !d.port || d.flags.includes('available')) continue;
+      endpoints.set(key, { host: d.host, port: d.port });
+      candidates.push({ key, hasSession: deviceSessions.activeFor(sfdkDeviceName(d)).length > 0 });
     }
+    const { probe, online } = splitBySession(candidates);
     let changed = false;
+    const record = (key: string, state: Reachability): void => {
+      if (this.reachability.get(key) === state) return;
+      this.reachability.set(key, state);
+      changed = true;
+    };
+    for (const key of online) record(key, 'online');
     await Promise.all(
-      [...endpoints].map(async ([key, { host, port }]) => {
-        const state: Reachability = (await isReachable(host, port)) ? 'online' : 'offline';
-        if (this.reachability.get(key) !== state) {
-          this.reachability.set(key, state);
-          changed = true;
-        }
+      probe.map(async (key) => {
+        const { host, port } = endpoints.get(key)!;
+        record(key, (await isReachable(host, port)) ? 'online' : 'offline');
       }),
     );
     if (changed) {

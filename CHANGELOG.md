@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.11
+
+- The Devices view checks whether a device is reachable only while the view is visible, every 60 s (was 15 s, always), once right when it opens, and not for devices with a running session. It stops after the window has been unfocused for 5 minutes. This stops the constant connections that made the phone's sshd fork, log and wake from suspend.
+
 ## v0.1.10
 
 - Device agent 1.10.8 makes each mirror frame cheaper on the phone: libvpx encodes with up to 4 threads (3 before) and one token partition per thread, and the full-size screen conversion has a vectorisable path (about twice as fast in a host benchmark, identical picture). Expected on the Jolla Phone (8 cores): encode about 10 % and convert about half faster; not yet measured on a phone. A faster encoder speed was tried and rejected: it sent 2 to 5 times the target bitrate.
