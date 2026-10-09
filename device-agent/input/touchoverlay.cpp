@@ -2,11 +2,13 @@
 #include "paths.h"
 #include "waylandutil.h"
 
-#include "alien-manager-client-protocol.h"
+#include "surface-extension-client-protocol.h"
 
+#include <QDataStream>
 #include <QImage>
 #include <QPainter>
 #include <QSocketNotifier>
+#include <QVariant>
 #include <wayland-client.h>
 
 #include <cerrno>
@@ -27,9 +29,9 @@ const int MAX_SIDE = 10000;
 const qint64 MAX_PIXELS = 16000000;
 
 const wl_registry_listener registryListener = { TouchOverlay::onGlobal, TouchOverlay::onGlobalRemove };
-const alien_manager_listener managerListener = { TouchOverlay::onManagerPing };
-const alien_client_listener clientListener = { TouchOverlay::onClientOomScore };
-const alien_surface_listener surfaceListener = { TouchOverlay::onSurfaceConfigure, TouchOverlay::onSurfaceClose };
+const wl_shell_surface_listener shellListener = { TouchOverlay::onShellPing, TouchOverlay::onShellConfigure,
+                                                  TouchOverlay::onShellPopupDone };
+const wl_output_listener outputListener = { TouchOverlay::onOutputGeometry, TouchOverlay::onOutputMode };
 const wl_buffer_listener bufferListener = { TouchOverlay::onBufferRelease };
 
 }
@@ -40,11 +42,13 @@ TouchOverlay::TouchOverlay(QObject *parent)
     , m_registry(nullptr)
     , m_compositor(nullptr)
     , m_shm(nullptr)
-    , m_manager(nullptr)
-    , m_client(nullptr)
+    , m_output(nullptr)
+    , m_shell(nullptr)
+    , m_extension(nullptr)
     , m_role(nullptr)
+    , m_extended(nullptr)
     , m_surface(nullptr)
-    , m_managerVersion(0)
+    , m_transform(0)
     , m_notifier(nullptr)
     , m_data(nullptr)
     , m_dataSize(0)
@@ -70,17 +74,23 @@ TouchOverlay::~TouchOverlay()
     m_notifier = nullptr;
     hideSurface();
     destroyBuffers();
+    if (m_extended) {
+        qt_extended_surface_destroy(m_extended);
+    }
     if (m_role) {
-        alien_surface_destroy(m_role);
+        wl_shell_surface_destroy(m_role);
     }
     if (m_surface) {
         wl_surface_destroy(m_surface);
     }
-    if (m_client) {
-        alien_client_destroy(m_client);
+    if (m_extension) {
+        qt_surface_extension_destroy(m_extension);
     }
-    if (m_manager) {
-        alien_manager_destroy(m_manager);
+    if (m_shell) {
+        wl_shell_destroy(m_shell);
+    }
+    if (m_output) {
+        wl_output_destroy(m_output);
     }
     if (m_shm) {
         wl_shm_destroy(m_shm);
@@ -152,35 +162,51 @@ bool TouchOverlay::initialize()
         fail(QStringLiteral("no answer from the compositor: ") + WaylandUtil::displayError(m_display));
         return false;
     }
-    if (!m_compositor || !m_shm || !m_manager) {
-        fail(!m_manager ? QStringLiteral("the compositor has no alien_manager")
-                        : QStringLiteral("the compositor has no wl_compositor or wl_shm"));
+    if (!m_compositor || !m_shm || !m_output || !m_shell || !m_extension) {
+        fail(QStringLiteral("the compositor has no wl_shell or qt_surface_extension for the touch overlay"));
+        return false;
+    }
+    // The output's mode event follows its binding; the surface is sized from it.
+    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS) || m_surfaceSize.isEmpty() || !m_buffers[0].handle) {
+        fail(m_error.isEmpty() ? QStringLiteral("the compositor reported no output size for the touch overlay") : m_error);
         return false;
     }
     m_surface = wl_compositor_create_surface(m_compositor);
-    m_client = alien_manager_create_alien_client(m_manager, "sailfish-devagent");
-    alien_manager_add_listener(m_manager, &managerListener, this);
-    alien_client_add_listener(m_client, &clientListener, this);
-    m_role = alien_client_get_alien_surface(m_client, m_surface);
-    alien_surface_add_listener(m_role, &surfaceListener, this);
-    alien_surface_set_title(m_role, "Remote touch indicator");
-    if (m_managerVersion >= 2) {
-        alien_surface_set_category(m_role, "overlay");
-    }
+    m_role = wl_shell_get_shell_surface(m_shell, m_surface);
+    wl_shell_surface_add_listener(m_role, &shellListener, this);
+    wl_shell_surface_set_title(m_role, "Remote touch indicator");
+    wl_shell_surface_set_toplevel(m_role);
+    m_extended = qt_surface_extension_get_extended_surface(m_extension, m_surface);
+    sendOverlayCategory();
 
     // Empty (not null) means no point is part of the input region. The marker can therefore never
     // consume a physical touch or interfere with the event stream it visualizes.
     wl_region *empty = wl_compositor_create_region(m_compositor);
     wl_surface_set_input_region(m_surface, empty);
     wl_region_destroy(empty);
-    wl_surface_commit(m_surface);
-    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS) || m_surfaceSize.isEmpty() || !m_buffers[0].handle) {
-        fail(m_error.isEmpty() ? QStringLiteral("the compositor did not configure the touch overlay") : m_error);
+    if (!WaylandUtil::roundtrip(m_display, OPEN_TIMEOUT_MS)) {
+        fail(QStringLiteral("no answer from the compositor: ") + WaylandUtil::displayError(m_display));
         return false;
     }
     m_notifier = new QSocketNotifier(wl_display_get_fd(m_display), QSocketNotifier::Read, this);
     connect(m_notifier, &QSocketNotifier::activated, this, &TouchOverlay::onReadable);
     return true;
+}
+
+// Qt's own wire format for window properties (QWaylandExtendedSurface::updateGenericProperty);
+// Lipstick reads the category from it before the first commit decides how the window is treated.
+void TouchOverlay::sendOverlayCategory()
+{
+    QByteArray value;
+    QDataStream stream(&value, QIODevice::WriteOnly);
+    stream.setVersion(QDataStream::Qt_5_6);
+    stream << QVariant(QStringLiteral("overlay"));
+    wl_array array;
+    wl_array_init(&array);
+    void *copy = wl_array_add(&array, static_cast<size_t>(value.size()));
+    std::memcpy(copy, value.constData(), static_cast<size_t>(value.size()));
+    qt_extended_surface_update_generic_property(m_extended, "CATEGORY", &array);
+    wl_array_release(&array);
 }
 
 bool TouchOverlay::createBuffers()
@@ -370,10 +396,14 @@ void TouchOverlay::onGlobal(void *data, wl_registry *registry, uint32_t name, co
             wl_registry_bind(registry, name, &wl_compositor_interface, qMin(version, uint32_t(3))));
     } else if (std::strcmp(interface, "wl_shm") == 0 && !overlay->m_shm) {
         overlay->m_shm = static_cast<wl_shm *>(wl_registry_bind(registry, name, &wl_shm_interface, 1));
-    } else if (std::strcmp(interface, "alien_manager") == 0 && version >= 1 && !overlay->m_manager) {
-        overlay->m_managerVersion = qMin(version, uint32_t(2));
-        overlay->m_manager = static_cast<alien_manager *>(
-            wl_registry_bind(registry, name, &alien_manager_interface, overlay->m_managerVersion));
+    } else if (std::strcmp(interface, "wl_output") == 0 && !overlay->m_output) {
+        overlay->m_output = static_cast<wl_output *>(wl_registry_bind(registry, name, &wl_output_interface, 1));
+        wl_output_add_listener(overlay->m_output, &outputListener, overlay);
+    } else if (std::strcmp(interface, "wl_shell") == 0 && !overlay->m_shell) {
+        overlay->m_shell = static_cast<wl_shell *>(wl_registry_bind(registry, name, &wl_shell_interface, 1));
+    } else if (std::strcmp(interface, "qt_surface_extension") == 0 && !overlay->m_extension) {
+        overlay->m_extension = static_cast<qt_surface_extension *>(
+            wl_registry_bind(registry, name, &qt_surface_extension_interface, 1));
     }
 }
 
@@ -381,47 +411,75 @@ void TouchOverlay::onGlobalRemove(void *, wl_registry *, uint32_t)
 {
 }
 
-void TouchOverlay::onManagerPing(void *, alien_manager *manager, uint32_t serial)
+void TouchOverlay::onShellPing(void *, wl_shell_surface *surface, uint32_t serial)
 {
-    alien_manager_pong(manager, serial);
+    wl_shell_surface_pong(surface, serial);
 }
 
-void TouchOverlay::onClientOomScore(void *, alien_client *, int32_t)
+void TouchOverlay::onShellConfigure(void *, wl_shell_surface *, uint32_t, int32_t, int32_t)
 {
 }
 
-void TouchOverlay::onSurfaceConfigure(void *data, alien_surface *surface, uint32_t width, uint32_t height,
-                                      wl_array *, uint32_t serial)
+void TouchOverlay::onShellPopupDone(void *, wl_shell_surface *)
+{
+}
+
+void TouchOverlay::onOutputGeometry(void *data, wl_output *, int32_t, int32_t, int32_t, int32_t, int32_t,
+                                    const char *, const char *, int32_t transform)
 {
     TouchOverlay *overlay = static_cast<TouchOverlay *>(data);
-    alien_surface_ack_configure(surface, serial);
-    const QSize size(static_cast<int>(width), static_cast<int>(height));
-    if (size == overlay->m_surfaceSize) {
+    overlay->m_transform = transform;
+    overlay->updateOutputSize();
+}
+
+void TouchOverlay::onOutputMode(void *data, wl_output *, uint32_t flags, int32_t width, int32_t height, int32_t)
+{
+    if (!(flags & WL_OUTPUT_MODE_CURRENT)) {
         return;
     }
-    const qreal alpha = overlay->m_alpha;
-    const bool pressed = overlay->m_pressed;
-    const bool fading = overlay->m_fade.isActive();
-    overlay->hideSurface();
-    overlay->destroyBuffers();
-    overlay->m_surfaceSize = size;
-    if (!overlay->createBuffers()) {
-        overlay->fail(overlay->m_error);
+    TouchOverlay *overlay = static_cast<TouchOverlay *>(data);
+    overlay->m_modeSize = QSize(width, height);
+    overlay->updateOutputSize();
+}
+
+// wl_shell toplevels get no configure, so the surface takes the output's size as the compositor
+// shows it: a quarter-turn transform swaps the mode's sides.
+void TouchOverlay::updateOutputSize()
+{
+    if (m_modeSize.isEmpty()) {
         return;
     }
-    overlay->m_alpha = alpha;
-    overlay->m_pressed = pressed;
-    if (fading) {
-        overlay->m_fade.start();
-    }
-    if (overlay->m_enabled && alpha > 0.0) {
-        overlay->render();
+    const bool quarterTurn = m_transform == WL_OUTPUT_TRANSFORM_90 || m_transform == WL_OUTPUT_TRANSFORM_270
+        || m_transform == WL_OUTPUT_TRANSFORM_FLIPPED_90 || m_transform == WL_OUTPUT_TRANSFORM_FLIPPED_270;
+    const QSize size = quarterTurn ? m_modeSize.transposed() : m_modeSize;
+    if (!resizeSurface(size)) {
+        fail(m_error);
     }
 }
 
-void TouchOverlay::onSurfaceClose(void *data, alien_surface *)
+bool TouchOverlay::resizeSurface(const QSize &size)
 {
-    static_cast<TouchOverlay *>(data)->fail(QStringLiteral("the compositor closed the touch overlay"));
+    if (size == m_surfaceSize) {
+        return true;
+    }
+    const qreal alpha = m_alpha;
+    const bool pressed = m_pressed;
+    const bool fading = m_fade.isActive();
+    hideSurface();
+    destroyBuffers();
+    m_surfaceSize = size;
+    if (!createBuffers()) {
+        return false;
+    }
+    m_alpha = alpha;
+    m_pressed = pressed;
+    if (fading) {
+        m_fade.start();
+    }
+    if (m_enabled && alpha > 0.0) {
+        render();
+    }
+    return true;
 }
 
 void TouchOverlay::onBufferRelease(void *data, wl_buffer *)

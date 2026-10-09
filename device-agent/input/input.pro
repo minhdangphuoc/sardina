@@ -16,5 +16,5 @@ HEADERS += \
     ../common/keypadkeys.h \
     ../common/waylandutil.h
 
-WAYLAND_CLIENT_PROTOCOLS = protocol/alien-manager.xml
+WAYLAND_CLIENT_PROTOCOLS = protocol/surface-extension.xml
 include(../common/wayland.pri)

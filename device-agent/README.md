@@ -148,7 +148,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
 
 ## Protocol
 
-One request per connection: one JSON line in, then the reply. Current version: **1.11.0**. 1.11.0
+One request per connection: one JSON line in, then the reply. Current version: **1.11.1**. 1.11.0
 splits the agent into modules: `ping` adds `"modules":["logs",…]` (the installed ones), the capability
 fields below appear only with the module that serves them (`logFormats` with logs, `stats` with stats,
 `mirrorEncodings` with mirror, `mirrorInput` and `keypad` with input), and a request for a missing
@@ -164,7 +164,7 @@ Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts 
 `touchIndicatorPath` to the phone-settings message and the `contact` record (below); 1.10.5 adds the
 mirror request field `idle` and a faster return to the full pace after an idle screen; 1.10.7 allows VP8 up
 to 60 fps under the phone's `maxFps` setting, double-buffers the capture and adds per-frame stage times;
-1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change). All additions are
+1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change); 1.11.1 only changes how the phone's touch indicator is shown (no protocol change). All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -323,8 +323,11 @@ unit/integration-fixture tested, but injection and rotation still require confir
 phone; the emulator follows the host pointer and is not conclusive.
 
 Touch indicator (1.10.4): the phone's `touchIndicator` switch draws a marker where VS Code touches.
-The agent binds the compositor's `alien_manager` v2, or v1 when only that exists, for an overlay on
-the phone. A stream that asked for `phoneState` gets `"touchIndicatorPath":"phone"|"mirror"|"off"`
+Since 1.11.1 the agent makes a `wl_shell` toplevel sized to the output and sets Qt's `CATEGORY`
+window property to `overlay` through `qt_surface_extension` (protocol file `protocol/surface-extension.xml`,
+copied unchanged from qtwayland, BSD licence notice kept inside), so Lipstick treats it as an overlay
+and not as an app. Before 1.11.1 it used `alien_manager`, whose category request does not exist on
+Sailfish OS 5.1. Without `wl_shell` or `qt_surface_extension` there is no phone overlay. A stream that asked for `phoneState` gets `"touchIndicatorPath":"phone"|"mirror"|"off"`
 in its `settings` message, sent again when control, the switch or the input lease changes. It is
 `off` unless the switch is on, control is allowed and the input lease is active. When no overlay
 is usable it is `mirror`, and every accepted injected contact is sent as

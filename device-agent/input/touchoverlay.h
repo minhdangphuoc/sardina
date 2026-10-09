@@ -10,20 +10,22 @@
 #include <cstddef>
 #include <stdint.h>
 
-struct alien_client;
-struct alien_manager;
-struct alien_surface;
-struct wl_array;
+struct qt_extended_surface;
+struct qt_surface_extension;
 struct wl_buffer;
 struct wl_compositor;
 struct wl_display;
+struct wl_output;
 struct wl_registry;
+struct wl_shell;
+struct wl_shell_surface;
 struct wl_shm;
 struct wl_surface;
 class QSocketNotifier;
 
-// Debug-only remote-touch marker. It is a raw Wayland surface in Lipstick's "overlay" category,
-// backed by two transparent wl_shm buffers. Its input region is empty, so neither remote nor
+// Debug-only remote-touch marker. It is a wl_shell toplevel that tags itself with Qt's CATEGORY
+// property "overlay", which Lipstick reads from qt_extended_surface, backed by two transparent
+// wl_shm buffers. Its input region is empty, so neither remote nor
 // physical touches can land on it. The owning MirrorStream is responsible for the security gate:
 // setEnabled(true) only while phone setting touchIndicator, control and the focus lease are all
 // active; false unmaps the surface immediately.
@@ -43,11 +45,14 @@ public:
     // Wayland listener callbacks (C function pointers); not for other callers.
     static void onGlobal(void *data, wl_registry *registry, uint32_t name, const char *interface, uint32_t version);
     static void onGlobalRemove(void *data, wl_registry *registry, uint32_t name);
-    static void onManagerPing(void *data, alien_manager *manager, uint32_t serial);
-    static void onClientOomScore(void *data, alien_client *client, int32_t score);
-    static void onSurfaceConfigure(void *data, alien_surface *surface, uint32_t width, uint32_t height,
-                                   wl_array *states, uint32_t serial);
-    static void onSurfaceClose(void *data, alien_surface *surface);
+    static void onShellPing(void *data, wl_shell_surface *surface, uint32_t serial);
+    static void onShellConfigure(void *data, wl_shell_surface *surface, uint32_t edges, int32_t width, int32_t height);
+    static void onShellPopupDone(void *data, wl_shell_surface *surface);
+    static void onOutputGeometry(void *data, wl_output *output, int32_t x, int32_t y, int32_t physicalWidth,
+                                 int32_t physicalHeight, int32_t subpixel, const char *make, const char *model,
+                                 int32_t transform);
+    static void onOutputMode(void *data, wl_output *output, uint32_t flags, int32_t width, int32_t height,
+                             int32_t refresh);
     static void onBufferRelease(void *data, wl_buffer *buffer);
 
 public slots:
@@ -69,6 +74,9 @@ private:
 
     bool initialize();
     bool createBuffers();
+    void sendOverlayCategory();
+    bool resizeSurface(const QSize &size);
+    void updateOutputSize();
     void destroyBuffers();
     void render();
     void hideSurface();
@@ -79,11 +87,14 @@ private:
     wl_registry *m_registry;
     wl_compositor *m_compositor;
     wl_shm *m_shm;
-    alien_manager *m_manager;
-    alien_client *m_client;
-    alien_surface *m_role;
+    wl_output *m_output;
+    wl_shell *m_shell;
+    qt_surface_extension *m_extension;
+    wl_shell_surface *m_role;
+    qt_extended_surface *m_extended;
     wl_surface *m_surface;
-    uint32_t m_managerVersion;
+    QSize m_modeSize;
+    int32_t m_transform;
     QSocketNotifier *m_notifier;
     Buffer m_buffers[2];
     uchar *m_data;

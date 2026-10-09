@@ -1,5 +1,9 @@
 # Changelog
 
+## v0.1.13
+
+- The phone-side touch indicator no longer shows as a separate app in the switcher (device agent 1.11.1). It is now a standard toplevel tagged as an overlay, and the mirror draws the marker itself when the phone cannot. Not yet verified on a phone.
+
 ## v0.1.12
 
 - QML completion, hover and error checks for Sailfish projects, read from the selected build target (no new view or command). Completion offers types, properties and `on...` handlers of the object's type chain, `id.`, singletons, enum values, attached properties and `import` lines with module names and versions; hover shows the type chain and member owner. An unknown type or property is reported as an error only when the file parses cleanly, every `import` resolves and the type chain is complete. New setting `sailfish.qml.languageFeatures` (default on). Checked against the installed targets on this machine only; not on a phone.
