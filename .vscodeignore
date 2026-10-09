@@ -14,3 +14,12 @@ eslint.config.mjs
 .gitignore
 .git/**
 device-agent/**
+PLAN*.md
+HANDOFF.md
+REVIEW*.md
+AGENTS.md
+CLAUDE.md
+reports/**
+research_notes/**
+.claude/**
+.github/**
