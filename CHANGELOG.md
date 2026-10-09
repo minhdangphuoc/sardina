@@ -1,5 +1,10 @@
 # Changelog
 
+## v0.1.13
+
+- The touch indicator is drawn on the phone again (device agent 1.11.2), as a window above apps and the lock screen that is not listed in the switcher; the mirror draws the marker itself when the phone cannot. Fixed a Lipstick crash the earlier indicator could cause after a control session or on a clipboard change. Tested on the emulator (sessions, killed sessions, clipboard changes, rotation, lock and display off, keyboard, taps and swipes passing through) with the new opt-in `make -C device-agent/tools emulator-test`; not yet on a phone.
+- Removing one agent module leaves nothing of it: the module's package removes its own files from the agent's runtime folder (unfetched screenshots and lipstick's staging folder for `screenshot`, frame buffers for `mirror` and `input`), and VS Code then removes them too for older agents and checks read-only that none of the module's packages, files or processes is left, in the same kind of notification as a full removal. A full removal also removes the service's private `/tmp` folders if systemd left them, and checks for them. `device-agent/tools/emulator/uninstall-check.sh`, run as root on a device, lists anything of the agent still there. Checked on the emulator, for one module and for the whole agent; not yet on a phone.
+
 ## v0.1.12
 
 - QML completion, hover and error checks for Sailfish projects, read from the selected build target (no new view or command). Completion offers types, properties and `on...` handlers of the object's type chain, `id.`, singletons, enum values, attached properties and `import` lines with module names and versions; hover shows the type chain and member owner. An unknown type or property is reported as an error only when the file parses cleanly, every `import` resolves and the type chain is complete. New setting `sailfish.qml.languageFeatures` (default on). Checked against the installed targets on this machine only; not on a phone.

@@ -138,17 +138,22 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   service, whose SIGTERM handler closes its notifications and removes the socket directory and any
   staged screenshot, then closes the agent's notifications as `defaultuser`; `%postun` removes
   `/var/lib/sailfish-devagent`, the RPM copy in `/tmp`, a socket directory or staged screenshots a
-  crashed daemon left, the `multi-user.target.wants` link and the unit's failed state, and closes a
+  crashed daemon left, the `multi-user.target.wants` link, the unit's failed state and any
+  PrivateTmp folder systemd left, and closes a
   running Settings app (`pkill -u defaultuser -x jolla-settings`, never lipstick) so it drops the
   entry. `%post` closes it too, so a new or changed page shows the next time Settings opens. VS
   Code repeats the root steps for agents whose scriptlets predate them (1.10.0), then removes what
   the device user may remove (`~/.cache/sailfish-tools` included), closes leftover notifications
   over the session bus and checks read-only that nothing is left. The journal keeps the agent's past
   log lines; they rotate out like any other service's.
+- A removed module's `%postun` removes its own files from the runtime directory (`screenshot`:
+  `shot-*.png` there and in the staging folder; `mirror`: `recorder-*`; `input`: `touch-overlay-*`);
+  VS Code repeats that as the device user and checks the module is gone.
+  `tools/emulator/uninstall-check.sh` (as root) prints anything of the agent still on a device.
 
 ## Protocol
 
-One request per connection: one JSON line in, then the reply. Current version: **1.11.0**. 1.11.0
+One request per connection: one JSON line in, then the reply. Current version: **1.11.2**. 1.11.0
 splits the agent into modules: `ping` adds `"modules":["logs",…]` (the installed ones), the capability
 fields below appear only with the module that serves them (`logFormats` with logs, `stats` with stats,
 `mirrorEncodings` with mirror, `mirrorInput` and `keypad` with input), and a request for a missing
@@ -164,7 +169,7 @@ Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts 
 `touchIndicatorPath` to the phone-settings message and the `contact` record (below); 1.10.5 adds the
 mirror request field `idle` and a faster return to the full pace after an idle screen; 1.10.7 allows VP8 up
 to 60 fps under the phone's `maxFps` setting, double-buffers the capture and adds per-frame stage times;
-1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change). All additions are
+1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change); 1.11.1 and 1.11.2 change how the phone's touch indicator is shown, and 1.11.2 cleans up after a removed module (no protocol change). All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -323,8 +328,15 @@ unit/integration-fixture tested, but injection and rotation still require confir
 phone; the emulator follows the host pointer and is not conclusive.
 
 Touch indicator (1.10.4): the phone's `touchIndicator` switch draws a marker where VS Code touches.
-The agent binds the compositor's `alien_manager` v2, or v1 when only that exists, for an overlay on
-the phone. A stream that asked for `phoneState` gets `"touchIndicatorPath":"phone"|"mirror"|"off"`
+Since 1.11.1 the agent makes a `wl_shell` toplevel sized to the output and sets Qt's `CATEGORY`
+window property through `qt_surface_extension` (protocol file `protocol/surface-extension.xml`,
+copied unchanged from qtwayland, BSD licence notice kept inside), so Lipstick does not treat it as an
+app. Before 1.11.1 it used `alien_manager`, whose category request does not exist on Sailfish OS 5.1.
+Since 1.11.2 the category is `notification`, not `overlay`: Lipstick connects every overlay window to
+clipboard changes for good, and a clipboard change after such a window is gone crashes Lipstick. The
+agent also binds `wl_seat` and `wl_data_device_manager` and makes its data device before the window
+is first shown (Lipstick's clipboard code assumes one), drops every clipboard offer at once, and keeps
+the window shown, fully transparent between touches, until the control session ends. Without `wl_shell`, `qt_surface_extension`, `wl_seat` or `wl_data_device_manager` there is no phone overlay. A stream that asked for `phoneState` gets `"touchIndicatorPath":"phone"|"mirror"|"off"`
 in its `settings` message, sent again when control, the switch or the input lease changes. It is
 `off` unless the switch is on, control is allowed and the input lease is active. When no overlay
 is usable it is `mirror`, and every accepted injected contact is sent as

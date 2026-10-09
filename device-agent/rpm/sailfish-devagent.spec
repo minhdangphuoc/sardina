@@ -1,6 +1,6 @@
 Name:       sailfish-devagent
 Summary:    Developer agent for VS Code: the service and its Settings page
-Version:    1.11.0
+Version:    1.11.2
 Release:    1
 License:    GPL-3.0-or-later
 URL:        https://github.com/minhdangphuoc/vscode-sailfish
@@ -139,6 +139,8 @@ if [ "$1" = "0" ]; then
         rm -f "$devagent_home"/sailfish-devagent/shot-*.png
         rmdir "$devagent_home/sailfish-devagent" >/dev/null 2>&1 || :
     fi
+    # The unit's PrivateTmp folders: systemd removes them on stop, but not after a crash of its own.
+    rm -rf /tmp/systemd-private-*-sailfish-devagent.service-* /var/tmp/systemd-private-*-sailfish-devagent.service-*
     # The Settings app would keep showing the removed entry until it restarts.
     pkill -u defaultuser -x jolla-settings >/dev/null 2>&1 || :
 fi
@@ -167,6 +169,41 @@ fi
 %preun input
 if [ "$1" = "0" ]; then
     pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-input( |$)' >/dev/null 2>&1 || :
+fi
+
+# A removed module's own files in the agent's runtime directory (the core keeps the directory):
+# only its file names, and never through a symlinked directory. Kept in sync with
+# MODULE_RUNTIME_FILES in src/agent/uninstallCore.ts.
+%postun screenshot
+if [ "$1" = "0" ]; then
+    devagent_uid=$(id -u defaultuser 2>/dev/null) || devagent_uid=
+    devagent_home=$(getent passwd defaultuser 2>/dev/null | cut -d: -f6) || devagent_home=
+    devagent_run="/run/user/$devagent_uid/sailfish-devagent"
+    if [ -n "$devagent_uid" ] && [ -d "$devagent_run" ] && [ ! -L "$devagent_run" ]; then
+        rm -f "$devagent_run"/shot-*.png
+    fi
+    if [ -n "$devagent_home" ] && [ -d "$devagent_home/sailfish-devagent" ] && [ ! -L "$devagent_home/sailfish-devagent" ]; then
+        rm -f "$devagent_home"/sailfish-devagent/shot-*.png
+        rmdir "$devagent_home/sailfish-devagent" >/dev/null 2>&1 || :
+    fi
+fi
+
+%postun mirror
+if [ "$1" = "0" ]; then
+    devagent_uid=$(id -u defaultuser 2>/dev/null) || devagent_uid=
+    devagent_run="/run/user/$devagent_uid/sailfish-devagent"
+    if [ -n "$devagent_uid" ] && [ -d "$devagent_run" ] && [ ! -L "$devagent_run" ]; then
+        rm -f "$devagent_run"/recorder-*
+    fi
+fi
+
+%postun input
+if [ "$1" = "0" ]; then
+    devagent_uid=$(id -u defaultuser 2>/dev/null) || devagent_uid=
+    devagent_run="/run/user/$devagent_uid/sailfish-devagent"
+    if [ -n "$devagent_uid" ] && [ -d "$devagent_run" ] && [ ! -L "$devagent_run" ]; then
+        rm -f "$devagent_run"/touch-overlay-*
+    fi
 fi
 
 %files

@@ -10,23 +10,32 @@
 #include <cstddef>
 #include <stdint.h>
 
-struct alien_client;
-struct alien_manager;
-struct alien_surface;
-struct wl_array;
+struct qt_extended_surface;
+struct qt_surface_extension;
 struct wl_buffer;
 struct wl_compositor;
+struct wl_data_device;
+struct wl_data_device_manager;
+struct wl_data_offer;
 struct wl_display;
+struct wl_output;
 struct wl_registry;
+struct wl_seat;
+struct wl_shell;
+struct wl_shell_surface;
 struct wl_shm;
 struct wl_surface;
 class QSocketNotifier;
 
-// Debug-only remote-touch marker. It is a raw Wayland surface in Lipstick's "overlay" category,
-// backed by two transparent wl_shm buffers. Its input region is empty, so neither remote nor
-// physical touches can land on it. The owning MirrorStream is responsible for the security gate:
-// setEnabled(true) only while phone setting touchIndicator, control and the focus lease are all
-// active; false unmaps the surface immediately.
+// Debug-only remote-touch marker: a full-screen wl_shell toplevel with Qt's CATEGORY "notification"
+// and an empty input region, so no touch can land on it. Once shown it stays mapped, fully
+// transparent while idle or disabled, until the input module exits. The owning MirrorStream is the
+// security gate: setEnabled(true) only while phone setting touchIndicator, control and the focus
+// lease are active.
+//
+// Lipstick's clipboard code (QWaylandSurface::updateSelection) dereferences a client's
+// wl_data_device without a check, so one exists before the first map and lives with the
+// connection; without one the overlay is never shown.
 class TouchOverlay : public QObject
 {
     Q_OBJECT
@@ -43,16 +52,26 @@ public:
     // Wayland listener callbacks (C function pointers); not for other callers.
     static void onGlobal(void *data, wl_registry *registry, uint32_t name, const char *interface, uint32_t version);
     static void onGlobalRemove(void *data, wl_registry *registry, uint32_t name);
-    static void onManagerPing(void *data, alien_manager *manager, uint32_t serial);
-    static void onClientOomScore(void *data, alien_client *client, int32_t score);
-    static void onSurfaceConfigure(void *data, alien_surface *surface, uint32_t width, uint32_t height,
-                                   wl_array *states, uint32_t serial);
-    static void onSurfaceClose(void *data, alien_surface *surface);
+    static void onShellPing(void *data, wl_shell_surface *surface, uint32_t serial);
+    static void onShellConfigure(void *data, wl_shell_surface *surface, uint32_t edges, int32_t width, int32_t height);
+    static void onShellPopupDone(void *data, wl_shell_surface *surface);
+    static void onOutputGeometry(void *data, wl_output *output, int32_t x, int32_t y, int32_t physicalWidth,
+                                 int32_t physicalHeight, int32_t subpixel, const char *make, const char *model,
+                                 int32_t transform);
+    static void onOutputMode(void *data, wl_output *output, uint32_t flags, int32_t width, int32_t height,
+                             int32_t refresh);
     static void onBufferRelease(void *data, wl_buffer *buffer);
+    static void onDataOffer(void *data, wl_data_device *device, wl_data_offer *offer);
+    static void onDataEnter(void *data, wl_data_device *device, uint32_t serial, wl_surface *surface, int32_t x,
+                            int32_t y, wl_data_offer *offer);
+    static void onDataLeave(void *data, wl_data_device *device);
+    static void onDataMotion(void *data, wl_data_device *device, uint32_t time, int32_t x, int32_t y);
+    static void onDataDrop(void *data, wl_data_device *device);
+    static void onDataSelection(void *data, wl_data_device *device, wl_data_offer *offer);
 
 public slots:
     // Receives MirrorInput::contactChanged after coordinate validation and a successful position
-    // write. Release begins a short fade; disabling the overlay bypasses the fade and unmaps it.
+    // write. Release begins a short fade back to a transparent frame.
     void setContact(const QPoint &point, bool pressed);
 
 private slots:
@@ -66,12 +85,21 @@ private:
         uchar *data = nullptr;
         bool busy = false;
     };
+    struct BufferSet {
+        Buffer buffers[2];
+        uchar *data = nullptr;
+        size_t size = 0;
+    };
 
     bool initialize();
-    bool createBuffers();
-    void destroyBuffers();
+    bool createBuffers(BufferSet *set);
+    void destroyBuffers(BufferSet *set);
+    void sendCategory();
+    void showSurface();
+    bool resizeSurface(const QSize &size);
+    void updateOutputSize();
     void render();
-    void hideSurface();
+    void disconnectDisplay();
     void fail(const QString &error);
     QPoint surfacePoint() const;
 
@@ -79,15 +107,19 @@ private:
     wl_registry *m_registry;
     wl_compositor *m_compositor;
     wl_shm *m_shm;
-    alien_manager *m_manager;
-    alien_client *m_client;
-    alien_surface *m_role;
+    wl_output *m_output;
+    wl_shell *m_shell;
+    qt_surface_extension *m_extension;
+    wl_seat *m_seat;
+    wl_data_device_manager *m_dataManager;
+    wl_data_device *m_dataDevice;
+    wl_shell_surface *m_role;
+    qt_extended_surface *m_extended;
     wl_surface *m_surface;
-    uint32_t m_managerVersion;
+    QSize m_modeSize;
+    int32_t m_transform;
     QSocketNotifier *m_notifier;
-    Buffer m_buffers[2];
-    uchar *m_data;
-    size_t m_dataSize;
+    BufferSet m_set;
     QSize m_surfaceSize;
     QSize m_screen;
     QPoint m_point;
@@ -96,7 +128,6 @@ private:
     qreal m_alpha;
     bool m_enabled;
     bool m_pressed;
-    bool m_mapped;
     bool m_renderPending;
     bool m_broken;
 };

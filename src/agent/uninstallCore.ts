@@ -64,6 +64,9 @@ export function restartHomeScreenConfirm(device: string): string {
 /** The link `systemctl enable` made for agents up to 1.10.0; 1.10.1 ships its wants link in the package instead. */
 const LEGACY_WANTS_LINK = `/etc/systemd/system/multi-user.target.wants/${AGENT_PACKAGE}.service`;
 
+/** The unit's PrivateTmp folders (systemd removes them on stop, not after a crash of its own); globs. */
+const PRIVATE_TMP = [`/tmp/systemd-private-*-${AGENT_PACKAGE}.service-*`, `/var/tmp/systemd-private-*-${AGENT_PACKAGE}.service-*`];
+
 /** Base of the per-user runtime directories on the device (`/run/user/<uid>`). */
 export const DEVICE_RUNTIME_BASE = '/run/user';
 
@@ -81,6 +84,7 @@ export const UNINSTALL_SCRIPT = [
   `rm -f ${LEGACY_REMOTE_RPM}`,
   `[ -L ${LEGACY_WANTS_LINK} ] && rm -f ${LEGACY_WANTS_LINK}`,
   `rm -rf /var/lib/${AGENT_PACKAGE}`,
+  `rm -rf ${PRIVATE_TMP.join(' ')}`,
   `systemctl daemon-reload >/dev/null 2>&1`,
   `systemctl reset-failed ${AGENT_PACKAGE}.service >/dev/null 2>&1`,
   // A running Settings app keeps showing the removed entry: close only it (never lipstick).
@@ -100,7 +104,28 @@ const ROOT_PATHS = [
   `/usr/share/${AGENT_PACKAGE}`,
   `/usr/libexec/${AGENT_PACKAGE}`,
   `/var/lib/${AGENT_PACKAGE}`,
+  ...PRIVATE_TMP,
 ];
+
+/** Removes `$1` (a path) and reports it; quiet when it does not exist (an unmatched glob stays literal). */
+const GONE = `gone() { { [ -e "$1" ] || [ -L "$1" ]; } || return 0; rm -rf "$1" 2>/dev/null; if [ -e "$1" ] || [ -L "$1" ]; then echo "${MARK}:left:$1"; else echo "${MARK}:removed:$1"; fi; }`;
+
+/** lipstick's screenshot staging folder ($s, set by the caller): only the agent's file names, then the folder. */
+const STAGING_CLEANUP = [
+  `if [ -n "$h" ] && [ -d "$s" ] && [ ! -L "$s" ]; then`,
+  `  for p in "$s"/shot-*.png; do [ -e "$p" ] && rm -f "$p" && echo "${MARK}:removed:$p"; done`,
+  `  rmdir "$s" 2>/dev/null && echo "${MARK}:removed:$s" || echo "${MARK}:left:$s"`,
+  `fi`,
+];
+
+/** Each module's own files in the agent's runtime directory; its %postun removes them too (the core keeps the directory). */
+export const MODULE_RUNTIME_FILES: Readonly<Record<AgentModule, readonly string[]>> = {
+  logs: [],
+  stats: [],
+  screenshot: ['shot-*.png'],
+  mirror: ['recorder-*'],
+  input: ['touch-overlay-*'],
+};
 
 /**
  * Run as the device user over `device exec -- sh -c CLEANUP_SCRIPT sh <rpm copy> <runtime base>`
@@ -112,15 +137,12 @@ const ROOT_PATHS = [
  */
 export const CLEANUP_SCRIPT = [
   `f=$1; r=$2; u=$(id -u); h=$HOME; b="$r/$u/dbus/user_bus_socket"`,
-  `gone() { { [ -e "$1" ] || [ -L "$1" ]; } || return 0; rm -rf "$1" 2>/dev/null; if [ -e "$1" ] || [ -L "$1" ]; then echo "${MARK}:left:$1"; else echo "${MARK}:removed:$1"; fi; }`,
+  GONE,
   `gone "$f"`,
   `gone "$r/$u/${AGENT_PACKAGE}"`,
   `[ -n "$h" ] && gone "$h/${DEVICE_TOOLS_DIR}"`,
   `s="$h/${AGENT_PACKAGE}"`,
-  `if [ -n "$h" ] && [ -d "$s" ] && [ ! -L "$s" ]; then`,
-  `  for p in "$s"/shot-*.png; do [ -e "$p" ] && rm -f "$p" && echo "${MARK}:removed:$p"; done`,
-  `  rmdir "$s" 2>/dev/null && echo "${MARK}:removed:$s" || echo "${MARK}:left:$s"`,
-  `fi`,
+  ...STAGING_CLEANUP,
   `ds() { dbus-send --bus="unix:path=$b" --print-reply --reply-timeout=3000 "$@"; }`,
   `if command -v dbus-send >/dev/null 2>&1 && [ -S "$b" ]; then`,
   `  if out=$(ds --dest=org.freedesktop.Notifications /org/freedesktop/Notifications org.freedesktop.Notifications.GetNotifications string: 2>/dev/null); then`,
@@ -140,6 +162,30 @@ export const CLEANUP_SCRIPT = [
 
 /** The positional arguments for CLEANUP_SCRIPT (after `sh -c CLEANUP_SCRIPT sh`). */
 export const CLEANUP_ARGS: readonly string[] = [LEGACY_REMOTE_RPM, DEVICE_RUNTIME_BASE];
+
+/**
+ * CLEANUP_SCRIPT for removed modules, run as the device user with the runtime base as `$1` after the
+ * root step: removes their own files from the agent's runtime directory (for agents whose module
+ * scriptlets predate that) and checks read-only that none of their packages, executables or
+ * processes is left. Same report lines; fixed text built from the fixed module names.
+ */
+export function moduleCleanupScript(modules: readonly AgentModule[]): string {
+  const files = modules.flatMap((m) => MODULE_RUNTIME_FILES[m]).map((f) => `"$d"/${f}`);
+  const lines = [`r=$1; u=$(id -u); h=$HOME; d="$r/$u/${AGENT_PACKAGE}"`, GONE];
+  if (files.length > 0) lines.push(`if [ -d "$d" ] && [ ! -L "$d" ]; then for p in ${files.join(' ')}; do gone "$p"; done; fi`);
+  if (modules.includes('screenshot')) lines.push(`s="$h/${AGENT_PACKAGE}"`, ...STAGING_CLEANUP);
+  const executables = modules.map((m) => `/usr/libexec/${AGENT_PACKAGE}/${AGENT_PACKAGE}-${m}`);
+  lines.push(
+    `for n in ${modules.map((m) => `${AGENT_PACKAGE}-${m}`).join(' ')}; do rpm -q $n >/dev/null 2>&1 && echo "${MARK}:left:package $n"; done`,
+    `for p in ${executables.join(' ')}; do { [ -e "$p" ] || [ -L "$p" ]; } && echo "${MARK}:left:$p"; done`,
+    `pgrep -u ${DEVICE_USER} -f '^/usr/libexec/${AGENT_PACKAGE}/${AGENT_PACKAGE}-(${modules.join('|')})( |$)' >/dev/null 2>&1 && echo "${MARK}:left:running module process"`,
+    `echo "${MARK}:done"`,
+  );
+  return lines.join('\n');
+}
+
+/** The positional arguments for moduleCleanupScript. */
+export const MODULE_CLEANUP_ARGS: readonly string[] = [DEVICE_RUNTIME_BASE];
 
 export interface CleanupReport {
   /** Paths the cleanup removed. */
@@ -189,8 +235,16 @@ function listed(items: readonly string[], max = 3): string {
 }
 
 /** The one notification after a successful root step: what was cleaned up and anything still there. */
-export function uninstallSummary(device: string, report: CleanupReport): { level: 'information' | 'warning'; message: string } {
-  const parts = [`Sailfish: the device agent was removed from "${device}".`];
+export function uninstallSummary(
+  device: string,
+  report: CleanupReport,
+  modules?: readonly AgentModule[],
+): { level: 'information' | 'warning'; message: string } {
+  const parts = [
+    modules
+      ? `Sailfish: removed the ${modules.join(', ')} module${modules.length === 1 ? '' : 's'} from "${device}".`
+      : `Sailfish: the device agent was removed from "${device}".`,
+  ];
   const extra: string[] = [];
   if (report.removed.length > 0) extra.push(plural(report.removed.length, 'leftover item'));
   if (report.closed.length > 0) extra.push(plural(report.closed.length, 'notification'));
@@ -203,7 +257,7 @@ export function uninstallSummary(device: string, report: CleanupReport): { level
   } else if (report.unchecked.length > 0) {
     parts.push(`Could not check: ${listed(report.unchecked)}.`);
   } else if (report.left.length === 0) {
-    parts.push('Nothing of the agent is left.');
+    parts.push(modules ? `Nothing of ${modules.length === 1 ? 'it' : 'them'} is left.` : 'Nothing of the agent is left.');
   }
   const level = report.left.length > 0 || !report.complete ? 'warning' : 'information';
   return { level, message: parts.join(' ') };
