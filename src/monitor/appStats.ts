@@ -32,7 +32,7 @@ export const APP_STATS_SCRIPT = [
   `echo "pid $p"; cat /proc/$p/stat; echo '--'; cat /proc/$p/status; echo '--'; cat /proc/uptime; head -n 1 /proc/stat`,
 ].join('\n');
 
-/** Kernel clock ticks per second; 100 on every Sailfish OS target. */
+/** Kernel clock ticks per second; 100 on every SFOS target. */
 export const CLOCK_TICKS_PER_SECOND = 100;
 
 export interface ProcStat {

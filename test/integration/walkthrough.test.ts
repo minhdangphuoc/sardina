@@ -34,10 +34,10 @@ function readPackageJson(): PackageJson {
  * not expose a stable API for.
  */
 suite('walkthrough (FR-15.1, AC-1.12)', () => {
-  test('sailfish.gettingStarted has exactly 5 steps, no addDevice (v0.2)', () => {
+  test('sardina.gettingStarted has exactly 5 steps, no addDevice (v0.2)', () => {
     const pkg = readPackageJson();
-    const walkthrough = pkg.contributes.walkthroughs?.find((w) => w.id === 'sailfish.gettingStarted');
-    assert.ok(walkthrough, 'expected a sailfish.gettingStarted walkthrough');
+    const walkthrough = pkg.contributes.walkthroughs?.find((w) => w.id === 'sardina.gettingStarted');
+    assert.ok(walkthrough, 'expected a sardina.gettingStarted walkthrough');
 
     const ids = walkthrough?.steps.map((s) => s.id) ?? [];
     assert.strictEqual(ids.length, 5, `expected exactly 5 steps, got: ${ids.join(', ')}`);
@@ -47,19 +47,19 @@ suite('walkthrough (FR-15.1, AC-1.12)', () => {
 
   test('every completionEvent references a declared command or context key', () => {
     const pkg = readPackageJson();
-    const walkthrough = pkg.contributes.walkthroughs?.find((w) => w.id === 'sailfish.gettingStarted');
+    const walkthrough = pkg.contributes.walkthroughs?.find((w) => w.id === 'sardina.gettingStarted');
     assert.ok(walkthrough);
 
     const declaredCommands = new Set((pkg.contributes.commands ?? []).map((c) => c.command));
     // src/core/contextKeys.ts's ALL_KEYS; kept in sync manually since that
     // file has no vscode-free export a Node script can import directly.
     const declaredContextKeys = new Set([
-      'sailfish.isProject',
-      'sailfish.projectCount',
-      'sailfish.sdkAvailable',
-      'sailfish.platformSupported',
-      'sailfish.hasTarget',
-      'sailfish.hasDevice',
+      'sardina.isProject',
+      'sardina.projectCount',
+      'sardina.sdkAvailable',
+      'sardina.platformSupported',
+      'sardina.hasTarget',
+      'sardina.hasDevice',
     ]);
 
     for (const step of walkthrough?.steps ?? []) {
@@ -79,7 +79,7 @@ suite('walkthrough (FR-15.1, AC-1.12)', () => {
 
   test('every step has markdown media under media/walkthrough with real content', () => {
     const pkg = readPackageJson();
-    const walkthrough = pkg.contributes.walkthroughs?.find((w) => w.id === 'sailfish.gettingStarted');
+    const walkthrough = pkg.contributes.walkthroughs?.find((w) => w.id === 'sardina.gettingStarted');
     assert.ok(walkthrough);
     const repoRoot = path.resolve(fixturesRoot(), '..', '..');
 

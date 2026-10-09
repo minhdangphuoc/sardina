@@ -38,7 +38,7 @@ async function verifyKey(ctx: vscode.ExtensionContext, keyName: string, passphra
   const out = path.join(dir, 'probe.sig');
   const passFile = path.join(dir, 'probe.pass');
   try {
-    fs.writeFileSync(probe, 'sailfish signing probe\n');
+    fs.writeFileSync(probe, 'sardina signing probe\n');
     const args = ['--batch', '--yes', '--pinentry-mode', passphrase === '' ? 'error' : 'loopback'];
     if (passphrase !== '') {
       fs.writeFileSync(passFile, `${passphrase}\n`, { mode: 0o600 });
@@ -90,12 +90,12 @@ async function createKey(ctx: vscode.ExtensionContext, services: Services): Prom
   try {
     fs.writeFileSync(paramsFile, buildKeyParams(name, email, passphrase), { mode: 0o600 });
     const result = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Sailfish: generating the signing key (this can take a minute)…' },
+      { location: vscode.ProgressLocation.Notification, title: 'Sardina: generating the signing key (this can take a minute)…' },
       () => spawnCapture('gpg', ['--batch', '--status-fd', '1', '--generate-key', paramsFile], { timeoutMs: 5 * 60 * 1000 }),
     );
     if (result.exitCode !== 0) {
       services.output.log('error', `gpg key generation failed (exit ${result.exitCode}): ${result.stderr.trim()}`);
-      void services.prompts.showErrorMessage(`Sailfish: gpg could not create the key: ${result.stderr.trim().split('\n').pop() ?? `exit ${result.exitCode}`}`);
+      void services.prompts.showErrorMessage(`Sardina: gpg could not create the key: ${result.stderr.trim().split('\n').pop() ?? `exit ${result.exitCode}`}`);
       return undefined;
     }
     created = /\[GNUPG:\] KEY_CREATED \w ([0-9A-Fa-f]{40})/.exec(result.stdout)?.[1];
@@ -105,17 +105,17 @@ async function createKey(ctx: vscode.ExtensionContext, services: Services): Prom
   return { name: name.trim(), signingUser: created ?? name.trim(), passphrase };
 }
 
-/** `Sailfish: Set Up Package Signing`: picks (or creates) a GPG key and fills in the sailfish.build.sign* settings for the active project. */
+/** `Sardina: Set Up Package Signing`: picks (or creates) a GPG key and fills in the sardina.build.sign* settings for the active project. */
 async function setupSigning(ctx: vscode.ExtensionContext, services: Services): Promise<void> {
   const project = await services.projects.resolveActive();
   if (!project) {
-    void services.prompts.showWarningMessage('Sailfish: open a Sailfish project first; the signing settings are saved per project folder.');
+    void services.prompts.showWarningMessage('Sardina: open an SFOS project first; the signing settings are saved per project folder.');
     return;
   }
 
   const { missing, keys } = await listKeys();
   if (missing) {
-    void services.prompts.showWarningMessage('Sailfish: gpg was not found. Install GnuPG (for example `sudo apt install gnupg`), then run this command again.');
+    void services.prompts.showWarningMessage('Sardina: gpg was not found. Install GnuPG (for example `sudo apt install gnupg`), then run this command again.');
     return;
   }
 
@@ -153,14 +153,14 @@ async function setupSigning(ctx: vscode.ExtensionContext, services: Services): P
       services.output.log('warn', `gpg could not sign with "${keyName}": ${check.detail}`);
       void services.prompts.showErrorMessage(
         passphrase === ''
-          ? `Sailfish: "${keyName}" is protected by a passphrase, but none was entered. Run the command again and enter it. Nothing was saved.`
-          : `Sailfish: gpg could not sign with "${keyName}" and that passphrase (${check.detail || 'wrong passphrase?'}). Nothing was saved.`,
+          ? `Sardina: "${keyName}" is protected by a passphrase, but none was entered. Run the command again and enter it. Nothing was saved.`
+          : `Sardina: gpg could not sign with "${keyName}" and that passphrase (${check.detail || 'wrong passphrase?'}). Nothing was saved.`,
       );
       return;
     }
   }
 
-  const config = vscode.workspace.getConfiguration('sailfish', project.folder.uri);
+  const config = vscode.workspace.getConfiguration('sardina', project.folder.uri);
   const target = vscode.ConfigurationTarget.WorkspaceFolder;
   await config.update('build.signingUser', keyRef, target);
   if (passphrase !== undefined) {
@@ -170,11 +170,11 @@ async function setupSigning(ctx: vscode.ExtensionContext, services: Services): P
   await config.update('build.sign', true, target);
 
   void services.prompts.showInformationMessage(
-    `Sailfish: packages will be signed with "${keyName}" (${keyRef.slice(-16)}). To verify one, import the public key once: ` +
+    `Sardina: packages will be signed with "${keyName}" (${keyRef.slice(-16)}). To verify one, import the public key once: ` +
       `gpg --export --armor ${keyRef} | rpm --import /dev/stdin, then run rpm -K on the RPM.`,
   );
 }
 
 export function activateSigning(ctx: vscode.ExtensionContext, services: Services): void {
-  ctx.subscriptions.push(vscode.commands.registerCommand('sailfish.setupSigning', () => setupSigning(ctx, services)));
+  ctx.subscriptions.push(vscode.commands.registerCommand('sardina.setupSigning', () => setupSigning(ctx, services)));
 }

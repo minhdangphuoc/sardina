@@ -1,10 +1,10 @@
 import * as vscode from 'vscode';
 
-export const OUTPUT_CHANNEL_NAME = 'Sailfish OS';
+export const OUTPUT_CHANNEL_NAME = 'Sardina';
 
 export type LogLevel = 'info' | 'debug' | 'warn' | 'error';
 
-/** The extension's single "Sailfish OS" OutputChannel (FR-1.6). */
+/** The extension's single "Sardina" OutputChannel (FR-1.6). */
 export class Output {
   readonly channel: vscode.OutputChannel;
   private debugEnabled = false;
@@ -46,7 +46,7 @@ interface OutputServices {
 export function activateOutput(ctx: vscode.ExtensionContext, services: OutputServices): void {
   ctx.subscriptions.push(services.output);
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.showOutput', () => {
+    vscode.commands.registerCommand('sardina.showOutput', () => {
       services.output.show();
     }),
   );

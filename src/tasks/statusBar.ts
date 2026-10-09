@@ -27,11 +27,11 @@ export class BuildConfigStatusBar {
   private readonly device = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
   private readonly buildType = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
   private readonly deployMethod = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
-  private readonly debugAction = actionItem(92, '$(debug-alt) Debug', 'sailfish.debugOnDevice', 'Sailfish: Build, Deploy & Debug on the device. To debug without rebuilding: "Sailfish: Debug Installed App"');
+  private readonly debugAction = actionItem(92, '$(debug-alt) Debug', 'sardina.debugOnDevice', 'Sardina: Build, Deploy & Debug on the device. To debug without rebuilding: "Sardina: Debug Installed App"');
   private readonly actions = [
-    actionItem(95, '$(tools)', 'sailfish.build', 'Sailfish: Build'),
-    actionItem(94, '$(package) Deploy', 'sailfish.deploy', 'Sailfish: Build & Deploy to the device, without launching'),
-    actionItem(93, '$(play) Run', 'sailfish.buildDeployRun', 'Sailfish: Build, Deploy & Run (Ctrl+Alt+R). To launch without rebuilding: "Sailfish: Run Installed App"'),
+    actionItem(95, '$(tools)', 'sardina.build', 'Sardina: Build'),
+    actionItem(94, '$(package) Deploy', 'sardina.deploy', 'Sardina: Build & Deploy to the device, without launching'),
+    actionItem(93, '$(play) Run', 'sardina.buildDeployRun', 'Sardina: Build, Deploy & Run (Ctrl+Alt+R). To launch without rebuilding: "Sardina: Run Installed App"'),
     this.debugAction,
   ];
 
@@ -39,14 +39,14 @@ export class BuildConfigStatusBar {
   private registeredDevices: Map<string, Reachability> | undefined;
 
   constructor(private readonly services: Services) {
-    this.device.command = 'sailfish.device.setDefault';
-    this.buildType.command = 'sailfish.selectBuildType';
-    this.deployMethod.command = 'sailfish.selectDeployMethod';
+    this.device.command = 'sardina.device.setDefault';
+    this.buildType.command = 'sardina.selectBuildType';
+    this.deployMethod.command = 'sardina.selectDeployMethod';
   }
 
   refresh(): void {
     const items = [this.device, this.buildType, this.deployMethod, ...this.actions];
-    if (this.services.contextKeys.get('sailfish.isProject') !== true) {
+    if (this.services.contextKeys.get('sardina.isProject') !== true) {
       for (const item of items) item.hide();
       return;
     }
@@ -62,20 +62,20 @@ export class BuildConfigStatusBar {
     const base = deviceTextWithSessions(device, sessions);
     this.device.text = unregistered ? `$(warning) ${device}` : offline ? `${base} (offline)` : base;
     const baseTooltip = unregistered
-      ? `Sailfish: "${device}" is not registered with the SDK (missing from \`sfdk device list\`). Click to pick another device.`
+      ? `Sardina: "${device}" is not registered with the SDK (missing from \`sfdk device list\`). Click to pick another device.`
       : offline
-        ? `Sailfish: "${device}" is registered but not reachable (unplugged, asleep, or another network). Click to change.`
+        ? `Sardina: "${device}" is registered but not reachable (unplugged, asleep, or another network). Click to change.`
         : device
-        ? `Sailfish: deploy device "${device}" (click to change)`
-        : 'Sailfish: select a deploy device';
+        ? `Sardina: deploy device "${device}" (click to change)`
+        : 'Sardina: select a deploy device';
     const stopHint = sessionTooltip(device, sessions);
     this.device.tooltip = deviceTooltip(baseTooltip, stopHint, !!device && !unregistered);
     this.device.backgroundColor = unregistered || debugging ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
     this.debugAction.text = debugActionText(sessions);
     this.buildType.text = buildTypeText(buildType);
-    this.buildType.tooltip = 'Sailfish: build type (click to change)';
+    this.buildType.tooltip = 'Sardina: build type (click to change)';
     this.deployMethod.text = deployMethodText(method);
-    this.deployMethod.tooltip = `Sailfish: ${deployMethodLabel(method)} (click to change)`;
+    this.deployMethod.tooltip = `Sardina: ${deployMethodLabel(method)} (click to change)`;
     for (const item of items) item.show();
   }
 
@@ -104,9 +104,9 @@ function deviceTooltip(base: string, stopHint: string | undefined, withMonitorLi
   const text = stopHint ? `${base}\n\n${stopHint}` : base;
   if (!withMonitorLink) return text;
   const md = new vscode.MarkdownString(undefined, true);
-  md.isTrusted = { enabledCommands: ['sailfish.monitor.open'] };
+  md.isTrusted = { enabledCommands: ['sardina.monitor.open'] };
   md.appendText(text);
-  md.appendMarkdown('\n\n[Open Device Monitor](command:sailfish.monitor.open)');
+  md.appendMarkdown('\n\n[Open Device Monitor](command:sardina.monitor.open)');
   return md;
 }
 
@@ -118,14 +118,14 @@ function actionItem(priority: number, text: string, command: string, tooltip: st
   return item;
 }
 
-/** Saves a selector choice next to `sailfish.target`: the active project's folder settings. */
+/** Saves a selector choice next to `sardina.target`: the active project's folder settings. */
 async function saveFolderSetting(services: Services, key: 'build.type' | 'deploy.method', value: string): Promise<void> {
   const folder = scopeFolder(services) ?? vscode.workspace.workspaceFolders?.[0];
   if (!folder) {
-    void services.prompts.showWarningMessage('Sailfish: no workspace folder to save the setting to');
+    void services.prompts.showWarningMessage('Sardina: no workspace folder to save the setting to');
     return;
   }
-  await vscode.workspace.getConfiguration('sailfish', folder.uri).update(key, value, vscode.ConfigurationTarget.WorkspaceFolder);
+  await vscode.workspace.getConfiguration('sardina', folder.uri).update(key, value, vscode.ConfigurationTarget.WorkspaceFolder);
 }
 
 async function pick<T extends string>(
@@ -147,12 +147,12 @@ export function activateBuildConfigStatusBar(ctx: vscode.ExtensionContext, servi
   const statusBar = new BuildConfigStatusBar(services);
   ctx.subscriptions.push(
     statusBar,
-    vscode.commands.registerCommand('sailfish.selectBuildType', async () => {
+    vscode.commands.registerCommand('sardina.selectBuildType', async () => {
       const current = services.settings.get('build.type', scopeFolder(services)?.uri);
       const value = await pick<BuildType>(services, BUILD_TYPES, current, 'Select the build type');
       if (value) await saveFolderSetting(services, 'build.type', value);
     }),
-    vscode.commands.registerCommand('sailfish.selectDeployMethod', async () => {
+    vscode.commands.registerCommand('sardina.selectDeployMethod', async () => {
       const current = services.settings.get('deploy.method', scopeFolder(services)?.uri);
       const value = await pick<DeployMethod>(services, DEPLOY_METHODS, current, 'Select how to deploy to the device');
       if (value) await saveFolderSetting(services, 'deploy.method', value);

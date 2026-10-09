@@ -1,6 +1,6 @@
 /** Pure argv builders per FR-5.3..5.6. */
 
-export interface SailfishTaskDefinitionLike {
+export interface SardinaTaskDefinitionLike {
   command: 'build' | 'deploy' | 'run' | 'package' | 'check' | 'clean' | 'matrix-build' | 'logs';
   target?: string;
   device?: string;
@@ -14,7 +14,7 @@ export interface SailfishTaskDefinitionLike {
 }
 
 export interface SigningSettings {
-  /** `sailfish.build.sign`: adds `--sign`; the user and passphrase file go in as session `-c` options. */
+  /** `sardina.build.sign`: adds `--sign`; the user and passphrase file go in as session `-c` options. */
   sign?: boolean;
   signingUser?: string;
   signingPassphraseFile?: string;
@@ -37,7 +37,7 @@ function signingConfigArgs(settings: SigningSettings): string[] {
 export interface BuildArgvSettings extends SigningSettings {
   runHarbourCheck: boolean;
   jobs: number;
-  /** The `sailfish.build.type` selector; a task definition's own `debug` wins. */
+  /** The `sardina.build.type` selector; a task definition's own `debug` wins. */
   buildType?: 'release' | 'debug';
 }
 
@@ -56,7 +56,7 @@ export const DEBUG_GLOBAL_CFLAGS = '-O0 -g -pipe -Wall -fexceptions -fstack-prot
 export const DEBUG_RPMBUILD_ARGS: readonly string[] = ['--define', `__global_cflags ${DEBUG_GLOBAL_CFLAGS}`];
 
 /** FR-5.3. `-c target=`/`-c device=` are passed to SfdkRunner as options, not included here. */
-export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSettings): string[] {
+export function buildArgs(def: SardinaTaskDefinitionLike, settings: BuildArgvSettings): string[] {
   const args: string[] = signingConfigArgs(settings);
   args.push('build');
   if (settings.sign) {
@@ -86,11 +86,11 @@ export function buildArgs(def: SailfishTaskDefinitionLike, settings: BuildArgvSe
 }
 
 export interface DeployArgvSettings {
-  method: NonNullable<SailfishTaskDefinitionLike['deployMethod']>;
+  method: NonNullable<SardinaTaskDefinitionLike['deployMethod']>;
 }
 
 /** FR-5.4. */
-export function deployArgs(def: SailfishTaskDefinitionLike, settings: DeployArgvSettings): string[] {
+export function deployArgs(def: SardinaTaskDefinitionLike, settings: DeployArgvSettings): string[] {
   const method = def.deployMethod ?? settings.method;
   const args: string[] = ['deploy', `--${method}`];
   if (def.debug) {
@@ -100,7 +100,7 @@ export function deployArgs(def: SailfishTaskDefinitionLike, settings: DeployArgv
 }
 
 /** FR-5.6 package. */
-export function packageArgs(def: SailfishTaskDefinitionLike, settings: SigningSettings = {}): string[] {
+export function packageArgs(def: SardinaTaskDefinitionLike, settings: SigningSettings = {}): string[] {
   const args: string[] = [...signingConfigArgs(settings), 'package'];
   if (settings.sign) {
     args.push('--sign');

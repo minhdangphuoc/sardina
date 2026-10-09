@@ -203,7 +203,7 @@ export function serializeDevicesXml(doc: DevicesXmlDocument, writtenAtIso: strin
   return (
     `<?xml version="1.0" encoding="UTF-8"?>\n` +
     `<!DOCTYPE ${XML.docType}>\n` +
-    `<!-- Written by sailfish-tools, ${writtenAtIso}. -->\n` +
+    `<!-- Written by Sardina, ${writtenAtIso}. -->\n` +
     `<qtcreator>\n${body}</qtcreator>\n`
   );
 }

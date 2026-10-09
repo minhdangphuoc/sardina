@@ -1,7 +1,7 @@
 import type { SfdkDeviceInfo } from '../core/types';
 import { sfdkDeviceName } from './listParsing';
 
-/** Pure argv builder for FR-6.6 (`sailfish.device.openSsh`); no `vscode` import so it's unit-testable under plain mocha. */
+/** Pure argv builder for FR-6.6 (`sardina.device.openSsh`); no `vscode` import so it's unit-testable under plain mocha. */
 export interface TerminalLaunch {
   shellPath: string;
   shellArgs: string[];

@@ -10,8 +10,8 @@ import {
 } from './keys';
 
 const MISSING_QT_QML_MESSAGE =
-  'The qt-qml extension was not found, so Sailfish OS QML projects will not silence the qmlls language ' +
-  'server (which is unusable against Qt 5.6 Sailfish targets). Install theqtcompany.qt-qml (Open VSX) or, ' +
+  'The qt-qml extension was not found, so SFOS QML projects will not silence the qmlls language ' +
+  'server (which is unusable against Qt 5.6 SFOS targets). Install theqtcompany.qt-qml (Open VSX) or, ' +
   'for syntax highlighting only, bbenoist.QML (Marketplace).';
 
 /** True unless `qmlls.enabled` is explicitly `false` at workspace/folder scope; a global-scope `false` does not count (FR-8.1). */
@@ -45,7 +45,7 @@ async function updateFolderOrWorkspace(config: vscode.WorkspaceConfiguration, ke
   }
 }
 
-/** FR-8.1: silences qmlls for one Sailfish folder; only writes WorkspaceFolder scope, never `qmlls.additionalImportPaths` (FR-8.8). */
+/** FR-8.1: silences qmlls for one SFOS folder; only writes WorkspaceFolder scope, never `qmlls.additionalImportPaths` (FR-8.8). */
 async function silenceFolder(
   folder: vscode.WorkspaceFolder,
   ctx: vscode.ExtensionContext,
@@ -93,7 +93,7 @@ async function silenceFolder(
   }
 
   silencedFolders.add(folderKey);
-  services.output.log('info', `qmlls disabled for Sailfish project folder "${folder.name}" (${QT_QML_SILENCE_SETTING})`);
+  services.output.log('info', `qmlls disabled for SFOS project folder "${folder.name}" (${QT_QML_SILENCE_SETTING})`);
 }
 
 async function silenceAll(
@@ -107,7 +107,7 @@ async function silenceAll(
   }
 }
 
-/** FR-8.1: on activation and on ProjectRegistry changes, disables qmlls per Sailfish folder (qt-qml needs Qt >= 6.8, Sailfish ships 5.6). */
+/** FR-8.1: on activation and on ProjectRegistry changes, disables qmlls per SFOS folder (qt-qml needs Qt >= 6.8, SFOS ships 5.6). */
 export function activateQtQml(ctx: vscode.ExtensionContext, services: Services): void {
   const silencedFolders = new Set<string>();
   const warnedFolders = new Set<string>();

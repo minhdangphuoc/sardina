@@ -82,7 +82,7 @@ const updateOffered = new Set<string>();
 const REVEAL = 'Reveal in folder';
 /** Offered after an install or removal, never run without a confirmation (restartHomeScreen). */
 const RESTART_HOME_SCREEN = 'Restart Home Screen';
-const LAST_FOLDER_KEY = 'sailfish.agent.lastScreenshotFolder';
+const LAST_FOLDER_KEY = 'sardina.agent.lastScreenshotFolder';
 const REQUEST_TIMEOUT_MS = 30_000;
 const FETCH_TIMEOUT_MS = 120_000;
 const COPY_TIMEOUT_MS = 120_000;
@@ -95,7 +95,7 @@ export function clientArgs(): string[] {
   return name ? ['--client', name] : [];
 }
 
-/** The device from a Devices-view item, else the workspace's `sailfish.device`. */
+/** The device from a Devices-view item, else the workspace's `sardina.device`. */
 function resolveDevice(services: Services, item: unknown): string | undefined {
   const fromItem = deviceFrom(item);
   if (fromItem) return sfdkDeviceName(fromItem);
@@ -105,7 +105,7 @@ function resolveDevice(services: Services, item: unknown): string | undefined {
 export function requireDevice(services: Services, item: unknown): string | undefined {
   const device = resolveDevice(services, item);
   if (!device) {
-    void services.prompts.showWarningMessage('Sailfish: select a device first (status bar or Devices view).');
+    void services.prompts.showWarningMessage('Sardina: select a device first (status bar or Devices view).');
   }
   return device;
 }
@@ -189,12 +189,12 @@ export async function ensureAgentProbe(
   const state = known ?? (await probe(services, device));
   if (state.state === 'running' && state.developerMode) {
     if (!hasModule(state, need.module)) {
-      return offerInstall(ctx, services, device, need, `Sailfish: ${need.feature} needs the ${need.module} module of the device agent on "${device}".`, [need.module], false);
+      return offerInstall(ctx, services, device, need, `Sardina: ${need.feature} needs the ${need.module} module of the device agent on "${device}".`, [need.module], false);
     }
     // The phone's own settings win: say so before asking for something it will refuse.
     const refusal = need.setting ? phoneRefusal(state, need.setting) : undefined;
     if (refusal) {
-      void services.prompts.showErrorMessage(`Sailfish: "${device}": ${refusal}`);
+      void services.prompts.showErrorMessage(`Sardina: "${device}": ${refusal}`);
       return undefined;
     }
     return state;
@@ -205,7 +205,7 @@ export async function ensureAgentProbe(
   }
   void services.prompts.showErrorMessage(
     state.state === 'running'
-      ? `Sailfish: Developer Mode is off on "${device}", so the device agent refuses requests. Turn it on in Settings → Developer tools.`
+      ? `Sardina: Developer Mode is off on "${device}", so the device agent refuses requests. Turn it on in Settings → Developer tools.`
       : describeProbe(device, state),
   );
   return undefined;
@@ -250,13 +250,13 @@ export async function detectArch(
   if (fromRpm) return { arch: fromRpm };
   const uname = await services.runner.run({ args: ['device', 'exec', '--', 'uname', '-m'], device, timeoutMs: REQUEST_TIMEOUT_MS, token });
   if (uname.exitCode !== 0) {
-    return { error: `Sailfish: could not tell the architecture of "${device}" (see the Sailfish OS output).` };
+    return { error: `Sardina: could not tell the architecture of "${device}" (see the Sardina output).` };
   }
   const arch = archFromOutput(uname.stdout);
   if (!arch) {
     const machine = uname.stdout.trim().split(/\r?\n/)[0] || 'unknown';
     return {
-      error: `Sailfish: the device agent does not support the architecture of "${device}" (${machine}); supported: ${AGENT_ARCHES.join(', ')}.`,
+      error: `Sardina: the device agent does not support the architecture of "${device}" (${machine}); supported: ${AGENT_ARCHES.join(', ')}.`,
     };
   }
   return { arch };
@@ -299,7 +299,7 @@ export async function installAgentOn(
   if (!consented) {
     const modules = AGENT_MODULES.filter((m) => parts.includes(m));
     const consent = await services.prompts.showWarningMessage(
-      `Sailfish: install the device agent on "${device}"?`,
+      `Sardina: install the device agent on "${device}"?`,
       { modal: true, detail: installConsentDetail(device, modules) },
       INSTALL_AGENT,
     );
@@ -307,7 +307,7 @@ export async function installAgentOn(
   }
 
   const prepared = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Sailfish: preparing the device agent for "${device}"…`, cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: `Sardina: preparing the device agent for "${device}"…`, cancellable: true },
     async (progress, token): Promise<boolean> => {
       progress.report({ message: 'checking the architecture…' });
       const detected = await detectArch(services, device, token);
@@ -326,7 +326,7 @@ export async function installAgentOn(
       }
       const rpms = pickAgentRpms(arch, files, parts);
       if (!rpms) {
-        void services.prompts.showErrorMessage(`Sailfish: this extension build ships no ${AGENT_PACKAGE} RPMs for ${arch} (expected in ${dir}).`);
+        void services.prompts.showErrorMessage(`Sardina: this extension build ships no ${AGENT_PACKAGE} RPMs for ${arch} (expected in ${dir}).`);
         return false;
       }
       // A copy left by an install that never finished would be installed with the new ones.
@@ -335,7 +335,7 @@ export async function installAgentOn(
         progress.report({ message: `copying ${rpm.file}…` });
         if (!(await copyRpm(services, device, path.join(dir, rpm.file), rpm.copyName, token))) {
           if (!token.isCancellationRequested) {
-            void services.prompts.showErrorMessage(`Sailfish: copying ${rpm.file} to "${device}" failed (see the Sailfish OS output).`);
+            void services.prompts.showErrorMessage(`Sardina: copying ${rpm.file} to "${device}" failed (see the Sardina output).`);
           }
           return false;
         }
@@ -349,7 +349,7 @@ export async function installAgentOn(
   const exitCode = await runAsRootOnDevice(services, device, {
     title: `Install the device agent on "${device}"`,
     prompt: 'Developer-mode password of the device (Settings → Developer tools).',
-    progressTitle: `Sailfish: install the device agent on "${device}"`,
+    progressTitle: `Sardina: install the device agent on "${device}"`,
     script: INSTALL_SCRIPT,
     timeoutMs: ROOT_TIMEOUT_MS,
   });
@@ -361,7 +361,7 @@ export async function installAgentOn(
   }
   if (exitCode !== 0) {
     void services.prompts.showErrorMessage(
-      `Sailfish: installing the device agent on "${device}" failed (exit ${exitCode}). Check the password, and the Sailfish OS output channel for rpm's message.`,
+      `Sardina: installing the device agent on "${device}" failed (exit ${exitCode}). Check the password, and the Sardina output channel for rpm's message.`,
     );
     return false;
   }
@@ -442,7 +442,7 @@ async function cleanUpAfterUninstall(services: Services, device: string): Promis
  */
 async function restartHomeScreen(services: Services, device: string): Promise<void> {
   const confirm = await services.prompts.showWarningMessage(
-    `Sailfish: ${restartHomeScreenConfirm(device)}`,
+    `Sardina: ${restartHomeScreenConfirm(device)}`,
     { modal: true },
     RESTART_HOME_SCREEN,
   );
@@ -452,8 +452,8 @@ async function restartHomeScreen(services: Services, device: string): Promise<vo
     device,
     timeoutMs: REQUEST_TIMEOUT_MS,
   });
-  if (result.exitCode === 0) void services.prompts.showInformationMessage(`Sailfish: the home screen on "${device}" was restarted.`);
-  else void services.prompts.showErrorMessage(`Sailfish: restarting the home screen on "${device}" failed (exit ${result.exitCode}).`);
+  if (result.exitCode === 0) void services.prompts.showInformationMessage(`Sardina: the home screen on "${device}" was restarted.`);
+  else void services.prompts.showErrorMessage(`Sardina: restarting the home screen on "${device}" failed (exit ${result.exitCode}).`);
 }
 
 function restartHomeScreenCommand(services: Services) {
@@ -492,17 +492,17 @@ function uninstallAgent(services: Services) {
     const exitCode = await runAsRootOnDevice(services, device, {
       title: `Uninstall ${what} from "${device}"`,
       prompt: 'Developer-mode password of the device (Settings → Developer tools).',
-      progressTitle: `Sailfish: remove ${what} from "${device}"`,
+      progressTitle: `Sardina: remove ${what} from "${device}"`,
       script: modules ? uninstallModulesScript(modules) : UNINSTALL_SCRIPT,
       timeoutMs: ROOT_TIMEOUT_MS,
     });
     if (exitCode === undefined) return;
     if (exitCode !== 0) {
       void services.prompts.showErrorMessage(
-        `Sailfish: removing ${what} from "${device}" failed (exit ${exitCode}). Check the password, and the Sailfish OS output channel for rpm's message.`,
+        `Sardina: removing ${what} from "${device}" failed (exit ${exitCode}). Check the password, and the Sardina output channel for rpm's message.`,
       );
     } else if (modules) {
-      void services.prompts.showInformationMessage(`Sailfish: removed ${what} from "${device}".`);
+      void services.prompts.showInformationMessage(`Sardina: removed ${what} from "${device}".`);
     } else {
       await cleanUpAfterUninstall(services, device);
     }
@@ -514,13 +514,13 @@ function agentStatus(ctx: vscode.ExtensionContext, services: Services) {
     const device = requireDevice(services, item);
     if (!device) return;
     const state = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Sailfish: asking the device agent on "${device}"…`, cancellable: true },
+      { location: vscode.ProgressLocation.Notification, title: `Sardina: asking the device agent on "${device}"…`, cancellable: true },
       (_progress, token) => probe(services, device, token),
     );
     const bundled = await newerBundledAgent(ctx, state);
     if (state.state === 'running' && bundled) {
       updateOffered.add(device);
-      const message = `${describeProbe(device, state)} ${agentUpdateNotice(device, state.version, bundled).replace(/^Sailfish: /, 'Update available: ')}`;
+      const message = `${describeProbe(device, state)} ${agentUpdateNotice(device, state.version, bundled).replace(/^Sardina: /, 'Update available: ')}`;
       void services.prompts.showInformationMessage(message, UPDATE_AGENT).then((choice) => {
         if (choice === UPDATE_AGENT) void updateAgentOn(ctx, services, device, state);
       });
@@ -537,26 +537,26 @@ async function captureScreenshot(services: Services, device: string, token: vsco
   const reply = parseAgentReply(shot.stdout);
   if (shot.exitCode !== 0 || !reply?.ok || !reply.path) {
     if (!token.isCancellationRequested) {
-      void services.prompts.showErrorMessage(`Sailfish: the device agent could not take a screenshot: ${reply?.error ? describeAgentRefusal(reply.error) : shot.stderr.trim() || `exit ${shot.exitCode}`}`);
+      void services.prompts.showErrorMessage(`Sardina: the device agent could not take a screenshot: ${reply?.error ? describeAgentRefusal(reply.error) : shot.stderr.trim() || `exit ${shot.exitCode}`}`);
     }
     return undefined;
   }
   if (!isScreenshotPath(reply.path)) {
     services.output.log('error', `device agent returned an unexpected screenshot path: ${reply.path}`);
-    void services.prompts.showErrorMessage('Sailfish: the device agent returned an unexpected screenshot path (see the Sailfish OS output).');
+    void services.prompts.showErrorMessage('Sardina: the device agent returned an unexpected screenshot path (see the Sardina output).');
     return undefined;
   }
   try {
     const fetched = await services.runner.run({ args: ['device', 'exec', '--', 'base64', reply.path], device, timeoutMs: FETCH_TIMEOUT_MS, token });
     if (fetched.exitCode !== 0) {
       if (!token.isCancellationRequested) {
-        void services.prompts.showErrorMessage(`Sailfish: fetching the screenshot from "${device}" failed (see the Sailfish OS output).`);
+        void services.prompts.showErrorMessage(`Sardina: fetching the screenshot from "${device}" failed (see the Sardina output).`);
       }
       return undefined;
     }
     const png = decodeBase64Output(fetched.stdout);
     if (!isPng(png)) {
-      void services.prompts.showErrorMessage(`Sailfish: the screenshot fetched from "${device}" is not a PNG file.`);
+      void services.prompts.showErrorMessage(`Sardina: the screenshot fetched from "${device}" is not a PNG file.`);
       return undefined;
     }
     return png;
@@ -579,7 +579,7 @@ function takeScreenshot(ctx: vscode.ExtensionContext, services: Services) {
     if (!(await ensureAgent(ctx, services, device, NEED.screenshot))) return;
 
     const png = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Sailfish: taking a screenshot of "${device}"…`, cancellable: true },
+      { location: vscode.ProgressLocation.Notification, title: `Sardina: taking a screenshot of "${device}"…`, cancellable: true },
       (_progress, token) => captureScreenshot(services, device, token),
     );
     if (!png) return;
@@ -597,19 +597,19 @@ function takeScreenshot(ctx: vscode.ExtensionContext, services: Services) {
       await fs.writeFile(target.fsPath, png);
     } catch (err) {
       void services.prompts.showErrorMessage(
-        `Sailfish: could not save the screenshot to ${target.fsPath}: ${err instanceof Error ? err.message : String(err)}`,
+        `Sardina: could not save the screenshot to ${target.fsPath}: ${err instanceof Error ? err.message : String(err)}`,
       );
       return;
     }
     await ctx.globalState.update(LAST_FOLDER_KEY, path.dirname(target.fsPath));
     await vscode.commands.executeCommand('vscode.open', target);
-    void services.prompts.showInformationMessage(`Sailfish: screenshot saved to ${target.fsPath}`, REVEAL).then((choice) => {
+    void services.prompts.showInformationMessage(`Sardina: screenshot saved to ${target.fsPath}`, REVEAL).then((choice) => {
       if (choice === REVEAL) void vscode.commands.executeCommand('revealFileInOS', target);
     });
   };
 }
 
-/** Show Device Logs: streams the device journal into the "Sailfish Device Log" output channel until stopped. */
+/** Show Device Logs: streams the device journal into the "Sardina Device Log" output channel until stopped. */
 function showLogs(ctx: vscode.ExtensionContext, services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
@@ -621,12 +621,12 @@ function showLogs(ctx: vscode.ExtensionContext, services: Services) {
 
 export function activateDeviceAgent(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.agent.install', installAgent(ctx, services)),
-    vscode.commands.registerCommand('sailfish.agent.uninstall', uninstallAgent(services)),
-    vscode.commands.registerCommand('sailfish.agent.status', agentStatus(ctx, services)),
-    vscode.commands.registerCommand('sailfish.agent.screenshot', takeScreenshot(ctx, services)),
-    vscode.commands.registerCommand('sailfish.agent.logs', showLogs(ctx, services)),
-    vscode.commands.registerCommand('sailfish.device.restartHomeScreen', restartHomeScreenCommand(services)),
+    vscode.commands.registerCommand('sardina.agent.install', installAgent(ctx, services)),
+    vscode.commands.registerCommand('sardina.agent.uninstall', uninstallAgent(services)),
+    vscode.commands.registerCommand('sardina.agent.status', agentStatus(ctx, services)),
+    vscode.commands.registerCommand('sardina.agent.screenshot', takeScreenshot(ctx, services)),
+    vscode.commands.registerCommand('sardina.agent.logs', showLogs(ctx, services)),
+    vscode.commands.registerCommand('sardina.device.restartHomeScreen', restartHomeScreenCommand(services)),
   );
   activateDeviceLog(ctx, services, clientArgs);
   activateMirror(ctx, services);

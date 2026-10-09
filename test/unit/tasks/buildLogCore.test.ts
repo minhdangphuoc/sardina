@@ -4,7 +4,7 @@ import { BUILD_LOG_CHANNEL_NAME, formatStepFooter, formatStepHeader, mapBuildLog
 
 describe('buildLogCore', () => {
   it('names the channel', () => {
-    assert.strictEqual(BUILD_LOG_CHANNEL_NAME, 'Sailfish OS Build');
+    assert.strictEqual(BUILD_LOG_CHANNEL_NAME, 'Sardina Build');
   });
 
   it('formats the step header with the command line and time', () => {

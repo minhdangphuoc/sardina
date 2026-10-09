@@ -12,7 +12,7 @@ export function checkProjectName(name: string): NameCheck {
     return { ok: false, error: 'Project name must match ^[a-z][a-z0-9-]*$' };
   }
   if (!name.startsWith('harbour-')) {
-    return { ok: true, warning: 'Sailfish Harbour packages are conventionally named "harbour-<name>"' };
+    return { ok: true, warning: 'SFOS Harbour packages are conventionally named "harbour-<name>"' };
   }
   return { ok: true };
 }

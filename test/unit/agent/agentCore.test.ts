@@ -472,7 +472,7 @@ describe('agentCore phone settings (agent 1.9.0)', () => {
 
   it('describeProbe: unchanged without settings, then none, one and three permissions off', () => {
     const base = { state: 'running', version: '1.9.0', developerMode: true } as const;
-    assert.strictEqual(describeProbe('d', base), 'Sailfish: device agent 1.9.0 is running on "d"; Developer Mode is on.');
+    assert.strictEqual(describeProbe('d', base), 'Sardina: device agent 1.9.0 is running on "d"; Developer Mode is on.');
     assert.match(describeProbe('d', { ...base, settings: { screenView: true, control: true, logs: true } }), /On the phone: the phone allows screen view, control and logs\.$/);
     assert.match(describeProbe('d', { ...base, settings: { control: false } }), /the phone has turned off control \(Settings → System → Developer agent\)\.$/);
     assert.match(describeProbe('d', { ...base, settings: { screenView: false, control: false, logs: false } }), /turned off screen view, control, logs /);

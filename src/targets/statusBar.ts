@@ -7,7 +7,7 @@ import { computeStatusBarState } from './statusBarCore';
 export type { StatusBarState } from './statusBarCore';
 export { computeStatusBarState } from './statusBarCore';
 
-/** The workspace folder whose `sailfish.target` this status bar reflects (mirrors contextKeys.ts's scopeFolder). */
+/** The workspace folder whose `sardina.target` this status bar reflects (mirrors contextKeys.ts's scopeFolder). */
 export function scopeFolder(services: Services): vscode.WorkspaceFolder | undefined {
   const activeUri = vscode.window.activeTextEditor?.document.uri;
   if (activeUri) {
@@ -29,12 +29,12 @@ export class TargetStatusBar {
 
   constructor(private readonly services: Services) {
     this.item = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
-    this.item.command = 'sailfish.selectTarget';
+    this.item.command = 'sardina.selectTarget';
   }
 
   refresh(): void {
-    const isProject = this.services.contextKeys.get('sailfish.isProject') === true;
-    const sdkAvailable = this.services.contextKeys.get('sailfish.sdkAvailable') === true;
+    const isProject = this.services.contextKeys.get('sardina.isProject') === true;
+    const sdkAvailable = this.services.contextKeys.get('sardina.sdkAvailable') === true;
     const folder = scopeFolder(this.services);
     const target = this.services.settings.get('target', folder?.uri);
     const knownTargetNames = getLastTargetList()?.map((t) => t.name);

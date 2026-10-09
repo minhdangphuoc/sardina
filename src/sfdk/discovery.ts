@@ -16,7 +16,7 @@ const DOWNLOAD_ACTION = 'Download SDK';
 const INSTALL_ACTION = 'Install instructions';
 const DONT_SHOW_ACTION = "Don't show again";
 const INSTALL_URL = 'https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/';
-const WINDOWS_MESSAGE = 'Sailfish OS Tools does not support Windows yet (sfdk requires MSYS2)';
+const WINDOWS_MESSAGE = 'Sardina does not support Windows yet (sfdk requires MSYS2)';
 const VERSION_PROBE_TIMEOUT_MS = 15000;
 
 interface SdkCandidate {
@@ -86,7 +86,7 @@ function findSdkCandidate(services: Services): SdkCandidate | undefined {
 }
 
 /**
- * Locates and version-gates the Sailfish SDK per FR-1.1 (setting > env > home >
+ * Locates and version-gates the SFOS SDK per FR-1.1 (setting > env > home >
  * PATH), FR-1.2 (version gate) and FR-1.7 (Windows gate).
  */
 export class SdkLocator {
@@ -114,7 +114,7 @@ export class SdkLocator {
     this.notFoundWarned = true;
     void this.services.prompts
       .showWarningMessage(
-        'Sailfish: could not find the Sailfish SDK. Set the SDK path to enable Sailfish commands.',
+        'Sardina: could not find the SFOS SDK. Set the SDK path to enable Sardina commands.',
         DOWNLOAD_ACTION,
         SET_SDK_PATH_ACTION,
         INSTALL_ACTION,
@@ -122,9 +122,9 @@ export class SdkLocator {
       )
       .then((choice) => {
         if (choice === SET_SDK_PATH_ACTION) {
-          void vscode.commands.executeCommand('sailfish.setSdkPath');
+          void vscode.commands.executeCommand('sardina.setSdkPath');
         } else if (choice === DOWNLOAD_ACTION) {
-          void vscode.commands.executeCommand('sailfish.downloadSdk');
+          void vscode.commands.executeCommand('sardina.downloadSdk');
         } else if (choice === INSTALL_ACTION) {
           void vscode.env.openExternal(vscode.Uri.parse(INSTALL_URL));
         }
@@ -137,16 +137,16 @@ export class SdkLocator {
         this.windowsWarned = true;
         void this.services.prompts.showInformationMessage(WINDOWS_MESSAGE);
       }
-      await this.services.contextKeys.set('sailfish.platformSupported', false);
-      await this.services.contextKeys.set('sailfish.sdkAvailable', false);
+      await this.services.contextKeys.set('sardina.platformSupported', false);
+      await this.services.contextKeys.set('sardina.sdkAvailable', false);
       this.setInfo(undefined);
       return undefined;
     }
-    await this.services.contextKeys.set('sailfish.platformSupported', true);
+    await this.services.contextKeys.set('sardina.platformSupported', true);
 
     const candidate = findSdkCandidate(this.services);
     if (!candidate) {
-      await this.services.contextKeys.set('sailfish.sdkAvailable', false);
+      await this.services.contextKeys.set('sardina.sdkAvailable', false);
       this.setInfo(undefined);
       this.warnNotFound();
       return undefined;
@@ -160,7 +160,7 @@ export class SdkLocator {
     this.services.output.logInvocation(result.argv, result.exitCode, result.durationMs);
 
     if (result.exitCode !== 0) {
-      await this.services.contextKeys.set('sailfish.sdkAvailable', false);
+      await this.services.contextKeys.set('sardina.sdkAvailable', false);
       this.setInfo(undefined);
       this.warnNotFound();
       return undefined;
@@ -172,17 +172,17 @@ export class SdkLocator {
     if (parsed && compareSemverLike(parsed, MIN_VERSION) < 0) {
       this.services.output.log(
         'warn',
-        `Sailfish SDK ${version} is older than the minimum supported version ${MIN_VERSION.raw}; some features may not work as expected.`,
+        `SFOS SDK ${version} is older than the minimum supported version ${MIN_VERSION.raw}; some features may not work as expected.`,
       );
     } else if (!parsed) {
       this.services.output.log(
         'warn',
-        'Could not determine the Sailfish SDK version from sfdk --version output; skipping the version gate.',
+        'Could not determine the SFOS SDK version from sfdk --version output; skipping the version gate.',
       );
     }
 
     const info: SdkInfo = { root: candidate.root, sfdkPath: candidate.sfdkPath, version, source: candidate.source };
-    await this.services.contextKeys.set('sailfish.sdkAvailable', true);
+    await this.services.contextKeys.set('sardina.sdkAvailable', true);
     this.setInfo(info);
     return info;
   }
@@ -198,21 +198,21 @@ async function pickSdkPath(services: Services): Promise<void> {
     canSelectFolders: true,
     canSelectFiles: false,
     canSelectMany: false,
-    openLabel: 'Select Sailfish SDK root',
+    openLabel: 'Select SFOS SDK root',
     defaultUri: current ? vscode.Uri.file(current) : undefined,
   });
   const picked = uris?.[0];
   if (!picked) {
     return;
   }
-  await vscode.workspace.getConfiguration('sailfish').update('sdkPath', picked.fsPath, vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration('sardina').update('sdkPath', picked.fsPath, vscode.ConfigurationTarget.Global);
 }
 
 const ONLINE_VARIANT = 'Online installer (recommended: small download, fetches the rest during install)';
 const OFFLINE_VARIANT = 'Offline installer (large download, nothing more to fetch during install)';
 
 /**
- * "Sailfish: Download SDK" — opens the platform-specific installer download in the
+ * "Sardina: Download SDK" — opens the platform-specific installer download in the
  * browser. Never downloads or executes anything itself; the user runs the fetched
  * installer. The version list comes from the releases directory listing (deprecated
  * releases hidden, newest first and preselected); if it can't be read, the newest
@@ -258,7 +258,7 @@ async function downloadSdk(services: Services): Promise<void> {
   const url = await resolveDownloadUrl(process.platform, variant, chosen);
   if (!url) {
     void services.prompts.showWarningMessage(
-      "Sailfish: couldn't determine the direct download link (offline, or the page changed) — opening the install docs instead.",
+      "Sardina: couldn't determine the direct download link (offline, or the page changed) — opening the install docs instead.",
     );
     void vscode.env.openExternal(vscode.Uri.parse(INSTALL_URL));
     return;
@@ -267,12 +267,12 @@ async function downloadSdk(services: Services): Promise<void> {
   if (services.sdk.current()) {
     void services.prompts
       .showInformationMessage(
-        `Sailfish: the installer is downloading in your browser. This window keeps using the SDK at ${services.sdk.current()?.root}; once the new one is installed, choose it with "${SET_SDK_PATH_ACTION}".`,
+        `Sardina: the installer is downloading in your browser. This window keeps using the SDK at ${services.sdk.current()?.root}; once the new one is installed, choose it with "${SET_SDK_PATH_ACTION}".`,
         SET_SDK_PATH_ACTION,
       )
       .then((choice) => {
         if (choice === SET_SDK_PATH_ACTION) {
-          void vscode.commands.executeCommand('sailfish.setSdkPath');
+          void vscode.commands.executeCommand('sardina.setSdkPath');
         }
       });
   }
@@ -281,10 +281,10 @@ async function downloadSdk(services: Services): Promise<void> {
 export function activateSdk(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(services.sdk);
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.setSdkPath', () => pickSdkPath(services)),
-    vscode.commands.registerCommand('sailfish.downloadSdk', () => downloadSdk(services)),
-    vscode.commands.registerCommand('sailfish.sdk.install', () => {
-      const category = `${ctx.extension.id}#sailfish.gettingStarted`;
+    vscode.commands.registerCommand('sardina.setSdkPath', () => pickSdkPath(services)),
+    vscode.commands.registerCommand('sardina.downloadSdk', () => downloadSdk(services)),
+    vscode.commands.registerCommand('sardina.sdk.install', () => {
+      const category = `${ctx.extension.id}#sardina.gettingStarted`;
       return vscode.commands.executeCommand('workbench.action.openWalkthrough', { category, step: `${category}#installSdk` }, false);
     }),
     services.settings.onDidChange('sdkPath', () => void services.sdk.refresh()),

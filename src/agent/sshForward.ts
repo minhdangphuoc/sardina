@@ -44,7 +44,7 @@ const HOST_KEY_FILES = [
 ];
 const SSH_PID_FILE = 'ssh.pid';
 const SOCKET_FILE = 'agent.sock';
-const SOCKET_PATH_STATE_PREFIX = 'sailfish.mirror.socketPath.';
+const SOCKET_PATH_STATE_PREFIX = 'sardina.mirror.socketPath.';
 
 export interface ForwardExit {
   code: number | null;
@@ -637,7 +637,7 @@ export function rememberSocketPath(ctx: vscode.ExtensionContext, device: string,
 
 /**
  * The device with its ssh endpoint (host, port, user, key). From a Devices/Emulators view item that
- * already has one it is returned as is; otherwise (palette with the `sailfish.device` setting, or an
+ * already has one it is returned as is; otherwise (palette with the `sardina.device` setting, or an
  * emulator row without an endpoint) `sfdk device list` is run and matched by `sfdkDeviceName`.
  */
 export async function resolveDeviceEndpoint(

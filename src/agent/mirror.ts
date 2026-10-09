@@ -81,7 +81,7 @@ export { FORWARD_FIRST_BYTE_MS, FORWARD_IDLE_MS, FORWARD_READY_TIMEOUT_MS, FORWA
  */
 
 const INSTALL_AGENT = 'Install Device Agent';
-const VIEW_TYPE = 'sailfish.mirror';
+const VIEW_TYPE = 'sardina.mirror';
 /** The agent's reason when the phone's "control" switch is off, and the strip's words for it. */
 const CONTROL_OFF_WIRE = 'control disabled on the phone';
 const CONTROL_OFF_TEXT = 'disabled on the phone';
@@ -1161,7 +1161,7 @@ function openMirror(
       if (state.state !== 'running') return;
       if (!agentSupportsMirror(state.version)) {
         const choice = await services.prompts.showWarningMessage(
-          `Sailfish: the device agent on "${device}" is ${state.version}; the screen mirror needs ${MIRROR_MIN_AGENT_VERSION}.`,
+          `Sardina: the device agent on "${device}" is ${state.version}; the screen mirror needs ${MIRROR_MIN_AGENT_VERSION}.`,
           INSTALL_AGENT,
         );
         if (choice !== INSTALL_AGENT) return;
@@ -1212,8 +1212,8 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
   const keypadContextChanged = (): void => {
     const active = [...sessions.values()].find((session) => session.panel.active && session.keypadInfo() !== undefined);
     const info = active?.keypadInfo();
-    void vscode.commands.executeCommand('setContext', 'sailfish.mirrorKeypad', info !== undefined);
-    void vscode.commands.executeCommand('setContext', 'sailfish.mirrorKeypadLayout', info !== undefined && keypadLayouts.configured(info.model));
+    void vscode.commands.executeCommand('setContext', 'sardina.mirrorKeypad', info !== undefined);
+    void vscode.commands.executeCommand('setContext', 'sardina.mirrorKeypadLayout', info !== undefined && keypadLayouts.configured(info.model));
   };
   const activeKeypadSession = (): MirrorSession | undefined =>
     [...sessions.values()].find((session) => session.panel.active && session.keypadInfo() !== undefined);
@@ -1225,7 +1225,7 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
     try {
       await keypadLayouts.edit(info);
     } catch (err) {
-      void services.prompts.showErrorMessage(`Sailfish: keypad layout could not be edited: ${err instanceof Error ? err.message : String(err)}`);
+      void services.prompts.showErrorMessage(`Sardina: keypad layout could not be edited: ${err instanceof Error ? err.message : String(err)}`);
     }
     await refreshModel(info.model);
   };
@@ -1234,10 +1234,10 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
   keypadContextChanged();
   if (process.env.TEST_MODE === 'full') {
     ctx.subscriptions.push(
-      vscode.commands.registerCommand('sailfish._test.mirrorInput', (device: unknown, message: unknown) => {
+      vscode.commands.registerCommand('sardina._test.mirrorInput', (device: unknown, message: unknown) => {
         if (typeof device === 'string') sessions.get(device)?.inputForTest(message);
       }),
-      vscode.commands.registerCommand('sailfish._test.mirrorFocus', (device: unknown, focused: unknown) => {
+      vscode.commands.registerCommand('sardina._test.mirrorFocus', (device: unknown, focused: unknown) => {
         if (typeof device === 'string' && typeof focused === 'boolean') sessions.get(device)?.focusForTest(focused);
       }),
     );
@@ -1245,12 +1245,12 @@ export function activateMirror(ctx: vscode.ExtensionContext, services: Services)
   ctx.subscriptions.push(
     keypadLayouts,
     keypadLayouts.onDidChange((model) => { void refreshModel(model); }),
-    vscode.commands.registerCommand('sailfish.agent.mirror', openMirror(ctx, services, sessions, keypadLayouts, keypadContextChanged, editKeypadLayout)),
-    vscode.commands.registerCommand('sailfish.agent.editKeypadLayout', async () => {
+    vscode.commands.registerCommand('sardina.agent.mirror', openMirror(ctx, services, sessions, keypadLayouts, keypadContextChanged, editKeypadLayout)),
+    vscode.commands.registerCommand('sardina.agent.editKeypadLayout', async () => {
       const info = activeKeypadSession()?.keypadInfo();
       if (info) await editKeypadLayout(info);
     }),
-    vscode.commands.registerCommand('sailfish.agent.resetKeypadLayout', async () => {
+    vscode.commands.registerCommand('sardina.agent.resetKeypadLayout', async () => {
       const session = activeKeypadSession();
       const info = session?.keypadInfo();
       if (info && await keypadLayouts.reset(info)) await refreshModel(info.model);

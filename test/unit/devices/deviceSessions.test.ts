@@ -65,11 +65,11 @@ describe('switch notice', () => {
       stopped: [{ kind: 'debug', label: 'debugging' }, { kind: 'app', label: 'cameragallery' }, { kind: 'logs', label: 'device logs' }],
       failed: [],
     });
-    assert.strictEqual(msg, 'Sailfish: Stopped on "Old": debugging, cameragallery, device logs. Now using "New".');
+    assert.strictEqual(msg, 'Sardina: Stopped on "Old": debugging, cameragallery, device logs. Now using "New".');
   });
   it('names failures and an empty selection', () => {
     const msg = switchNotice('Old', undefined, { stopped: [], failed: [{ kind: 'mirror', label: 'screen mirror', reason: 'did not stop within 10s' }] });
-    assert.strictEqual(msg, 'Sailfish: Could not stop cleanly on "Old": screen mirror (did not stop within 10s). No device selected.');
+    assert.strictEqual(msg, 'Sardina: Could not stop cleanly on "Old": screen mirror (did not stop within 10s). No device selected.');
   });
 });
 
@@ -104,10 +104,10 @@ describe('DeviceSessions change events and builders', () => {
   it('builds the tree description and the stop notice', () => {
     assert.strictEqual(sessionDescription([{ kind: 'debug', label: 'debugging' }, { kind: 'logs', label: 'device logs' }, { kind: 'app', label: 'debugging' }]), 'debugging · device logs');
     assert.strictEqual(sessionDescription([]), '');
-    assert.strictEqual(stopNotice('A', { stopped: [], failed: [] }), 'Sailfish: Nothing is running on "A".');
+    assert.strictEqual(stopNotice('A', { stopped: [], failed: [] }), 'Sardina: Nothing is running on "A".');
     assert.strictEqual(
       stopNotice('A', { stopped: [{ kind: 'debug', label: 'debugging' }], failed: [] }),
-      'Sailfish: Stopped on "A": debugging.',
+      'Sardina: Stopped on "A": debugging.',
     );
   });
 });
@@ -199,7 +199,7 @@ describe('DeviceSessions ids, stopOne and metadata', () => {
     assert.strictEqual(sessionDescription(r.activeFor('A')), 'device logs · app monitor');
     assert.strictEqual(
       switchNotice('A', 'B', { stopped: r.activeFor('A'), failed: [] }),
-      'Sailfish: Stopped on "A": device logs, app monitor. Now using "B".',
+      'Sardina: Stopped on "A": device logs, app monitor. Now using "B".',
     );
   });
 });

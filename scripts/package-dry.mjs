@@ -22,8 +22,8 @@ if (ls.status !== 0) {
   process.exit(ls.status ?? 1);
 }
 
-const tmp = mkdtempSync(path.join(tmpdir(), 'sailfish-tools-vsix-'));
-const vsixPath = path.join(tmp, 'sailfish-tools.vsix');
+const tmp = mkdtempSync(path.join(tmpdir(), 'sardina-vsix-'));
+const vsixPath = path.join(tmp, 'sardina.vsix');
 
 let exitCode = 0;
 try {

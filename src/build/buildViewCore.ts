@@ -68,7 +68,7 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
       description: input.target || 'not selected',
       icon: 'circuit-board',
       tooltip: 'Build target (click to change)',
-      command: 'sailfish.selectTarget',
+      command: 'sardina.selectTarget',
     },
     {
       id: 'device',
@@ -82,7 +82,7 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
           : deviceState === 'offline'
             ? `"${input.device}" is registered but not reachable (unplugged, asleep, or another network). Click to change.`
             : 'Deploy device (click to change)',
-      command: 'sailfish.device.setDefault',
+      command: 'sardina.device.setDefault',
     },
     {
       id: 'type',
@@ -90,7 +90,7 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
       description: BUILD_TYPES.find((c) => c.value === input.buildType)?.label ?? input.buildType,
       icon: 'gear',
       tooltip: 'Build type (click to change)',
-      command: 'sailfish.selectBuildType',
+      command: 'sardina.selectBuildType',
     },
     {
       id: 'deploy',
@@ -98,7 +98,7 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
       description: deployMethodLabel(input.deployMethod),
       icon: 'cloud-upload',
       tooltip: 'Deploy method (click to change)',
-      command: 'sailfish.selectDeployMethod',
+      command: 'sardina.selectDeployMethod',
     },
     {
       id: 'signing',
@@ -106,7 +106,7 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
       description: input.sign ? 'on' : 'off',
       icon: input.sign ? 'lock' : 'unlock',
       tooltip: 'Package signing (click to set up)',
-      command: 'sailfish.setupSigning',
+      command: 'sardina.setupSigning',
     },
     {
       id: 'last',
@@ -115,7 +115,7 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
       icon: lastIcon,
       color: lastColor,
       tooltip: 'Open the build log',
-      command: 'sailfish.showBuildLog',
+      command: 'sardina.showBuildLog',
     },
   ];
 }

@@ -3,7 +3,7 @@
  * free of any `vscode` import so unit tests (which run outside a VS Code
  * host) can assert package.json's schema against it directly.
  */
-export interface SailfishSettings {
+export interface SardinaSettings {
   sdkPath: string;
   devicesXmlPath: string;
   target: string;
@@ -32,7 +32,7 @@ export interface SailfishSettings {
   'experimental.msys2Shell': string;
 }
 
-export const DEFAULTS: SailfishSettings = {
+export const DEFAULTS: SardinaSettings = {
   sdkPath: '',
   devicesXmlPath: '',
   target: '',

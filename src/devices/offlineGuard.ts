@@ -65,7 +65,7 @@ export async function reportOffline(services: Services, device: string, detail?:
   const emulator = (await findDevice(device))?.kind === 'emulator';
   const choice = await services.prompts.showWarningMessage(offlineMessage(device, emulator), OPEN_DEVICES_VIEW, RETRY);
   if (choice === OPEN_DEVICES_VIEW) {
-    await vscode.commands.executeCommand('sailfish.devices.focus');
+    await vscode.commands.executeCommand('sardina.devices.focus');
     return false;
   }
   return choice === RETRY;
@@ -78,7 +78,7 @@ export async function reportOffline(services: Services, device: string, detail?:
 export async function ensureDeviceOnline(services: Services, device: string): Promise<boolean> {
   for (;;) {
     const state = await vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: 'Sailfish', cancellable: false },
+      { location: vscode.ProgressLocation.Notification, title: 'Sardina', cancellable: false },
       (progress) => {
         progress.report({ message: `connecting to "${device}"…` });
         return probeDevice(services, device);

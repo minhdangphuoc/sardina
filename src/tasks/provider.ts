@@ -1,38 +1,38 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
 import type { ProjectDescriptor } from '../core/types';
-import { SailfishPseudoterminal } from './pseudoterminal';
-import type { SailfishTaskDefinitionLike } from './argv';
+import { SardinaPseudoterminal } from './pseudoterminal';
+import type { SardinaTaskDefinitionLike } from './argv';
 
-export const SAILFISH_TASK_TYPE = 'sailfish';
+export const SARDINA_TASK_TYPE = 'sardina';
 
-export interface SailfishTaskDefinition extends vscode.TaskDefinition, SailfishTaskDefinitionLike {}
+export interface SardinaTaskDefinition extends vscode.TaskDefinition, SardinaTaskDefinitionLike {}
 
 function makeTask(
   services: Services,
   project: ProjectDescriptor,
-  def: SailfishTaskDefinitionLike,
+  def: SardinaTaskDefinitionLike,
   label: string,
 ): vscode.Task {
-  const definition: SailfishTaskDefinition = { type: SAILFISH_TASK_TYPE, ...def };
+  const definition: SardinaTaskDefinition = { type: SARDINA_TASK_TYPE, ...def };
   return new vscode.Task(
     definition,
     project.folder,
     label,
-    SAILFISH_TASK_TYPE,
+    SARDINA_TASK_TYPE,
     new vscode.CustomExecution(
-      () => Promise.resolve(new SailfishPseudoterminal(services, project, definition)),
+      () => Promise.resolve(new SardinaPseudoterminal(services, project, definition)),
     ),
   );
 }
 
 /** FR-5.8: groups + problem matchers per task command. */
-function applyGroupAndMatchers(task: vscode.Task, command: SailfishTaskDefinitionLike['command']): void {
+function applyGroupAndMatchers(task: vscode.Task, command: SardinaTaskDefinitionLike['command']): void {
   if (command === 'build') {
     task.group = vscode.TaskGroup.Build;
-    task.problemMatchers = ['$sailfish-gcc', '$sailfish-qmake', '$sailfish-rpmbuild'];
+    task.problemMatchers = ['$sardina-gcc', '$sardina-qmake', '$sardina-rpmbuild'];
   } else if (command === 'check') {
-    task.problemMatchers = ['$sailfish-rpmvalidator'];
+    task.problemMatchers = ['$sardina-rpmvalidator'];
   } else if (command === 'clean') {
     task.group = vscode.TaskGroup.Clean;
   } else if (command === 'package') {
@@ -40,7 +40,7 @@ function applyGroupAndMatchers(task: vscode.Task, command: SailfishTaskDefinitio
   }
 }
 
-/** FR-5.2: the fixed task list offered for each Sailfish project. */
+/** FR-5.2: the fixed task list offered for each SFOS project. */
 function tasksForProject(services: Services, project: ProjectDescriptor): vscode.Task[] {
   const build = makeTask(services, project, { command: 'build' }, 'build');
   applyGroupAndMatchers(build, 'build');
@@ -67,8 +67,8 @@ function tasksForProject(services: Services, project: ProjectDescriptor): vscode
   return [build, buildDebug, deploy, run, pkg, check, clean];
 }
 
-/** FR-5.1 TaskProvider for task type "sailfish". */
-export class SailfishTaskProvider implements vscode.TaskProvider {
+/** FR-5.1 TaskProvider for task type "sardina". */
+export class SardinaTaskProvider implements vscode.TaskProvider {
   constructor(private readonly services: Services) {}
 
   provideTasks(): vscode.Task[] {
@@ -76,8 +76,8 @@ export class SailfishTaskProvider implements vscode.TaskProvider {
   }
 
   resolveTask(task: vscode.Task): vscode.Task | undefined {
-    const def = task.definition as Partial<SailfishTaskDefinition>;
-    if (def.type !== SAILFISH_TASK_TYPE || !def.command) {
+    const def = task.definition as Partial<SardinaTaskDefinition>;
+    if (def.type !== SARDINA_TASK_TYPE || !def.command) {
       return undefined;
     }
     // task.scope is a WorkspaceFolder object, or a numeric TaskScope for workspace-/global-scoped tasks.
@@ -87,7 +87,7 @@ export class SailfishTaskProvider implements vscode.TaskProvider {
     if (!project) {
       return undefined;
     }
-    const full: SailfishTaskDefinitionLike = { ...def, command: def.command };
+    const full: SardinaTaskDefinitionLike = { ...def, command: def.command };
     const resolved = makeTask(this.services, project, full, task.name || def.command);
     applyGroupAndMatchers(resolved, def.command);
     return resolved;
@@ -96,6 +96,6 @@ export class SailfishTaskProvider implements vscode.TaskProvider {
 
 export function activateTasks(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(
-    vscode.tasks.registerTaskProvider(SAILFISH_TASK_TYPE, new SailfishTaskProvider(services)),
+    vscode.tasks.registerTaskProvider(SARDINA_TASK_TYPE, new SardinaTaskProvider(services)),
   );
 }

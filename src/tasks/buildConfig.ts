@@ -144,7 +144,7 @@ export function deviceTextWithSessions(device: string, sessions: ReadonlyArray<{
 export function sessionTooltip(device: string, sessions: ReadonlyArray<{ label: string }>): string {
   if (sessions.length === 0) return '';
   const labels = [...new Set(sessions.map((s) => s.label))].join(', ');
-  return `Active on "${device}": ${labels}.\nTo stop them, run "Sailfish: Stop Sessions on Device" (or use the stop button in the Devices view).`;
+  return `Active on "${device}": ${labels}.\nTo stop them, run "Sardina: Stop Sessions on Device" (or use the stop button in the Devices view).`;
 }
 
 /** The Debug action button text: `$(debug-alt) Debugging…` while a debug session runs on the selected device. */

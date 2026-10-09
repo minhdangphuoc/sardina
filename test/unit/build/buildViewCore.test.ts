@@ -21,12 +21,12 @@ describe('buildRows', () => {
       rows.map((r) => [r.id, r.command]),
       [
         ['project', undefined],
-        ['target', 'sailfish.selectTarget'],
-        ['device', 'sailfish.device.setDefault'],
-        ['type', 'sailfish.selectBuildType'],
-        ['deploy', 'sailfish.selectDeployMethod'],
-        ['signing', 'sailfish.setupSigning'],
-        ['last', 'sailfish.showBuildLog'],
+        ['target', 'sardina.selectTarget'],
+        ['device', 'sardina.device.setDefault'],
+        ['type', 'sardina.selectBuildType'],
+        ['deploy', 'sardina.selectDeployMethod'],
+        ['signing', 'sardina.setupSigning'],
+        ['last', 'sardina.showBuildLog'],
       ],
     );
     assert.strictEqual(rows[0].label, 'RAWfish');

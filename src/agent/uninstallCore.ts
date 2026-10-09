@@ -190,13 +190,13 @@ function listed(items: readonly string[], max = 3): string {
 
 /** The one notification after a successful root step: what was cleaned up and anything still there. */
 export function uninstallSummary(device: string, report: CleanupReport): { level: 'information' | 'warning'; message: string } {
-  const parts = [`Sailfish: the device agent was removed from "${device}".`];
+  const parts = [`Sardina: the device agent was removed from "${device}".`];
   const extra: string[] = [];
   if (report.removed.length > 0) extra.push(plural(report.removed.length, 'leftover item'));
   if (report.closed.length > 0) extra.push(plural(report.closed.length, 'notification'));
   if (extra.length > 0) parts.push(`Also removed ${extra.join(' and ')}.`);
   if (report.left.length > 0) {
-    parts.push(`Still on the device: ${listed(report.left)} (see the Sailfish OS output; root-owned items need "devel-su").`);
+    parts.push(`Still on the device: ${listed(report.left)} (see the Sardina output; root-owned items need "devel-su").`);
   }
   if (!report.complete) {
     parts.push('The final check did not finish, so leftovers could not be verified.');

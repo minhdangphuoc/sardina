@@ -24,7 +24,7 @@ const SHOW_OUTPUT_ACTION = 'Show Output';
 function notifyError(services: Services, message: string): void {
   void services.prompts.showErrorMessage(message, SHOW_OUTPUT_ACTION).then((choice) => {
     if (choice === SHOW_OUTPUT_ACTION) {
-      void vscode.commands.executeCommand('sailfish.showOutput');
+      void vscode.commands.executeCommand('sardina.showOutput');
     }
   });
 }
@@ -42,7 +42,7 @@ async function runWithProgress<T>(
         return await fn(token);
       } catch (err) {
         services.output.log('error', `${title} failed: ${err instanceof Error ? err.message : String(err)}`);
-        notifyError(services, `Sailfish: ${title} failed`);
+        notifyError(services, `Sardina: ${title} failed`);
         return undefined;
       }
     },
@@ -55,7 +55,7 @@ function notifyIfFailed(services: Services, title: string, result: SfdkResult): 
     return;
   }
   const firstLine = (result.stderr.trim() || result.stdout.trim() || `exit ${result.exitCode}`).split(/\r?\n/)[0];
-  notifyError(services, `Sailfish: ${title} failed: ${firstLine}`);
+  notifyError(services, `Sardina: ${title} failed: ${firstLine}`);
 }
 
 /** R25: names reach `sfdk <family> <verb> <name>` as one positional argv element with no validation upstream; reject anything option-like before it gets there. */
@@ -67,7 +67,7 @@ function rejectUnsafeName(services: Services, name: string): boolean {
   if (!isUnsafeName(name)) {
     return false;
   }
-  notifyError(services, `Sailfish: "${name}" looks like an option, not a device/emulator name; refusing to run sfdk`);
+  notifyError(services, `Sardina: "${name}" looks like an option, not a device/emulator name; refusing to run sfdk`);
   return true;
 }
 
@@ -75,7 +75,7 @@ function runEmulatorVerb(services: Services, provider: DevicesTreeDataProvider, 
   return async (item: unknown): Promise<void> => {
     const device = deviceFrom(item);
     if (!device) {
-      void services.prompts.showWarningMessage('Sailfish: select an emulator in the Devices view first.');
+      void services.prompts.showWarningMessage('Sardina: select an emulator in the Devices view first.');
       return;
     }
     if (rejectUnsafeName(services, device.name)) {
@@ -84,17 +84,17 @@ function runEmulatorVerb(services: Services, provider: DevicesTreeDataProvider, 
     const state = provider.reachabilityOf(device);
     if ((verb === 'start' && state === 'online') || (verb === 'stop' && state === 'offline')) {
       void services.prompts.showInformationMessage(
-        `Sailfish: emulator ${device.name} is already ${verb === 'start' ? 'running' : 'stopped'}.`,
+        `Sardina: emulator ${device.name} is already ${verb === 'start' ? 'running' : 'stopped'}.`,
       );
       return;
     }
-    const result = await runWithProgress(`Sailfish: emulator ${verb} ${device.name}`, services, (token) =>
+    const result = await runWithProgress(`Sardina: emulator ${verb} ${device.name}`, services, (token) =>
       services.runner.run({ args: ['emulator', verb, device.name], ensureEngine: false, token }),
     );
     if (result) {
       if (verb === 'status') {
         void services.prompts.showInformationMessage(
-          result.stdout.trim() || result.stderr.trim() || `Sailfish: emulator ${verb} finished (exit ${result.exitCode})`,
+          result.stdout.trim() || result.stderr.trim() || `Sardina: emulator ${verb} finished (exit ${result.exitCode})`,
         );
       } else {
         notifyIfFailed(services, `emulator ${verb} ${device.name}`, result);
@@ -106,7 +106,7 @@ function runEmulatorVerb(services: Services, provider: DevicesTreeDataProvider, 
 
 function runEngineVerb(services: Services, provider: DevicesTreeDataProvider, verb: 'start' | 'stop') {
   return async (): Promise<void> => {
-    const result = await runWithProgress(`Sailfish: engine ${verb}`, services, (token) =>
+    const result = await runWithProgress(`Sardina: engine ${verb}`, services, (token) =>
       services.runner.run({ args: ['engine', verb], ensureEngine: false, token }),
     );
     if (result) {
@@ -120,13 +120,13 @@ function showEmulator(services: Services) {
   return async (item: unknown): Promise<void> => {
     const device = deviceFrom(item);
     if (!device) {
-      void services.prompts.showWarningMessage('Sailfish: select an emulator in the Devices view first.');
+      void services.prompts.showWarningMessage('Sardina: select an emulator in the Devices view first.');
       return;
     }
     if (rejectUnsafeName(services, device.name)) {
       return;
     }
-    const result = await runWithProgress(`Sailfish: emulator show ${device.name}`, services, (token) =>
+    const result = await runWithProgress(`Sardina: emulator show ${device.name}`, services, (token) =>
       services.runner.run({ args: ['emulator', 'show', device.name], ensureEngine: false, token }),
     );
     if (!result) {
@@ -138,7 +138,7 @@ function showEmulator(services: Services) {
       services.output.log('info', `devices: correlated VirtualBox VM "${vmName}" for "${device.name}"`);
     }
     void services.prompts.showInformationMessage(
-      result.stdout.trim() || result.stderr.trim() || `Sailfish: emulator show ${device.name} (exit ${result.exitCode})`,
+      result.stdout.trim() || result.stderr.trim() || `Sardina: emulator show ${device.name} (exit ${result.exitCode})`,
     );
   };
 }
@@ -147,7 +147,7 @@ function showEmulator(services: Services) {
 async function pickAvailableDevice(services: Services, provider: DevicesTreeDataProvider): Promise<SfdkDeviceInfo | undefined> {
   const available = await provider.listAvailableForPick();
   if (available.length === 0) {
-    void services.prompts.showInformationMessage('Sailfish: no emulators available to install.');
+    void services.prompts.showInformationMessage('Sardina: no emulators available to install.');
     return undefined;
   }
   const picked = await services.prompts.showQuickPick(
@@ -166,7 +166,7 @@ function installAvailable(services: Services, provider: DevicesTreeDataProvider)
     if (rejectUnsafeName(services, device.name)) {
       return;
     }
-    const result = await runWithProgress(`Sailfish: install emulator ${device.name}`, services, (token) =>
+    const result = await runWithProgress(`Sardina: install emulator ${device.name}`, services, (token) =>
       services.runner.run({ args: ['emulator', 'install', device.name], ensureEngine: false, token }),
     );
     if (result) {
@@ -180,13 +180,13 @@ function installAvailable(services: Services, provider: DevicesTreeDataProvider)
 async function writeDefaultDeviceSetting(services: Services, name: string): Promise<boolean> {
   const folder = vscode.workspace.workspaceFolders?.[0];
   if (!folder) {
-    void services.prompts.showWarningMessage('Sailfish: no workspace folder to save the default device to');
+    void services.prompts.showWarningMessage('Sardina: no workspace folder to save the default device to');
     return false;
   }
-  const config = vscode.workspace.getConfiguration('sailfish', folder.uri);
+  const config = vscode.workspace.getConfiguration('sardina', folder.uri);
   await cleanUpBeforeSwitch(services, services.settings.get('device', folder.uri) || undefined, name);
   await config.update('device', name, vscode.ConfigurationTarget.WorkspaceFolder);
-  await services.contextKeys.set('sailfish.hasDevice', true);
+  await services.contextKeys.set('sardina.hasDevice', true);
   return true;
 }
 
@@ -194,7 +194,7 @@ async function writeDefaultDeviceSetting(services: Services, name: string): Prom
 async function pickInstalledDevice(services: Services, provider: DevicesTreeDataProvider): Promise<SfdkDeviceInfo | undefined> {
   const installed = await provider.listInstalledForPick();
   if (installed.length === 0) {
-    void services.prompts.showInformationMessage('Sailfish: no devices or emulators found.');
+    void services.prompts.showInformationMessage('Sardina: no devices or emulators found.');
     return undefined;
   }
   const items = installed.map((d) => `${d.name} (${d.kind})`);
@@ -214,7 +214,7 @@ function setDefault(services: Services, provider: DevicesTreeDataProvider) {
   };
 }
 
-/** Tree item or the selected device (`sailfish.device`); with several running devices and none selected, asks which. */
+/** Tree item or the selected device (`sardina.device`); with several running devices and none selected, asks which. */
 function stopSessions(services: Services) {
   return async (item: unknown): Promise<void> => {
     const fromItem = deviceFrom(item);
@@ -223,7 +223,7 @@ function stopSessions(services: Services) {
       const busy = deviceSessions.devices();
       name = busy.length === 1 ? busy[0] : await services.prompts.showQuickPick(busy, { placeHolder: 'Stop sessions on which device?' });
       if (!name) {
-        if (busy.length === 0) void services.prompts.showInformationMessage('Sailfish: no device selected and nothing is running.');
+        if (busy.length === 0) void services.prompts.showInformationMessage('Sardina: no device selected and nothing is running.');
         return;
       }
     }
@@ -241,7 +241,7 @@ function setSfdkDefault(services: Services, provider: DevicesTreeDataProvider) {
     if (!(await writeDefaultDeviceSetting(services, name))) {
       return;
     }
-    const result = await runWithProgress(`Sailfish: set sfdk default device ${name}`, services, (token) =>
+    const result = await runWithProgress(`Sardina: set sfdk default device ${name}`, services, (token) =>
       services.runner.run({ args: ['config', '--global', `device=${name}`], ensureEngine: false, token }),
     );
     provider.refresh();
@@ -255,7 +255,7 @@ function openSsh(services: Services) {
   return (item: unknown): void => {
     const device = deviceFrom(item);
     if (!device) {
-      void services.prompts.showWarningMessage('Sailfish: select a device in the Devices view first.');
+      void services.prompts.showWarningMessage('Sardina: select a device in the Devices view first.');
       return;
     }
     if (rejectUnsafeName(services, device.name)) {
@@ -263,7 +263,7 @@ function openSsh(services: Services) {
     }
     const sfdkPath = services.sdk.current()?.sfdkPath;
     if (!sfdkPath) {
-      notifyError(services, 'Sailfish SDK not found; commands are disabled until an SDK is configured.');
+      notifyError(services, 'SFOS SDK not found; commands are disabled until an SDK is configured.');
       return;
     }
     const launch = buildSshLaunch(device, sfdkPath);
@@ -279,7 +279,7 @@ function openSsh(services: Services) {
 const CUSTOM_USERNAME = 'Custom username…';
 
 /**
- * "Sailfish: Connect to Device (WLAN)" — opens a real interactive `ssh` terminal to a
+ * "Sardina: Connect to Device (WLAN)" — opens a real interactive `ssh` terminal to a
  * device by IP, independent of sfdk/devices.xml (no device needs to be registered first).
  * No password is ever read or handled here: the user types it into the opened terminal.
  */
@@ -302,7 +302,7 @@ function connectWlan(services: Services) {
       return;
     }
     const usernameChoice = await services.prompts.showQuickPick(['nemo', 'defaultuser', CUSTOM_USERNAME], {
-      placeHolder: 'Device username (nemo on Sailfish OS < 3.4.0, defaultuser on newer)',
+      placeHolder: 'Device username (nemo on SFOS < 3.4.0, defaultuser on newer)',
     });
     if (!usernameChoice) {
       return;
@@ -319,7 +319,7 @@ function connectWlan(services: Services) {
     }
     const launch = buildWlanSshLaunch(host, port, user);
     if (!launch) {
-      notifyError(services, `Sailfish: could not build an ssh command for ${user}@${host}:${port}`);
+      notifyError(services, `Sardina: could not build an ssh command for ${user}@${host}:${port}`);
       return;
     }
     const terminal = vscode.window.createTerminal({
@@ -334,11 +334,11 @@ function connectWlan(services: Services) {
   };
 }
 
-/** Registers the sailfish.devices view and its commands (FR-6.2..FR-6.8). */
+/** Registers the sardina.devices view and its commands (FR-6.2..FR-6.8). */
 export function activateDevices(ctx: vscode.ExtensionContext, services: Services): DevicesTreeDataProvider {
   const provider = new DevicesTreeDataProvider(services);
-  const sdkView = vscode.window.createTreeView('sailfish.sdk', { treeDataProvider: provider.section('sdk') });
-  const devicesView = vscode.window.createTreeView('sailfish.devices', { treeDataProvider: provider.section('devices') });
+  const sdkView = vscode.window.createTreeView('sardina.sdk', { treeDataProvider: provider.section('sdk') });
+  const devicesView = vscode.window.createTreeView('sardina.devices', { treeDataProvider: provider.section('devices') });
   const syncSdkDescription = (): void => {
     const info = services.sdk.current();
     sdkView.description = info ? sdkRootState(info, os.homedir()).description : undefined;
@@ -357,22 +357,22 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
   ctx.subscriptions.push({ dispose: () => setDeviceDirectory(undefined) });
 
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.devices.refresh', () => provider.refresh()),
-    vscode.commands.registerCommand('sailfish.emulator.start', runEmulatorVerb(services, provider, 'start')),
-    vscode.commands.registerCommand('sailfish.emulator.stop', runEmulatorVerb(services, provider, 'stop')),
-    vscode.commands.registerCommand('sailfish.emulator.status', runEmulatorVerb(services, provider, 'status')),
-    vscode.commands.registerCommand('sailfish.engine.start', runEngineVerb(services, provider, 'start')),
-    vscode.commands.registerCommand('sailfish.engine.stop', runEngineVerb(services, provider, 'stop')),
-    vscode.commands.registerCommand('sailfish.emulator.show', showEmulator(services)),
-    vscode.commands.registerCommand('sailfish.emulator.installAvailable', installAvailable(services, provider)),
-    vscode.commands.registerCommand('sailfish.device.setDefault', setDefault(services, provider)),
-    vscode.commands.registerCommand('sailfish.device.stopSessions', stopSessions(services)),
-    vscode.commands.registerCommand('sailfish.device.setSfdkDefault', setSfdkDefault(services, provider)),
-    vscode.commands.registerCommand('sailfish.device.openSsh', openSsh(services)),
-    vscode.commands.registerCommand('sailfish.device.connectWlan', connectWlan(services)),
-    vscode.commands.registerCommand('sailfish.device.add', addDevice(services, ctx)),
-    vscode.commands.registerCommand('sailfish.device.remove', removeDevice(services)),
-    vscode.commands.registerCommand('sailfish.device.installTools', installDeviceTools(services)),
+    vscode.commands.registerCommand('sardina.devices.refresh', () => provider.refresh()),
+    vscode.commands.registerCommand('sardina.emulator.start', runEmulatorVerb(services, provider, 'start')),
+    vscode.commands.registerCommand('sardina.emulator.stop', runEmulatorVerb(services, provider, 'stop')),
+    vscode.commands.registerCommand('sardina.emulator.status', runEmulatorVerb(services, provider, 'status')),
+    vscode.commands.registerCommand('sardina.engine.start', runEngineVerb(services, provider, 'start')),
+    vscode.commands.registerCommand('sardina.engine.stop', runEngineVerb(services, provider, 'stop')),
+    vscode.commands.registerCommand('sardina.emulator.show', showEmulator(services)),
+    vscode.commands.registerCommand('sardina.emulator.installAvailable', installAvailable(services, provider)),
+    vscode.commands.registerCommand('sardina.device.setDefault', setDefault(services, provider)),
+    vscode.commands.registerCommand('sardina.device.stopSessions', stopSessions(services)),
+    vscode.commands.registerCommand('sardina.device.setSfdkDefault', setSfdkDefault(services, provider)),
+    vscode.commands.registerCommand('sardina.device.openSsh', openSsh(services)),
+    vscode.commands.registerCommand('sardina.device.connectWlan', connectWlan(services)),
+    vscode.commands.registerCommand('sardina.device.add', addDevice(services, ctx)),
+    vscode.commands.registerCommand('sardina.device.remove', removeDevice(services)),
+    vscode.commands.registerCommand('sardina.device.installTools', installDeviceTools(services)),
   );
 
   return provider;

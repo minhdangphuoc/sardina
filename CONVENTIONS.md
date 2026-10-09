@@ -13,7 +13,7 @@ package.json, package-lock.json, tsconfig.json, tsconfig.test.json,
 esbuild.mjs, eslint.config.mjs, .vscodeignore, .gitignore, README.md,
 CHANGELOG.md, LICENSE, CONVENTIONS.md                                    [Scaffold]
 scripts/check-manifest.mjs, check-proprietary.mjs, package-dry.mjs       [Scaffold]
-resources/sailfish.svg                                                  [Scaffold]
+resources/sardina.svg                                                  [Scaffold]
 snippets/silica.code-snippets                                           [Task F]
 media/walkthrough/*.md                                                  [Task F]
 src/extension.ts                                                        [Scaffold — additive edits only]
@@ -61,8 +61,8 @@ Rules:
 
 ## Naming reconciliation
 
-- SDK location setting: `sailfish.sdkPath` (not `sailfish.sfdkPath`).
-- Output channel name: **Sailfish OS** (not "Sailfish Tools").
+- SDK location setting: `sardina.sdkPath` (not `sardina.sfdkPath`).
+- Output channel name: **Sardina** (not "Sailfish Tools").
 - Demo/fixture project name: `harbour-demo` (not `harbour-example`).
 - Fake sfdk layout: `test/fixtures/bin/{sfdk,sfdk.cmd,sfdk.js,_fake-core.js}`,
   `test/fixtures/sfdk/scenarios/<scenario>/<key>.stdout|.stderr|.exit|...`
@@ -86,17 +86,17 @@ Rules:
   `class ContextKeys { set(key, value): Promise<void>; get(key); snapshot() }` — implemented.
 - `src/settings/index.ts`:
   `class Settings { get<K>(key, scope?); onDidChange(key, listener) }` with
-  `SailfishSettings` listing every §4.6 v0.1 key (dotted keys like
+  `SardinaSettings` listing every §4.6 v0.1 key (dotted keys like
   `'build.jobs'` are TypeScript string-literal keys, not nested objects) —
   implemented.
 - `src/core/output.ts`:
   `class Output { log(level, msg); logInvocation(argv, exitCode, durationMs); show(); readonly channel }` —
-  implemented; channel name is **Sailfish OS**.
+  implemented; channel name is **SFOS**.
 
 Everything else not yet implemented throws `new Error('not implemented: Task X')`
 from its non-activation methods; each module's `activateX` registers its
 command ids with a handler that calls
-`services.prompts.showInformationMessage('Sailfish: <command> is not implemented yet (Task X)')`
+`services.prompts.showInformationMessage('Sardina: <command> is not implemented yet (Task X)')`
 so `npm run check:manifest` passes before the task lands.
 
 ## How to run each script

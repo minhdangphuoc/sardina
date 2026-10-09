@@ -46,7 +46,7 @@ function escapeRegExp(s: string): string {
 
 /**
  * Whether `%files` installs the app's binary: `%{_bindir}/<name>`, `%{_bindir}/*`, or the bare `%{_bindir}`
- * directory (what the stock Sailfish app template lists), each as its own whitespace-delimited token, not as a
+ * directory (what the stock SFOS app template lists), each as its own whitespace-delimited token, not as a
  * substring of a longer path. `/usr/bin` spellings count too.
  */
 function hasBindirEntry(filesText: string, name: string): boolean {

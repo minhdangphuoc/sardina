@@ -5,7 +5,7 @@ import { chooseLogFormat, clampLogLines, JournalLogSource, type LogEnd } from '.
 import { formatEntryLine, type JournalEntry } from './logModel';
 import type { AgentProbe } from '../agent/agentCore';
 
-export const LOG_CHANNEL_NAME = 'Sailfish Device Log';
+export const LOG_CHANNEL_NAME = 'Sardina Device Log';
 export const STOP_DEVICE_LOG = 'Stop';
 /** Lines kept for the test seam only (TEST_MODE=full). */
 const TEST_LINES_MAX = 5000;
@@ -26,7 +26,7 @@ interface Running {
 }
 
 /**
- * The one device log view: the journal of a device streamed into the "Sailfish Device Log" output
+ * The one device log view: the journal of a device streamed into the "Sardina Device Log" output
  * channel (JSON with a cursor when the agent supports it, text otherwise). One stream at a time;
  * the registry entry ('logs', 'device logs') lets a device switch stop it.
  */
@@ -61,7 +61,7 @@ export class DeviceLog {
     return this.running?.device;
   }
 
-  /** What `sailfish._test.deviceLog` returns. */
+  /** What `sardina._test.deviceLog` returns. */
   view(): { device?: string; running: boolean; lines: string[] } {
     return { ...(this.running ? { device: this.running.device } : {}), running: this.running !== undefined, lines: [...this.testLines] };
   }
@@ -70,7 +70,7 @@ export class DeviceLog {
   async show(device: string, agent: AgentProbe): Promise<void> {
     if (this.running?.device === device) {
       this.getChannel().show(true);
-      const choice = await this.services.prompts.showInformationMessage(`Sailfish: device logs are already streaming from "${device}".`, STOP_DEVICE_LOG);
+      const choice = await this.services.prompts.showInformationMessage(`Sardina: device logs are already streaming from "${device}".`, STOP_DEVICE_LOG);
       if (choice === STOP_DEVICE_LOG) this.stop();
       return;
     }
@@ -134,7 +134,7 @@ export class DeviceLog {
     src.onEnd((end) => this.onEnd(r, end));
     void src.start();
     void vscode.window.withProgress(
-      { location: vscode.ProgressLocation.Notification, title: `Sailfish: streaming device logs from "${device}"`, cancellable: true },
+      { location: vscode.ProgressLocation.Notification, title: `Sardina: streaming device logs from "${device}"`, cancellable: true },
       async (_progress, token) => {
         token.onCancellationRequested(() => {
           if (this.running === r) this.stop();
@@ -153,7 +153,7 @@ export class DeviceLog {
     const text = end.text || 'the log stream ended';
     this.ended(r, `[${text}]`);
     if (end.reason === 'refused' || end.reason === 'error') {
-      void this.services.prompts.showErrorMessage(`Sailfish: device logs from "${r.device}" stopped: ${text}`);
+      void this.services.prompts.showErrorMessage(`Sardina: device logs from "${r.device}" stopped: ${text}`);
     }
   }
 }
@@ -167,7 +167,7 @@ export function activateDeviceLog(ctx: vscode.ExtensionContext, services: Servic
     { dispose: () => log.stop() },
   );
   if (process.env.TEST_MODE === 'full') {
-    ctx.subscriptions.push(vscode.commands.registerCommand('sailfish._test.deviceLog', () => log.view()));
+    ctx.subscriptions.push(vscode.commands.registerCommand('sardina._test.deviceLog', () => log.view()));
   }
   return log;
 }

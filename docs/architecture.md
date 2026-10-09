@@ -18,7 +18,7 @@ flowchart LR
   CLI["sfdk command line"]
   ENG["Build engine<br/>VirtualBox VM or Docker"]
   EMU["Emulator<br/>VirtualBox VM"]
-  DEV["Phone or emulator<br/>Sailfish OS"]
+  DEV["Phone or emulator<br/>SFOS"]
   subgraph ONDEV["On the device"]
     AG["sailfish-devagent core<br/>systemd service"]
     MOD["Module processes, one per stream:<br/>logs, stats, screenshot, mirror, input"]
@@ -68,7 +68,7 @@ sequenceDiagram
   participant UI as Build view, status bar
   participant BD as buildDeployThen
   participant ST as buildState
-  participant LOG as Sailfish OS Build channel
+  participant LOG as Sardina Build channel
   participant SF as sfdk
   participant DEV as Device
   participant DBG as cppdbg, C/C++ extension
@@ -101,7 +101,7 @@ sequenceDiagram
   Debug and Deploy all report to. Its Stop button cancels the same token as the
   notification's Cancel button.
 - `tasks/buildLog.ts` streams the engine start, `sfdk build` and `sfdk deploy`
-  into the **Sailfish OS Build** channel.
+  into the **Sardina Build** channel.
 - `debug/` builds the debug configuration from `sfdk`'s own gdbserver recipe.
   **Restart** (Ctrl+Shift+F5) starts gdbserver again without building (see
   `debug/debugSessionCore.ts`); Stop cleans up and ends the sessions.
@@ -168,7 +168,7 @@ flowchart LR
     SS["statsSource.ts"]
     DP["deviceProbe.ts<br/>overview"]
   end
-  OUT["Output channel<br/>Sailfish Device Log"]
+  OUT["Output channel<br/>Sardina Device Log"]
   PNL["monitorPanel.ts<br/>one tab per device"]
   WV["Page in media/monitor<br/>narrow column: connection, App"]
   AGL -->|"agent 1.10.0 or newer"| LS
@@ -186,12 +186,12 @@ flowchart LR
 
 - **Logs** need the agent: `logSource.ts` sends the `logs` request (JSON format
   with agent 1.10.0 or newer, plain text lines with older agents) and
-  `deviceLog.ts` writes the formatted lines into the one **Sailfish Device Log**
+  `deviceLog.ts` writes the formatted lines into the one **Sardina Device Log**
   output channel. The monitor never reads the journal through the SSH login
   itself and has no log view of its own.
 - **App** stats come from the agent's `stats` stream once a second, or, when the
   agent lacks it, from a small script run through `sfdk device exec` every
-  `sailfish.monitor.pollIntervalSeconds` seconds while the tab is visible
+  `sardina.monitor.pollIntervalSeconds` seconds while the tab is visible
   (`monitor/appStats.ts`).
 - **Overview** comes from four short `sfdk device exec` commands, cached until
   you refresh.
@@ -203,10 +203,10 @@ flowchart LR
 | Folder | What it owns |
 |---|---|
 | `src/extension.ts` | Activation: creates the services and activates every module in a fixed order. |
-| `src/core/` | `services.ts` (the container), `output.ts` (the **Sailfish OS** channel), `contextKeys.ts`, `deviceSessions.ts` (what runs on which device), external tool checks. |
-| `src/settings/` | The `sailfish.*` settings, their defaults and change dispatch. |
+| `src/core/` | `services.ts` (the container), `output.ts` (the **SFOS** channel), `contextKeys.ts`, `deviceSessions.ts` (what runs on which device), external tool checks. |
+| `src/settings/` | The `sardina.*` settings, their defaults and change dispatch. |
 | `src/sfdk/` | Finding the SDK, running `sfdk` (`runner.ts`), parsing its output, **Download SDK**. |
-| `src/project/` | Detecting Sailfish projects and reading the `.spec` file. |
+| `src/project/` | Detecting SFOS projects and reading the `.spec` file. |
 | `src/targets/` | The target picker and the status bar item. |
 | `src/tasks/` | Build, deploy, run, package and clean tasks, the build and run commands, signing, argument building, path mapping, the build log, the build and device status bar items. |
 | `src/build/` | The **Build** view and the shared build state. |
@@ -215,7 +215,7 @@ flowchart LR
 | `src/agent/` | Installing and talking to the device agent; the mirror (`mirror*.ts`, `sshForward*.ts`). |
 | `src/monitor/` | The Device Monitor: panel, sources, models and `webview/` page code. |
 | `src/qml/` | QML completion, hover and error checks: parsers for `qmldir`, `*.qmltypes` and `.qml`, the lazy type index of the build target, `features.ts` (no VS Code) and `index.ts` (providers). |
-| `src/wizard/`, `src/walkthrough/`, `src/qtqml/`, `src/ui/` | New Project, the getting-started walkthrough, turning off `qmlls` in Sailfish projects, prompt helpers. |
+| `src/wizard/`, `src/walkthrough/`, `src/qtqml/`, `src/ui/` | New Project, the getting-started walkthrough, turning off `qmlls` in SFOS projects, prompt helpers. |
 | `media/` | The icon, the walkthrough text and the agent RPMs in `media/agent/<arch>/`. |
 
 Most folders keep the logic that needs no VS Code in `*Core.ts` files, so the

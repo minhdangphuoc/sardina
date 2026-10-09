@@ -20,7 +20,7 @@ suite('QML language features', () => {
 
   suiteSetup(async function () {
     this.timeout(20000);
-    await waitForContext('sailfish.projectCount', 1, 10000);
+    await waitForContext('sardina.projectCount', 1, 10000);
     qmlApi().setImportRootForTests(path.join(fixturesRoot(), 'qmltypes', 'root'));
     const file = path.join(fixturesRoot(), 'workspaces', 'qml-app', 'qml', 'harbour-demo.qml');
     doc = await vscode.workspace.openTextDocument(file);
@@ -58,7 +58,7 @@ suite('QML language features', () => {
     this.timeout(15000);
     await waitFor(() => diagnostics().some((d) => d.message.includes('Lable')), 5000);
     assert.deepStrictEqual(diagnostics().map((d) => d.message), ['Unknown type "Lable"']);
-    const config = vscode.workspace.getConfiguration('sailfish', doc.uri);
+    const config = vscode.workspace.getConfiguration('sardina', doc.uri);
     await config.update('qml.languageFeatures', false, vscode.ConfigurationTarget.Workspace);
     try {
       await waitFor(() => diagnostics().length === 0, 5000);

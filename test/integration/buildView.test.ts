@@ -24,19 +24,19 @@ function folder(): vscode.WorkspaceFolder {
 
 suite('Build view and Clean Project Build', () => {
   test('the Build view lists target, device, type, deploy, signing and last build', async () => {
-    await waitForContext('sailfish.isProject', true, 8000);
+    await waitForContext('sardina.isProject', true, 8000);
     const rows = api().__test.getBuildView().getChildren() as vscode.TreeItem[];
     assert.deepStrictEqual(
       rows.map((r) => r.id),
       ['project', 'target', 'device', 'type', 'deploy', 'signing', 'last'],
     );
     const command = (id: string): string | undefined => rows.find((r) => r.id === id)?.command?.command;
-    assert.strictEqual(command('target'), 'sailfish.selectTarget');
-    assert.strictEqual(command('device'), 'sailfish.device.setDefault');
-    assert.strictEqual(command('type'), 'sailfish.selectBuildType');
-    assert.strictEqual(command('deploy'), 'sailfish.selectDeployMethod');
-    assert.strictEqual(command('signing'), 'sailfish.setupSigning');
-    assert.strictEqual(command('last'), 'sailfish.showBuildLog');
+    assert.strictEqual(command('target'), 'sardina.selectTarget');
+    assert.strictEqual(command('device'), 'sardina.device.setDefault');
+    assert.strictEqual(command('type'), 'sardina.selectBuildType');
+    assert.strictEqual(command('deploy'), 'sardina.selectDeployMethod');
+    assert.strictEqual(command('signing'), 'sardina.setupSigning');
+    assert.strictEqual(command('last'), 'sardina.showBuildLog');
     // Earlier suites run builds against the fake sfdk, so the shared build state may already hold a result.
     const last = rows.find((r) => r.id === 'last')?.description ?? '';
     const lastText = String(last);
@@ -44,7 +44,7 @@ suite('Build view and Clean Project Build', () => {
   });
 
   test('Clean Project Build deletes generated files and dirs after a confirmation, and keeps sources', async () => {
-    await waitForContext('sailfish.isProject', true, 8000);
+    await waitForContext('sardina.isProject', true, 8000);
     const root = folder().uri.fsPath;
     const makefile = path.join(root, 'Makefile');
     const objDir = path.join(root, '.obj-test');
@@ -56,7 +56,7 @@ suite('Build view and Clean Project Build', () => {
       fs.mkdirSync(objDir);
       fs.writeFileSync(path.join(objDir, 'main.o'), '');
       fs.writeFileSync(handWritten, 'all:\n\techo hi\n');
-      await vscode.commands.executeCommand('sailfish.cleanProjectBuild');
+      await vscode.commands.executeCommand('sardina.cleanProjectBuild');
       assert.ok(!fs.existsSync(makefile), 'generated Makefile is deleted');
       assert.ok(!fs.existsSync(objDir), 'object dir is deleted');
       assert.ok(fs.existsSync(handWritten), 'a hand-written Makefile is kept');

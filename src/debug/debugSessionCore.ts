@@ -17,7 +17,7 @@ export const GDB_CONNECT_TIMEOUT_S = 30;
 export const RESTART_ADOPT_TIMEOUT_MS = 20_000;
 
 /** Configuration field that ties every launch of one "Debug on Device" run together, across restarts. */
-export const SESSION_ID_FIELD = 'sailfishSessionId';
+export const SESSION_ID_FIELD = 'sardinaSessionId';
 
 /**
  * True for the DAP request VS Code sends when Restart (or an adapter-requested restart) ends a

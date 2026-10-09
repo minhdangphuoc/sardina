@@ -3,7 +3,7 @@ import { parseSpec } from '../../../src/project/specParser';
 
 const QMAKE_SPEC = `
 Name:       harbour-demo
-Summary:    Demo Sailfish OS application
+Summary:    Demo SFOS application
 Version:    0.1
 Release:    1
 Requires:   sailfishsilica-qt5 >= 0.10.9
@@ -55,7 +55,7 @@ const SUBPACKAGE_SPEC = `
 Name:       harbour-demo
 Version:    0.1
 Release:    1
-Summary:    Demo Sailfish OS application
+Summary:    Demo SFOS application
 Requires:   sailfishsilica-qt5 >= 0.10.9
 
 %description
@@ -78,7 +78,7 @@ describe('parseSpec', () => {
     assert.strictEqual(info.name, 'harbour-demo');
     assert.strictEqual(info.version, '0.1');
     assert.strictEqual(info.release, '1');
-    assert.strictEqual(info.summary, 'Demo Sailfish OS application');
+    assert.strictEqual(info.summary, 'Demo SFOS application');
     assert.strictEqual(info.hasNativeBinary, true);
   });
 
@@ -87,7 +87,7 @@ describe('parseSpec', () => {
     assert.strictEqual(info.name, 'harbour-demo');
     assert.strictEqual(info.version, '0.1');
     assert.strictEqual(info.release, '1');
-    assert.strictEqual(info.summary, 'Demo Sailfish OS application');
+    assert.strictEqual(info.summary, 'Demo SFOS application');
     assert.deepStrictEqual(info.buildRequires, ['pkgconfig(sailfishapp) >= 1.0.2', 'pkgconfig(Qt5Qml)']);
     assert.strictEqual(info.hasNativeBinary, true);
     assert.strictEqual(info.isPureQml, false);
@@ -131,7 +131,7 @@ describe('parseSpec', () => {
   describe('native binary detection in %files', () => {
     const spec = (files: string) => `Name: harbour-x\nVersion: 1\n\n%files\n${files}\n`;
 
-    it('recognises the bare %{_bindir} entry the stock Sailfish app template uses', () => {
+    it('recognises the bare %{_bindir} entry the stock SFOS app template uses', () => {
       assert.strictEqual(parseSpec(spec('%defattr(-,root,root,-)\n%{_datadir}/%{name}/qml\n%{_bindir}'), { hasProFile: true, hasCMakeLists: false }).hasNativeBinary, true);
     });
 

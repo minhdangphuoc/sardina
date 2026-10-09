@@ -30,7 +30,7 @@ export function validateProjectName(name: string): string | vscode.InputBoxValid
 function notifyError(services: Services, message: string): void {
   void services.prompts.showErrorMessage(message, SHOW_OUTPUT_ACTION).then((choice) => {
     if (choice === SHOW_OUTPUT_ACTION) {
-      void vscode.commands.executeCommand('sailfish.showOutput');
+      void vscode.commands.executeCommand('sardina.showOutput');
     }
   });
 }
@@ -74,7 +74,7 @@ async function pickTemplateType(services: Services): Promise<string | undefined>
       }
       // R25 defense in depth: only a type sfdk actually listed may reach `init -t`.
       if (!validTypes.has(picked.type)) {
-        notifyError(services, `Sailfish: "${picked.type}" is not a known sfdk template type`);
+        notifyError(services, `Sardina: "${picked.type}" is not a known sfdk template type`);
         return undefined;
       }
       return picked.type;
@@ -82,11 +82,11 @@ async function pickTemplateType(services: Services): Promise<string | undefined>
   }
 
   const choice = await services.prompts.showWarningMessage(
-    'Sailfish: could not list template types from sfdk; enter one manually.',
+    'Sardina: could not list template types from sfdk; enter one manually.',
     SEE_OUTPUT_ACTION,
   );
   if (choice === SEE_OUTPUT_ACTION) {
-    void vscode.commands.executeCommand('sailfish.showOutput');
+    void vscode.commands.executeCommand('sardina.showOutput');
   }
   const typed = await services.prompts.showInputBox({
     prompt: 'Project template type',
@@ -97,7 +97,7 @@ async function pickTemplateType(services: Services): Promise<string | undefined>
     return undefined;
   }
   if (validateTemplateType(typed) !== undefined) {
-    notifyError(services, `Sailfish: "${typed}" is not a valid template type`);
+    notifyError(services, `Sardina: "${typed}" is not a valid template type`);
     return undefined;
   }
   return typed;
@@ -143,7 +143,7 @@ async function isNonEmptyDir(dir: string): Promise<boolean> {
 
 async function confirmForce(services: Services, dir: string): Promise<boolean> {
   const choice = await services.prompts.showWarningMessage(
-    `Sailfish: "${dir}" is not empty. Force sfdk to initialize into it anyway?`,
+    `Sardina: "${dir}" is not empty. Force sfdk to initialize into it anyway?`,
     'Force',
     'Cancel',
   );
@@ -158,7 +158,7 @@ const OPEN_ADD: OpenChoice = 'Add to workspace';
 /** FR-3.3 */
 async function offerOpen(services: Services, targetUri: vscode.Uri): Promise<void> {
   const choice = await services.prompts.showInformationMessage(
-    `Sailfish: project created at ${targetUri.fsPath}`,
+    `Sardina: project created at ${targetUri.fsPath}`,
     OPEN_CURRENT,
     OPEN_NEW,
     OPEN_ADD,
@@ -182,7 +182,7 @@ async function runInit(
   try {
     await fs.mkdir(opts.targetDir, { recursive: true });
   } catch (err) {
-    notifyError(services, `Sailfish: could not create "${opts.targetDir}": ${err instanceof Error ? err.message : String(err)}`);
+    notifyError(services, `Sardina: could not create "${opts.targetDir}": ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
 
@@ -204,7 +204,7 @@ async function runInit(
   args.push(opts.name);
 
   const result = await vscode.window.withProgress(
-    { location: vscode.ProgressLocation.Notification, title: `Sailfish: creating project "${opts.name}"…`, cancellable: true },
+    { location: vscode.ProgressLocation.Notification, title: `Sardina: creating project "${opts.name}"…`, cancellable: true },
     (_progress, token) => fetch(services, args, opts.targetDir, token),
   );
 
@@ -213,7 +213,7 @@ async function runInit(
   }
   if (result.exitCode !== 0) {
     const firstLine = (result.stderr.trim() || result.stdout.trim() || `exit ${result.exitCode}`).split(/\r?\n/)[0];
-    notifyError(services, `Sailfish: project creation failed: ${firstLine}`);
+    notifyError(services, `Sardina: project creation failed: ${firstLine}`);
     return;
   }
 
@@ -240,7 +240,7 @@ async function runWizard(services: Services): Promise<void> {
   // Re-validate server-side; a stubbed InputBox in tests skips validateInput (R25).
   const nameCheck = checkProjectName(name);
   if (!nameCheck.ok) {
-    notifyError(services, `Sailfish: "${name}" is not a valid project name`);
+    notifyError(services, `Sardina: "${name}" is not a valid project name`);
     return;
   }
 
@@ -255,6 +255,6 @@ async function runWizard(services: Services): Promise<void> {
 
 export function activateWizard(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sailfish.newProject', () => runWizard(services)),
+    vscode.commands.registerCommand('sardina.newProject', () => runWizard(services)),
   );
 }

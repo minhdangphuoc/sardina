@@ -71,7 +71,7 @@ describe('offline message', () => {
   it('names the device and what to do', () => {
     assert.strictEqual(
       offlineMessage('Flip WLAN'),
-      'Sailfish: "Flip WLAN" is offline — connect it (USB or Wi-Fi, Developer Mode on) and try again.',
+      'Sardina: "Flip WLAN" is offline — connect it (USB or Wi-Fi, Developer Mode on) and try again.',
     );
     assert.match(offlineMessage('Sailfish OS Emulator 5.1.0.11', true), /emulator .* is not running/);
   });

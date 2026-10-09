@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import { platformTarget, parseLatestVersion, buildDownloadUrl, parseInstallerVersions, hasOnlineInstaller } from '../../../src/sfdk/downloadSdk';
 
-describe('platformTarget ("Sailfish: Download SDK")', () => {
+describe('platformTarget ("Sardina: Download SDK")', () => {
   it('maps darwin/linux/win32 to the right installer suffix and extension', () => {
     assert.deepStrictEqual(platformTarget('darwin'), { suffix: 'mac', ext: 'dmg' });
     assert.deepStrictEqual(platformTarget('linux'), { suffix: 'linux64', ext: 'run' });

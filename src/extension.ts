@@ -23,6 +23,7 @@ import { activateWalkthrough } from './walkthrough/index';
 import { getShownMessages } from './ui/prompts';
 import { getLastTargetList, resetLastTargetListForTests } from './targets/targetListCache';
 import { checkExternalToolsOnce } from './core/externalTools';
+import { migrateFromSailfish } from './core/migration';
 import { OFFLINE_GUARD } from './devices/offlineGuard';
 
 export function activate(ctx: vscode.ExtensionContext) {
@@ -52,7 +53,8 @@ export function activate(ctx: vscode.ExtensionContext) {
   const qmlFeatures = activateQmlFeatures(ctx, services);
   activateWalkthrough(ctx, services);
 
-  // NFR-1: never awaited here — a fire-and-forget, once-per-install check.
+  // NFR-1: never awaited here — fire-and-forget, once-per-install checks.
+  void migrateFromSailfish(ctx, services);
   void checkExternalToolsOnce(ctx, services);
 
   const activationMs = performance.now() - activationStart;

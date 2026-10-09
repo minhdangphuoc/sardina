@@ -29,7 +29,7 @@ export function chooseStatsMode(stats: boolean | undefined): StatsMode {
   return stats === true ? 'stream' : 'poll';
 }
 
-/** `sailfish.monitor.pollIntervalSeconds` in milliseconds: default 5 s, minimum 2 s. */
+/** `sardina.monitor.pollIntervalSeconds` in milliseconds: default 5 s, minimum 2 s. */
 export function pollIntervalMs(seconds: unknown): number {
   const s = typeof seconds === 'number' && Number.isFinite(seconds) ? seconds : POLL_INTERVAL_DEFAULT_SEC;
   return Math.max(POLL_INTERVAL_MIN_SEC, s) * 1000;

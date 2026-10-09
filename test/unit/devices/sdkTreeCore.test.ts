@@ -30,7 +30,7 @@ describe('sdkTreeCore', () => {
   });
 
   it('sdkSourceLabel covers every source', () => {
-    assert.strictEqual(sdkSourceLabel('setting'), 'sailfish.sdkPath setting');
+    assert.strictEqual(sdkSourceLabel('setting'), 'sardina.sdkPath setting');
     assert.strictEqual(sdkSourceLabel('env'), 'SAILFISH_SDK_ROOT');
     assert.strictEqual(sdkSourceLabel('home'), '~/SailfishOS');
     assert.strictEqual(sdkSourceLabel('path'), 'PATH');

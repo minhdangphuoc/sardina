@@ -60,14 +60,14 @@ export function installScript(packages: readonly string[]): string {
 /** What to tell the user after the install finishes. */
 export function installOutcomeMessage(device: string, packages: readonly string[], exitCode: number | undefined): { ok: boolean; message: string } {
   if (exitCode === 0) {
-    return { ok: true, message: `Sailfish: installed ${packages.join(', ')} on "${device}".` };
+    return { ok: true, message: `Sardina: installed ${packages.join(', ')} on "${device}".` };
   }
   return {
     ok: false,
     message:
-      `Sailfish: installing ${packages.join(', ')} on "${device}" failed${exitCode === undefined ? '' : ` (exit ${exitCode})`}. ` +
+      `Sardina: installing ${packages.join(', ')} on "${device}" failed${exitCode === undefined ? '' : ` (exit ${exitCode})`}. ` +
       'Check that the device has internet access (Wi-Fi or mobile data), that you typed the developer-mode password, ' +
-      "and the Sailfish OS output channel for which package was not found.",
+      "and the Sardina output channel for which package was not found.",
   };
 }
 
@@ -167,14 +167,14 @@ export function installPlan(outcome: ToolCheckOutcome): InstallPlan {
 
 /** The error for a tool check that reached sfdk but did not run (login refused, sfdk error). */
 export function toolCheckFailureMessage(device: string, detail: string): string {
-  return `Sailfish: could not check the tools on "${device}": ${detail}. Nothing was installed; see the Sailfish OS output channel.`;
+  return `Sardina: could not check the tools on "${device}": ${detail}. Nothing was installed; see the Sardina output channel.`;
 }
 
 /** The message for a device whose SSH port does not answer; for an emulator, that it is not running. */
 export function offlineMessage(device: string, emulator = false): string {
   return emulator
-    ? `Sailfish: the emulator "${device}" is not running — start it (Devices view) and try again.`
-    : `Sailfish: "${device}" is offline — connect it (USB or Wi-Fi, Developer Mode on) and try again.`;
+    ? `Sardina: the emulator "${device}" is not running — start it (Devices view) and try again.`
+    : `Sardina: "${device}" is offline — connect it (USB or Wi-Fi, Developer Mode on) and try again.`;
 }
 
 export const OPEN_DEVICES_VIEW = 'Open Devices view';
@@ -263,15 +263,15 @@ export function rootShellAbortMessage(device: string, reason: RootShellAbort, li
   const s = (ms: number): string => (ms % 60_000 === 0 ? `${ms / 60_000} min` : `${Math.round(ms / 1000)} s`);
   switch (reason) {
     case 'no-prompt':
-      return `Sailfish: "${device}" did not answer within ${s(limits.promptMs)} — it may be offline or asleep. Connect it (USB or Wi-Fi, Developer Mode on) and try again.`;
+      return `Sardina: "${device}" did not answer within ${s(limits.promptMs)} — it may be offline or asleep. Connect it (USB or Wi-Fi, Developer Mode on) and try again.`;
     case 'dropped':
-      return `Sailfish: the connection to "${device}" dropped — the device stopped responding. Check the USB cable or Wi-Fi and try again.`;
+      return `Sardina: the connection to "${device}" dropped — the device stopped responding. Check the USB cable or Wi-Fi and try again.`;
     case 'stalled':
-      return `Sailfish: "${device}" stopped responding (no output for ${s(limits.stallMs)}). Check the connection and try again; see the Sailfish OS output for the last lines.`;
+      return `Sardina: "${device}" stopped responding (no output for ${s(limits.stallMs)}). Check the connection and try again; see the Sardina output for the last lines.`;
     case 'timeout':
-      return `Sailfish: the command on "${device}" did not finish within ${s(limits.overallMs)} and was stopped. See the Sailfish OS output for the last lines.`;
+      return `Sardina: the command on "${device}" did not finish within ${s(limits.overallMs)} and was stopped. See the Sardina output for the last lines.`;
     case 'password-rejected':
-      return `Sailfish: "${device}" did not accept the password. Use the developer-mode password (Settings → Developer tools) and try again.`;
+      return `Sardina: "${device}" did not accept the password. Use the developer-mode password (Settings → Developer tools) and try again.`;
   }
 }
 

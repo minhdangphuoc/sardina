@@ -109,13 +109,13 @@ export class BuildTreeDataProvider implements vscode.TreeDataProvider<BuildRowIt
   }
 }
 
-/** Registers the `sailfish.build` view; `devices` feeds the device row's reachability. */
+/** Registers the `sardina.build` view; `devices` feeds the device row's reachability. */
 export function activateBuildView(
   ctx: vscode.ExtensionContext,
   services: Services,
   devices: Parameters<BuildTreeDataProvider['watchDevices']>[0],
 ): BuildTreeDataProvider {
   const provider = new BuildTreeDataProvider(services);
-  ctx.subscriptions.push(provider, provider.watchDevices(devices), vscode.window.registerTreeDataProvider('sailfish.build', provider));
+  ctx.subscriptions.push(provider, provider.watchDevices(devices), vscode.window.registerTreeDataProvider('sardina.build', provider));
   return provider;
 }

@@ -432,12 +432,12 @@ function describeModules(probe: RunningProbe): string {
 export function describeProbe(device: string, probe: AgentProbe): string {
   switch (probe.state) {
     case 'running':
-      return `Sailfish: device agent ${probe.version} is running on "${device}"${describeModules(probe)}; Developer Mode is ${probe.developerMode ? 'on' : 'off, so screenshots and logs are refused'}.${describePhoneSettings(probe.settings)}`;
+      return `Sardina: device agent ${probe.version} is running on "${device}"${describeModules(probe)}; Developer Mode is ${probe.developerMode ? 'on' : 'off, so screenshots and logs are refused'}.${describePhoneSettings(probe.settings)}`;
     case 'not-running':
-      return `Sailfish: the device agent is installed on "${device}" but not running (try "Install Device Agent" again, or on the device: systemctl status sailfish-devagent).`;
+      return `Sardina: the device agent is installed on "${device}" but not running (try "Install Device Agent" again, or on the device: systemctl status sailfish-devagent).`;
     case 'not-installed':
-      return `Sailfish: the device agent is not installed on "${device}".`;
+      return `Sardina: the device agent is not installed on "${device}".`;
     case 'unreachable':
-      return `Sailfish: could not reach the device agent on "${device}": ${probe.detail}`;
+      return `Sardina: could not reach the device agent on "${device}": ${probe.detail}`;
   }
 }

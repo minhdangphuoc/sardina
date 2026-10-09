@@ -13,8 +13,8 @@ import {
   type ResolvedKeypadLayout,
 } from './keypadLayoutCore';
 
-const STATE_PREFIX = 'sailfish.keypadLayout.';
-const DISMISSED_PREFIX = 'sailfish.keypadHintDismissed.';
+const STATE_PREFIX = 'sardina.keypadLayout.';
+const DISMISSED_PREFIX = 'sardina.keypadHintDismissed.';
 const OVERWRITE = 'Overwrite';
 const LOGGED_DIAGNOSTICS_MAX = 256;
 
@@ -67,7 +67,7 @@ export class KeypadLayouts implements vscode.Disposable {
       return false;
     } catch (err) {
       if (this.notFound(err)) return this.create(info);
-      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be opened: ${this.message(err)}`);
+      await this.services.prompts.showErrorMessage(`Sardina: keypad layout could not be opened: ${this.message(err)}`);
       return false;
     }
   }
@@ -76,7 +76,7 @@ export class KeypadLayouts implements vscode.Disposable {
   async reset(info: KeypadInfo): Promise<boolean> {
     if (!this.configured(info.model)) return false;
     await this.forget(info.model);
-    await this.services.prompts.showInformationMessage(`Sailfish: keypad layout reset for ${info.model}; the file was not deleted`);
+    await this.services.prompts.showInformationMessage(`Sardina: keypad layout reset for ${info.model}; the file was not deleted`);
     return true;
   }
 
@@ -90,7 +90,7 @@ export class KeypadLayouts implements vscode.Disposable {
     try {
       await vscode.workspace.fs.createDirectory(dir);
     } catch (err) {
-      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be created: ${this.message(err)}`);
+      await this.services.prompts.showErrorMessage(`Sardina: keypad layout could not be created: ${this.message(err)}`);
       return false;
     }
     const uri = await this.services.prompts.showSaveDialog({
@@ -107,13 +107,13 @@ export class KeypadLayouts implements vscode.Disposable {
         await vscode.workspace.fs.writeFile(uri, Buffer.from(`${JSON.stringify(buildDefaultKeypadLayout(info), null, 2)}\n`, 'utf8'));
       }
     } catch (err) {
-      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be created: ${this.message(err)}`);
+      await this.services.prompts.showErrorMessage(`Sardina: keypad layout could not be created: ${this.message(err)}`);
       return false;
     }
     try {
       await this.open(uri);
     } catch (err) {
-      await this.services.prompts.showErrorMessage(`Sailfish: keypad layout was created but could not be opened: ${this.message(err)}`);
+      await this.services.prompts.showErrorMessage(`Sardina: keypad layout was created but could not be opened: ${this.message(err)}`);
     }
     return true;
   }
@@ -132,7 +132,7 @@ export class KeypadLayouts implements vscode.Disposable {
 
   private async confirmOverwrite(uri: vscode.Uri): Promise<boolean> {
     const choice = await this.services.prompts.showWarningMessage(
-      `Sailfish: ${uri.fsPath} is not a valid keypad layout. Overwrite it with a starter?`,
+      `Sardina: ${uri.fsPath} is not a valid keypad layout. Overwrite it with a starter?`,
       { modal: true },
       OVERWRITE,
     );
@@ -191,7 +191,7 @@ export class KeypadLayouts implements vscode.Disposable {
     const { model } = info;
     if (this.reporter(model).shouldReport(result.error)) {
       this.services.output.log('warn', `keypad layout ${source}: ${result.error}`);
-      void this.services.prompts.showErrorMessage(`Sailfish: keypad layout ${source} is invalid: ${result.error}`);
+      void this.services.prompts.showErrorMessage(`Sardina: keypad layout ${source} is invalid: ${result.error}`);
     }
     if (result.layout) this.lastValid.set(model, result.layout);
     return result.layout ?? this.lastValid.get(model);

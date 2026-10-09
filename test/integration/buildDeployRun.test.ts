@@ -4,7 +4,7 @@ import * as vscode from 'vscode';
 import { clearFakeLog, extensionApi, readFakeLog, stubMessages, waitFor, waitForContext, withScenario } from './helpers';
 import type { Services } from '../../src/core/services';
 
-/** FR-5.10 `sailfish.buildDeployRun` suite (AC-1.7); only discovered when TEST_MODE != 'bare'. */
+/** FR-5.10 `sardina.buildDeployRun` suite (AC-1.7); only discovered when TEST_MODE != 'bare'. */
 
 const TARGET = 'SailfishOS-4.4.0.58-aarch64';
 
@@ -14,7 +14,7 @@ function services(): Services {
 
 async function sfdkReady(): Promise<boolean> {
   try {
-    await waitForContext('sailfish.sdkAvailable', true, 5000);
+    await waitForContext('sardina.sdkAvailable', true, 5000);
   } catch {
     return false;
   }
@@ -31,10 +31,10 @@ async function sfdkReady(): Promise<boolean> {
 
 /** Global scope: never writes into the shared qml-app fixture's .vscode/settings.json. */
 async function setSetting(key: string, value: unknown): Promise<void> {
-  await vscode.workspace.getConfiguration('sailfish').update(key, value, vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration('sardina').update(key, value, vscode.ConfigurationTarget.Global);
 }
 
-suite('sailfish.buildDeployRun (FR-5.10, AC-1.7)', () => {
+suite('sardina.buildDeployRun (FR-5.10, AC-1.7)', () => {
   let ready = false;
 
   suiteSetup(async function () {
@@ -64,7 +64,7 @@ suite('sailfish.buildDeployRun (FR-5.10, AC-1.7)', () => {
     this.timeout(20000);
     await withScenario('default', async () => {
       clearFakeLog();
-      await vscode.commands.executeCommand('sailfish.buildDeployRun');
+      await vscode.commands.executeCommand('sardina.buildDeployRun');
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'device_exec.invoker'), 10000);
 
       const { invocations } = readFakeLog();
@@ -94,7 +94,7 @@ suite('sailfish.buildDeployRun (FR-5.10, AC-1.7)', () => {
     try {
       await withScenario('default', async () => {
         clearFakeLog();
-        await Promise.resolve(vscode.commands.executeCommand('sailfish.buildDeployRun')).catch(() => undefined);
+        await Promise.resolve(vscode.commands.executeCommand('sardina.buildDeployRun')).catch(() => undefined);
         await waitFor(() => messages.calls.some((c) => c.kind === 'error' && /No Such Key Zq9 Test/.test(c.message)), 10000);
         const error = messages.calls.find((c) => c.kind === 'error' && /No Such Key Zq9 Test/.test(c.message));
         assert.ok(error?.items.includes('Set up signing'), `actions: ${JSON.stringify(error?.items)}`);
@@ -114,7 +114,7 @@ suite('sailfish.buildDeployRun (FR-5.10, AC-1.7)', () => {
     this.timeout(20000);
     await withScenario('default', async () => {
       clearFakeLog();
-      await vscode.commands.executeCommand('sailfish.runInstalled');
+      await vscode.commands.executeCommand('sardina.runInstalled');
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'device_exec.invoker'), 10000);
       const keys = readFakeLog().invocations.map((i) => i.key).filter((k) => k !== 'tools_target_list');
       assert.ok(!keys.includes('build') && !keys.includes('deploy'), `must not build or deploy, got: ${keys.join(', ')}`);
@@ -131,7 +131,7 @@ suite('sailfish.buildDeployRun (FR-5.10, AC-1.7)', () => {
     this.timeout(20000);
     await withScenario('build-fails-compile', async () => {
       clearFakeLog();
-      await Promise.resolve(vscode.commands.executeCommand('sailfish.buildDeployRun')).catch(() => undefined);
+      await Promise.resolve(vscode.commands.executeCommand('sardina.buildDeployRun')).catch(() => undefined);
       await waitFor(() => readFakeLog().invocations.some((i) => i.key === 'build'), 10000);
       // give a would-be deploy call a moment to show up if the stop-on-failure logic were broken
       await new Promise((r) => setTimeout(r, 500));

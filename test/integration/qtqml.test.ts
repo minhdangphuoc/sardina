@@ -18,7 +18,7 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
   let sandbox: sinon.SinonSandbox;
 
   let extraDir: string | undefined;
-  let nonSailfishFolder: vscode.WorkspaceFolder | undefined;
+  let nonSfosFolder: vscode.WorkspaceFolder | undefined;
 
   suiteSetup(async function () {
     this.timeout(20000);
@@ -26,20 +26,20 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     // Under a narrow --grep, this suite may be the first to run and race
     // ProjectRegistry's own async initial refresh() (fired, not awaited,
     // from activateProjects) and activateQtQml's own first pass over it.
-    await waitForContext('sailfish.projectCount', 1, 10000);
+    await waitForContext('sardina.projectCount', 1, 10000);
 
     // This test host only reliably supports adding a workspace folder once
     // past the initial folder-mode -> multi-root transition (see
     // project.test.ts's own note): when project.test.ts's suite already ran
-    // (the normal full-suite case), reuse the non-Sailfish folder it leaves
+    // (the normal full-suite case), reuse the non-SFOS folder it leaves
     // behind at index 1 instead of adding a second one, which would fail.
     const existing = vscode.workspace.workspaceFolders?.find((f, i) => i > 0 && !services.projects.forFolder(f));
     if (existing) {
-      nonSailfishFolder = existing;
+      nonSfosFolder = existing;
     } else {
       try {
         extraDir = copyFixtureWorkspace('not-sailfish', 'sf-qtqml-notsailfish-');
-        nonSailfishFolder = await addWorkspaceFolder(extraDir);
+        nonSfosFolder = await addWorkspaceFolder(extraDir);
       } catch (err) {
         // Isolated --grep runs where this is the only suite adding a folder
         // succeed; a second concurrent add past another suite's own budget
@@ -165,7 +165,7 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     this.timeout(15000);
     const folder = vscode.workspace.workspaceFolders?.[0];
     assert.ok(folder, 'expected the qml-app root workspace folder');
-    assert.ok(services.projects.forFolder(folder), 'expected the root folder to be a detected Sailfish project');
+    assert.ok(services.projects.forFolder(folder), 'expected the root folder to be a detected SFOS project');
 
     stubQtQmlPresent();
     const { store, targetViolations } = stubQtQmlConfig();
@@ -180,13 +180,13 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     assert.deepStrictEqual(targetViolations, []);
   });
 
-  test('a non-Sailfish folder is left untouched', async function () {
+  test('a non-SFOS folder is left untouched', async function () {
     this.timeout(15000);
-    if (!nonSailfishFolder) {
+    if (!nonSfosFolder) {
       this.skip();
       return;
     }
-    const folder = nonSailfishFolder;
+    const folder = nonSfosFolder;
 
     stubQtQmlPresent();
     const { store } = stubQtQmlConfig();
@@ -194,7 +194,7 @@ suite('qt-qml silencing (FR-8.1, AC-1.10)', () => {
     await new Promise((r) => setTimeout(r, 500));
 
     assert.strictEqual(services.projects.forFolder(folder), undefined, 'expected not-sailfish to not be detected');
-    assert.strictEqual(store.has(folder.uri.toString()), false, 'expected no qt-qml config writes for a non-Sailfish folder');
+    assert.strictEqual(store.has(folder.uri.toString()), false, 'expected no qt-qml config writes for a non-SFOS folder');
   });
 
   test('when qt-qml is absent, a single one-time informational notice is shown across the whole run (no error)', async function () {

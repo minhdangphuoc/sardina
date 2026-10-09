@@ -27,7 +27,7 @@ import type { ActionState } from '../../src/monitor/panelModel';
  * to at call time.
  */
 
-const EXTENSION_ID = 'sailfish-tools-dev.sailfish-tools';
+const EXTENSION_ID = 'sailfish-tools-dev.sardina';
 
 let activeSandbox: sinon.SinonSandbox | undefined;
 
@@ -203,7 +203,7 @@ export async function waitFor(predicate: () => boolean, timeoutMs: number): Prom
   }
 }
 
-/** Example: `await waitForContext('sailfish.sdkAvailable', true, 3000);` */
+/** Example: `await waitForContext('sardina.sdkAvailable', true, 3000);` */
 export async function waitForContext(key: string, value: unknown, timeoutMs: number): Promise<void> {
   const api = extensionApi();
   await waitFor(() => {
@@ -325,7 +325,7 @@ export async function removeWorkspaceFolder(folder: vscode.WorkspaceFolder): Pro
 
 type AppMessage = Extract<HostMessage, { type: 'app' }>;
 
-/** What `sailfish._test.monitor(device, 'view')` returns: the host's view model of one Device Monitor panel. */
+/** What `sardina._test.monitor(device, 'view')` returns: the host's view model of one Device Monitor panel. */
 export interface MonitorView {
   device: string;
   state: ConnectionState;
@@ -339,19 +339,19 @@ export interface MonitorView {
 
 /** Example: `const view = await monitorView('My Phone'); assert.strictEqual(view.state, 'connected');` (TEST_MODE=full seam). */
 export async function monitorView(device: string): Promise<MonitorView> {
-  return await vscode.commands.executeCommand<MonitorView>('sailfish._test.monitor', device, 'view');
+  return await vscode.commands.executeCommand<MonitorView>('sardina._test.monitor', device, 'view');
 }
 
 export interface DeviceLogView {
   device?: string;
   running: boolean;
-  /** Lines written to the "Sailfish Device Log" output channel. */
+  /** Lines written to the "Sardina Device Log" output channel. */
   lines: string[];
 }
 
 /** Example: `const log = await deviceLogView(); assert.ok(log.lines.some((l) => l.includes('stopped')));` (TEST_MODE=full seam). */
 export async function deviceLogView(): Promise<DeviceLogView> {
-  return await vscode.commands.executeCommand<DeviceLogView>('sailfish._test.deviceLog');
+  return await vscode.commands.executeCommand<DeviceLogView>('sardina._test.deviceLog');
 }
 
 /**

@@ -1,7 +1,15 @@
 {
-  "name": "sailfish-tools",
-  "displayName": "Sailfish OS Tools",
-  "description": "Build, deploy, run and manage Sailfish OS applications from VS Code.",
+  "name": "sardina",
+  "displayName": "Sardina — SFOS Dev Kit",
+  "description": "Unofficial community extension for building, deploying, and managing SFOS apps via sfdk and QML.",
+  "keywords": [
+    "sfos",
+    "sfdk",
+    "qml",
+    "silica",
+    "jolla",
+    "sardina"
+  ],
   "publisher": "sailfish-tools-dev",
   "version": "0.1.12",
   "license": "GPL-3.0-or-later",
@@ -23,7 +31,7 @@
   "capabilities": {
     "untrustedWorkspaces": {
       "supported": false,
-      "description": "Sailfish OS Tools runs the SDK's sfdk on workspace build files, so it needs a trusted workspace."
+      "description": "Sardina runs the SDK's sfdk on workspace build files, so it needs a trusted workspace."
     }
   },
   "extensionDependencies": [
@@ -34,16 +42,16 @@
     "workspaceContains:rpm/*.spec",
     "workspaceContains:**/*.pro",
     "workspaceContains:**/CMakeLists.txt",
-    "onCommand:sailfish.newProject",
-    "onCommand:sailfish.setSdkPath",
-    "onCommand:sailfish.downloadSdk",
-    "onCommand:sailfish.sdk.install",
-    "onCommand:sailfish.device.add",
-    "onCommand:sailfish.device.remove",
-    "onCommand:sailfish.setupSigning",
-    "onView:sailfish.build",
-    "onView:sailfish.sdk",
-    "onView:sailfish.devices",
+    "onCommand:sardina.newProject",
+    "onCommand:sardina.setSdkPath",
+    "onCommand:sardina.downloadSdk",
+    "onCommand:sardina.sdk.install",
+    "onCommand:sardina.device.add",
+    "onCommand:sardina.device.remove",
+    "onCommand:sardina.setupSigning",
+    "onView:sardina.build",
+    "onView:sardina.sdk",
+    "onView:sardina.devices",
     "onLanguage:qml"
   ],
   "contributes": {
@@ -61,401 +69,401 @@
     ],
     "commands": [
       {
-        "command": "sailfish.setSdkPath",
+        "command": "sardina.setSdkPath",
         "title": "Set SDK Path",
-        "category": "Sailfish"
+        "category": "Sardina"
       },
       {
-        "command": "sailfish.downloadSdk",
+        "command": "sardina.downloadSdk",
         "title": "Download SDK",
-        "category": "Sailfish"
+        "category": "Sardina"
       },
       {
-        "command": "sailfish.sdk.install",
+        "command": "sardina.sdk.install",
         "title": "Install SDK",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(cloud-download)",
-        "enablement": "sailfish.platformSupported"
+        "enablement": "sardina.platformSupported"
       },
       {
-        "command": "sailfish.engine.start",
+        "command": "sardina.engine.start",
         "title": "Start Build Engine",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(debug-start)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.engine.stop",
+        "command": "sardina.engine.stop",
         "title": "Stop Build Engine",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(debug-stop)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.newProject",
+        "command": "sardina.newProject",
         "title": "New Project",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.selectTarget",
+        "command": "sardina.selectTarget",
         "title": "Select Target",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.setSfdkDefaultTarget",
+        "command": "sardina.setSfdkDefaultTarget",
         "title": "Set sfdk Default Target",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.debugOnDevice",
+        "command": "sardina.debugOnDevice",
         "title": "Debug on Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(debug-alt)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.setupSigning",
+        "command": "sardina.setupSigning",
         "title": "Set Up Package Signing",
-        "category": "Sailfish"
+        "category": "Sardina"
       },
       {
-        "command": "sailfish.selectBuildType",
+        "command": "sardina.selectBuildType",
         "title": "Select Build Type",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.selectDeployMethod",
+        "command": "sardina.selectDeployMethod",
         "title": "Select Deploy Method",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.build",
+        "command": "sardina.build",
         "title": "Build",
         "icon": "$(tools)",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.deploy",
+        "command": "sardina.deploy",
         "title": "Deploy",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.run",
+        "command": "sardina.run",
         "title": "Run",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.buildDeployRun",
+        "command": "sardina.buildDeployRun",
         "title": "Build, Deploy and Run",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.runInstalled",
+        "command": "sardina.runInstalled",
         "title": "Run Installed App",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.debugInstalled",
+        "command": "sardina.debugInstalled",
         "title": "Debug Installed App",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.package",
+        "command": "sardina.package",
         "title": "Package",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.clean",
+        "command": "sardina.clean",
         "title": "Clean",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.cleanProjectBuild",
+        "command": "sardina.cleanProjectBuild",
         "title": "Clean Project Build",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.rebuild",
+        "command": "sardina.rebuild",
         "title": "Rebuild",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.check",
+        "command": "sardina.check",
         "title": "Validate RPM",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.stopBuild",
+        "command": "sardina.stopBuild",
         "title": "Stop Build",
         "icon": "$(debug-stop)",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.showBuildLog",
+        "command": "sardina.showBuildLog",
         "title": "Show Build Log",
         "icon": "$(output)",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.devices.refresh",
+        "command": "sardina.devices.refresh",
         "title": "Refresh Devices",
         "icon": "$(refresh)",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.emulator.start",
+        "command": "sardina.emulator.start",
         "title": "Start Emulator",
         "icon": "$(debug-start)",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.emulator.stop",
+        "command": "sardina.emulator.stop",
         "title": "Stop Emulator",
         "icon": "$(debug-stop)",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.emulator.status",
+        "command": "sardina.emulator.status",
         "title": "Emulator Status",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.emulator.show",
+        "command": "sardina.emulator.show",
         "title": "Show Emulator",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.emulator.installAvailable",
+        "command": "sardina.emulator.installAvailable",
         "title": "Install Available Emulator",
         "icon": "$(cloud-download)",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.setDefault",
+        "command": "sardina.device.setDefault",
         "title": "Set Default Device",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.stopSessions",
+        "command": "sardina.device.stopSessions",
         "title": "Stop Sessions on Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(debug-stop)",
-        "enablement": "sailfish.platformSupported"
+        "enablement": "sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.setSfdkDefault",
+        "command": "sardina.device.setSfdkDefault",
         "title": "Set sfdk Default Device",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.openSsh",
+        "command": "sardina.device.openSsh",
         "title": "Open SSH to Device",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.connectWlan",
+        "command": "sardina.device.connectWlan",
         "title": "Connect to Device (WLAN)",
-        "category": "Sailfish",
-        "enablement": "sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.add",
+        "command": "sardina.device.add",
         "title": "Add Device",
         "icon": "$(add)",
-        "category": "Sailfish",
-        "enablement": "sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.installTools",
+        "command": "sardina.device.installTools",
         "title": "Install Deploy & Debug Tools on Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(cloud-download)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.agent.install",
+        "command": "sardina.agent.install",
         "title": "Install Device Agent",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(cloud-download)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.agent.uninstall",
+        "command": "sardina.agent.uninstall",
         "title": "Uninstall Device Agent",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.agent.status",
+        "command": "sardina.agent.status",
         "title": "Device Agent Status",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.agent.screenshot",
+        "command": "sardina.agent.screenshot",
         "title": "Take Device Screenshot",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(device-camera)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.agent.mirror",
+        "command": "sardina.agent.mirror",
         "title": "Mirror Device Screen",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(device-mobile)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.agent.editKeypadLayout",
+        "command": "sardina.agent.editKeypadLayout",
         "title": "Edit Keypad Layout",
-        "category": "Sailfish"
+        "category": "Sardina"
       },
       {
-        "command": "sailfish.agent.resetKeypadLayout",
+        "command": "sardina.agent.resetKeypadLayout",
         "title": "Reset Keypad Layout",
-        "category": "Sailfish"
+        "category": "Sardina"
       },
       {
-        "command": "sailfish.agent.logs",
+        "command": "sardina.agent.logs",
         "title": "Show Device Logs",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(output)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.device.restartHomeScreen",
+        "command": "sardina.device.restartHomeScreen",
         "title": "Restart Home Screen",
-        "category": "Sailfish",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.monitor.open",
+        "command": "sardina.monitor.open",
         "title": "Open Device Monitor",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(dashboard)",
-        "enablement": "sailfish.sdkAvailable && sailfish.platformSupported"
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
-        "command": "sailfish.monitor.restartApp",
+        "command": "sardina.monitor.restartApp",
         "title": "Restart App on Device Monitor Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(debug-restart)"
       },
       {
-        "command": "sailfish.monitor.stopApp",
+        "command": "sardina.monitor.stopApp",
         "title": "Stop App on Device Monitor Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(debug-stop)"
       },
       {
-        "command": "sailfish.monitor.screenshot",
+        "command": "sardina.monitor.screenshot",
         "title": "Take Screenshot of Device Monitor Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(device-camera)"
       },
       {
-        "command": "sailfish.monitor.mirror",
+        "command": "sardina.monitor.mirror",
         "title": "Mirror Device Monitor Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(device-mobile)"
       },
       {
-        "command": "sailfish.monitor.showLogs",
+        "command": "sardina.monitor.showLogs",
         "title": "Show Logs of Device Monitor Device",
-        "category": "Sailfish",
+        "category": "Sardina",
         "icon": "$(output)"
       },
       {
-        "command": "sailfish.device.remove",
+        "command": "sardina.device.remove",
         "title": "Remove Device",
-        "category": "Sailfish",
-        "enablement": "sailfish.platformSupported"
+        "category": "Sardina",
+        "enablement": "sardina.platformSupported"
       },
       {
-        "command": "sailfish.showOutput",
+        "command": "sardina.showOutput",
         "title": "Show Output",
-        "category": "Sailfish"
+        "category": "Sardina"
       }
     ],
     "configuration": {
-      "title": "Sailfish OS",
+      "title": "Sardina",
       "properties": {
-        "sailfish.sdkPath": {
+        "sardina.sdkPath": {
           "type": "string",
           "default": "",
           "scope": "machine",
-          "markdownDescription": "Absolute path to the Sailfish SDK installation root. Leave empty to auto-detect via environment and default locations."
+          "markdownDescription": "Absolute path to the SFOS SDK installation root. Leave empty to auto-detect via environment and default locations."
         },
-        "sailfish.devicesXmlPath": {
+        "sardina.devicesXmlPath": {
           "type": "string",
           "default": "",
           "scope": "machine",
           "markdownDescription": "Absolute path to the SDK's `devices.xml` (libsfdk's device registry, shared with Qt Creator). Leave empty to auto-detect."
         },
-        "sailfish.target": {
+        "sardina.target": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "markdownDescription": "The sfdk build target to use for this workspace (e.g. `SailfishOS-4.4.0.58-aarch64`). Leave empty to use the sfdk default target."
         },
-        "sailfish.device": {
+        "sardina.device": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "markdownDescription": "The sfdk device (emulator or hardware) to deploy to and run on for this workspace."
         },
-        "sailfish.showSnapshotTargets": {
+        "sardina.showSnapshotTargets": {
           "type": "boolean",
           "default": false,
           "scope": "window",
           "markdownDescription": "Show snapshot targets in target-selection pickers, in addition to regular targets."
         },
-        "sailfish.build.jobs": {
+        "sardina.build.jobs": {
           "type": "integer",
           "default": 0,
           "scope": "resource",
           "markdownDescription": "Number of parallel build jobs to pass to sfdk. `0` uses the sfdk default."
         },
-        "sailfish.build.runHarbourCheck": {
+        "sardina.build.runHarbourCheck": {
           "type": "boolean",
           "default": false,
           "scope": "resource",
           "markdownDescription": "Run the Harbour compliance check (`sfdk check`) automatically as part of the build task."
         },
-        "sailfish.debug.openDeviceMonitor": {
+        "sardina.debug.openDeviceMonitor": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
           "markdownDescription": "Open the Device Monitor tab (connection, app stats and actions) beside the editor when you start **Debug on Device** or **Debug Installed App**. The editor keeps the focus."
         },
-        "sailfish.monitor.pollIntervalSeconds": {
+        "sardina.monitor.pollIntervalSeconds": {
           "type": "integer",
           "default": 5,
           "minimum": 2,
@@ -463,7 +471,7 @@
           "scope": "window",
           "markdownDescription": "Seconds between app statistics samples when the device agent has no stats stream (device agent older than 1.10.0). Each sample is one `sfdk device exec` call."
         },
-        "sailfish.monitor.logLines": {
+        "sardina.monitor.logLines": {
           "type": "integer",
           "default": 500,
           "minimum": 1,
@@ -471,13 +479,13 @@
           "scope": "window",
           "markdownDescription": "How many of the newest device log lines **Show Device Logs** asks for when its stream starts."
         },
-        "sailfish.build.revealLog": {
+        "sardina.build.revealLog": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Show the \"Sailfish OS Build\" output channel when Run, Debug or Deploy starts building. The build log is streamed to the channel either way."
+          "markdownDescription": "Show the \"Sardina Build\" output channel when Run, Debug or Deploy starts building. The build log is streamed to the channel either way."
         },
-        "sailfish.build.extraArgs": {
+        "sardina.build.extraArgs": {
           "type": "array",
           "items": {
             "type": "string"
@@ -486,7 +494,7 @@
           "scope": "resource",
           "markdownDescription": "Extra arguments appended to every `sfdk build` invocation for this workspace."
         },
-        "sailfish.build.type": {
+        "sardina.build.type": {
           "type": "string",
           "enum": [
             "release",
@@ -500,31 +508,31 @@
           "scope": "resource",
           "markdownDescription": "Build type used by the build, deploy and run tasks. Also selectable from the status bar."
         },
-        "sailfish.build.sign": {
+        "sardina.build.sign": {
           "type": "boolean",
           "default": false,
           "scope": "resource",
-          "markdownDescription": "Sign the RPM packages produced by the build, deploy, run and package tasks (`sfdk build --sign`, `sfdk package --sign`). Needs a GPG key; see `sailfish.build.signingUser`."
+          "markdownDescription": "Sign the RPM packages produced by the build, deploy, run and package tasks (`sfdk build --sign`, `sfdk package --sign`). Needs a GPG key; see `sardina.build.signingUser`."
         },
-        "sailfish.build.signingUser": {
+        "sardina.build.signingUser": {
           "type": "string",
           "default": "",
           "scope": "resource",
           "markdownDescription": "The GPG key to sign with, passed to sfdk as `package.signing-user`: a user name, or a key ID or fingerprint. A name matches every key that contains it (`Jane Doe` also matches `Jane Doe Dev`), so the setup command saves the fingerprint. Leave empty to use the value from `sfdk config`."
         },
-        "sailfish.build.signingPassphraseFile": {
+        "sardina.build.signingPassphraseFile": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "markdownDescription": "Path to a file (mode 600) holding the key's passphrase, passed to sfdk as `package.signing-passphrase-file`. sfdk only reads the first line, and the file must be under the Sailfish SDK workspace (your home directory by default). Leave empty to use the value from `sfdk config`. The passphrase itself is never stored in settings."
+          "markdownDescription": "Path to a file (mode 600) holding the key's passphrase, passed to sfdk as `package.signing-passphrase-file`. sfdk only reads the first line, and the file must be under the SFOS SDK workspace (your home directory by default). Leave empty to use the value from `sfdk config`. The passphrase itself is never stored in settings."
         },
-        "sailfish.build.cleanOnArchChange": {
+        "sardina.build.cleanOnArchChange": {
           "type": "boolean",
           "default": false,
           "scope": "resource",
           "markdownDescription": "Clean the build output without asking when the target's architecture changes (e.g. `i486` → `aarch64`). In-source builds otherwise reuse objects compiled for the previous architecture and produce a broken package."
         },
-        "sailfish.deploy.method": {
+        "sardina.deploy.method": {
           "type": "string",
           "enum": [
             "sdk",
@@ -546,7 +554,7 @@
           "scope": "resource",
           "markdownDescription": "The deployment method used by the `deploy` task."
         },
-        "sailfish.run.launcher": {
+        "sardina.run.launcher": {
           "type": "string",
           "enum": [
             "auto",
@@ -558,31 +566,31 @@
           "scope": "resource",
           "markdownDescription": "How the application is launched on the device. `auto` picks the launcher based on the project shape."
         },
-        "sailfish.run.customCommand": {
+        "sardina.run.customCommand": {
           "type": "string",
           "default": "",
           "scope": "resource",
-          "markdownDescription": "Custom remote launch command used when `sailfish.run.launcher` is `custom`."
+          "markdownDescription": "Custom remote launch command used when `sardina.run.launcher` is `custom`."
         },
-        "sailfish.run.killBeforeLaunch": {
+        "sardina.run.killBeforeLaunch": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
           "markdownDescription": "Kill any previously running instance of the application on the device before launching it again."
         },
-        "sailfish.qtqml.silenceQmlls": {
+        "sardina.qtqml.silenceQmlls": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
-          "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this Sailfish project folder. Sailfish OS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
+          "markdownDescription": "Disable the Qt QML extension's `qmlls` language server for this SFOS project folder. SFOS build targets ship Qt 5.6, and `qmlls` requires Qt 6.8+, so it only produces spurious diagnostics against Silica QML."
         },
-        "sailfish.qml.languageFeatures": {
+        "sardina.qml.languageFeatures": {
           "type": "boolean",
           "default": true,
           "scope": "resource",
           "markdownDescription": "Completion, hover and diagnostics for QML, read from the selected build target."
         },
-        "sailfish.logLevel": {
+        "sardina.logLevel": {
           "type": "string",
           "enum": [
             "info",
@@ -590,25 +598,25 @@
           ],
           "default": "info",
           "scope": "window",
-          "markdownDescription": "Verbosity of the **Sailfish OS** output channel."
+          "markdownDescription": "Verbosity of the **Sardina** output channel."
         },
-        "sailfish.experimental.enableWindows": {
+        "sardina.experimental.enableWindows": {
           "type": "boolean",
           "default": false,
           "scope": "machine",
           "markdownDescription": "**Experimental.** Enable experimental Windows support (via MSYS2). Windows is otherwise unsupported in v0.1."
         },
-        "sailfish.experimental.msys2Shell": {
+        "sardina.experimental.msys2Shell": {
           "type": "string",
           "default": "C:\\msys64\\msys2_shell.cmd",
           "scope": "machine",
-          "markdownDescription": "**Experimental.** Path to the MSYS2 shell launcher, used only when `sailfish.experimental.enableWindows` is enabled."
+          "markdownDescription": "**Experimental.** Path to the MSYS2 shell launcher, used only when `sardina.experimental.enableWindows` is enabled."
         }
       }
     },
     "taskDefinitions": [
       {
-        "type": "sailfish",
+        "type": "sardina",
         "required": [
           "command"
         ],
@@ -672,8 +680,8 @@
     ],
     "problemMatchers": [
       {
-        "name": "sailfish-gcc",
-        "owner": "sailfish",
+        "name": "sardina-gcc",
+        "owner": "sardina",
         "source": "gcc",
         "fileLocation": [
           "autoDetect",
@@ -689,8 +697,8 @@
         }
       },
       {
-        "name": "sailfish-qmake",
-        "owner": "sailfish",
+        "name": "sardina-qmake",
+        "owner": "sardina",
         "source": "qmake",
         "fileLocation": [
           "autoDetect",
@@ -704,8 +712,8 @@
         }
       },
       {
-        "name": "sailfish-rpmbuild",
-        "owner": "sailfish",
+        "name": "sardina-rpmbuild",
+        "owner": "sardina",
         "source": "rpmbuild",
         "fileLocation": [
           "relative",
@@ -720,8 +728,8 @@
         "applyTo": "allDocuments"
       },
       {
-        "name": "sailfish-rpmvalidator",
-        "owner": "sailfish",
+        "name": "sardina-rpmvalidator",
+        "owner": "sardina",
         "source": "rpmvalidator",
         "fileLocation": [
           "relative",
@@ -740,337 +748,337 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "sailfish",
-          "title": "Sailfish OS",
-          "icon": "resources/sailfish.svg"
+          "id": "sardina",
+          "title": "Sardina",
+          "icon": "resources/sardina.svg"
         }
       ]
     },
     "views": {
-      "sailfish": [
+      "sardina": [
         {
-          "id": "sailfish.build",
+          "id": "sardina.build",
           "name": "Build",
-          "when": "sailfish.platformSupported && sailfish.sdkAvailable && sailfish.isProject"
+          "when": "sardina.platformSupported && sardina.sdkAvailable && sardina.isProject"
         },
         {
-          "id": "sailfish.devices",
+          "id": "sardina.devices",
           "name": "Devices",
-          "when": "sailfish.platformSupported && sailfish.sdkAvailable"
+          "when": "sardina.platformSupported && sardina.sdkAvailable"
         },
         {
-          "id": "sailfish.sdk",
+          "id": "sardina.sdk",
           "name": "SDK",
-          "when": "sailfish.platformSupported"
+          "when": "sardina.platformSupported"
         }
       ]
     },
     "menus": {
       "commandPalette": [
         {
-          "command": "sailfish.agent.editKeypadLayout",
-          "when": "sailfish.mirrorKeypad"
+          "command": "sardina.agent.editKeypadLayout",
+          "when": "sardina.mirrorKeypad"
         },
         {
-          "command": "sailfish.agent.resetKeypadLayout",
-          "when": "sailfish.mirrorKeypadLayout"
+          "command": "sardina.agent.resetKeypadLayout",
+          "when": "sardina.mirrorKeypadLayout"
         },
         {
-          "command": "sailfish.monitor.restartApp",
+          "command": "sardina.monitor.restartApp",
           "when": "false"
         },
         {
-          "command": "sailfish.monitor.stopApp",
+          "command": "sardina.monitor.stopApp",
           "when": "false"
         },
         {
-          "command": "sailfish.monitor.screenshot",
+          "command": "sardina.monitor.screenshot",
           "when": "false"
         },
         {
-          "command": "sailfish.monitor.mirror",
+          "command": "sardina.monitor.mirror",
           "when": "false"
         },
         {
-          "command": "sailfish.monitor.showLogs",
+          "command": "sardina.monitor.showLogs",
           "when": "false"
         }
       ],
       "editor/title": [
         {
-          "command": "sailfish.agent.editKeypadLayout",
-          "when": "activeWebviewPanelId == 'sailfish.mirror' && sailfish.mirrorKeypad",
+          "command": "sardina.agent.editKeypadLayout",
+          "when": "activeWebviewPanelId == 'sardina.mirror' && sardina.mirrorKeypad",
           "group": "keypad@1"
         },
         {
-          "command": "sailfish.agent.resetKeypadLayout",
-          "when": "activeWebviewPanelId == 'sailfish.mirror' && sailfish.mirrorKeypadLayout",
+          "command": "sardina.agent.resetKeypadLayout",
+          "when": "activeWebviewPanelId == 'sardina.mirror' && sardina.mirrorKeypadLayout",
           "group": "keypad@2"
         },
         {
-          "command": "sailfish.monitor.restartApp",
-          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor' && sailfish.monitor.appRunning",
+          "command": "sardina.monitor.restartApp",
+          "when": "activeWebviewPanelId == 'sardina.deviceMonitor' && sardina.monitor.appRunning",
           "group": "navigation@1"
         },
         {
-          "command": "sailfish.monitor.stopApp",
-          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor' && sailfish.monitor.appRunning",
+          "command": "sardina.monitor.stopApp",
+          "when": "activeWebviewPanelId == 'sardina.deviceMonitor' && sardina.monitor.appRunning",
           "group": "navigation@2"
         },
         {
-          "command": "sailfish.monitor.screenshot",
-          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor'",
+          "command": "sardina.monitor.screenshot",
+          "when": "activeWebviewPanelId == 'sardina.deviceMonitor'",
           "group": "navigation@3"
         },
         {
-          "command": "sailfish.monitor.mirror",
-          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor'",
+          "command": "sardina.monitor.mirror",
+          "when": "activeWebviewPanelId == 'sardina.deviceMonitor'",
           "group": "navigation@4"
         },
         {
-          "command": "sailfish.monitor.showLogs",
-          "when": "activeWebviewPanelId == 'sailfish.deviceMonitor'",
+          "command": "sardina.monitor.showLogs",
+          "when": "activeWebviewPanelId == 'sardina.deviceMonitor'",
           "group": "navigation@5"
         }
       ],
       "view/title": [
         {
-          "command": "sailfish.devices.refresh",
-          "when": "view == sailfish.sdk",
+          "command": "sardina.devices.refresh",
+          "when": "view == sardina.sdk",
           "group": "navigation@9"
         },
         {
-          "command": "sailfish.sdk.install",
-          "when": "view == sailfish.sdk && !sailfish.sdkAvailable",
+          "command": "sardina.sdk.install",
+          "when": "view == sardina.sdk && !sardina.sdkAvailable",
           "group": "navigation@1"
         },
         {
-          "command": "sailfish.downloadSdk",
-          "when": "view == sailfish.sdk",
+          "command": "sardina.downloadSdk",
+          "when": "view == sardina.sdk",
           "group": "1_sdk@1"
         },
         {
-          "command": "sailfish.setSdkPath",
-          "when": "view == sailfish.sdk",
+          "command": "sardina.setSdkPath",
+          "when": "view == sardina.sdk",
           "group": "1_sdk@2"
         },
         {
-          "command": "sailfish.device.add",
-          "when": "view == sailfish.devices",
+          "command": "sardina.device.add",
+          "when": "view == sardina.devices",
           "group": "navigation@1"
         },
         {
-          "command": "sailfish.emulator.installAvailable",
-          "when": "view == sailfish.devices",
+          "command": "sardina.emulator.installAvailable",
+          "when": "view == sardina.devices",
           "group": "navigation@2"
         },
         {
-          "command": "sailfish.devices.refresh",
-          "when": "view == sailfish.devices",
+          "command": "sardina.devices.refresh",
+          "when": "view == sardina.devices",
           "group": "navigation@9"
         },
         {
-          "command": "sailfish.build",
-          "when": "view == sailfish.build && !sailfish.building",
+          "command": "sardina.build",
+          "when": "view == sardina.build && !sardina.building",
           "group": "navigation@1"
         },
         {
-          "command": "sailfish.stopBuild",
-          "when": "view == sailfish.build && sailfish.building",
+          "command": "sardina.stopBuild",
+          "when": "view == sardina.build && sardina.building",
           "group": "navigation@1"
         },
         {
-          "command": "sailfish.showBuildLog",
-          "when": "view == sailfish.build",
+          "command": "sardina.showBuildLog",
+          "when": "view == sardina.build",
           "group": "navigation@2"
         },
         {
-          "command": "sailfish.cleanProjectBuild",
-          "when": "view == sailfish.build",
+          "command": "sardina.cleanProjectBuild",
+          "when": "view == sardina.build",
           "group": "1_clean@1"
         },
         {
-          "command": "sailfish.rebuild",
-          "when": "view == sailfish.build",
+          "command": "sardina.rebuild",
+          "when": "view == sardina.build",
           "group": "1_clean@2"
         },
         {
-          "command": "sailfish.package",
-          "when": "view == sailfish.build",
+          "command": "sardina.package",
+          "when": "view == sardina.build",
           "group": "2_package@1"
         },
         {
-          "command": "sailfish.check",
-          "when": "view == sailfish.build",
+          "command": "sardina.check",
+          "when": "view == sardina.build",
           "group": "2_package@2"
         },
         {
-          "command": "sailfish.runInstalled",
-          "when": "view == sailfish.build",
+          "command": "sardina.runInstalled",
+          "when": "view == sardina.build",
           "group": "3_installed@1"
         },
         {
-          "command": "sailfish.debugInstalled",
-          "when": "view == sailfish.build",
+          "command": "sardina.debugInstalled",
+          "when": "view == sardina.build",
           "group": "3_installed@2"
         },
         {
-          "command": "sailfish.setupSigning",
-          "when": "view == sailfish.build",
+          "command": "sardina.setupSigning",
+          "when": "view == sardina.build",
           "group": "4_setup@1"
         },
         {
-          "command": "sailfish.showBuildLog",
-          "when": "view == sailfish.build",
+          "command": "sardina.showBuildLog",
+          "when": "view == sardina.build",
           "group": "4_setup@2"
         }
       ],
       "view/item/context": [
         {
-          "command": "sailfish.emulator.start",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.stopped)?(\\+sessions)?$/",
+          "command": "sardina.emulator.start",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.stopped)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.emulator.stop",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
+          "command": "sardina.emulator.stop",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.emulator.status",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
+          "command": "sardina.emulator.status",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
         },
         {
-          "command": "sailfish.emulator.show",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
+          "command": "sardina.emulator.show",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
         },
         {
-          "command": "sailfish.device.setDefault",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
+          "command": "sardina.device.setDefault",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/"
         },
         {
-          "command": "sailfish.device.setDefault",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
+          "command": "sardina.device.setDefault",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
         },
         {
-          "command": "sailfish.device.stopSessions",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device\\+sessions$/",
+          "command": "sardina.device.stopSessions",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device\\+sessions$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.device.stopSessions",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?\\+sessions$/",
+          "command": "sardina.device.stopSessions",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?\\+sessions$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.device.openSsh",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
+          "command": "sardina.device.openSsh",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
         },
         {
-          "command": "sailfish.device.installTools",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
+          "command": "sardina.device.installTools",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
         },
         {
-          "command": "sailfish.device.remove",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
+          "command": "sardina.device.remove",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
         },
         {
-          "command": "sailfish.agent.screenshot",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.agent.screenshot",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.agent.mirror",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.agent.mirror",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.agent.screenshot",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
+          "command": "sardina.agent.screenshot",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.agent.mirror",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
+          "command": "sardina.agent.mirror",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.agent.logs",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.agent.logs",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.monitor.open",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.monitor.open",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.agent.logs",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
+          "command": "sardina.agent.logs",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.monitor.open",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
+          "command": "sardina.monitor.open",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.agent.status",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.agent.status",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.agent.status",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
+          "command": "sardina.agent.status",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.agent.install",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.agent.install",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.agent.install",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
+          "command": "sardina.agent.install",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.agent.uninstall",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.agent.uninstall",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.agent.uninstall",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
+          "command": "sardina.agent.uninstall",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.(running|stopped))?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.device.restartHomeScreen",
-          "when": "view == sailfish.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "command": "sardina.device.restartHomeScreen",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.device.restartHomeScreen",
-          "when": "view == sailfish.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
+          "command": "sardina.device.restartHomeScreen",
+          "when": "view == sardina.devices && viewItem =~ /^emulator(\\.running)?(\\+sessions)?$/",
           "group": "2_agent"
         },
         {
-          "command": "sailfish.engine.start",
-          "when": "view == sailfish.sdk && viewItem =~ /^sdk-engine(\\.stopped)?$/",
+          "command": "sardina.engine.start",
+          "when": "view == sardina.sdk && viewItem =~ /^sdk-engine(\\.stopped)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.engine.stop",
-          "when": "view == sailfish.sdk && viewItem =~ /^sdk-engine(\\.running)?$/",
+          "command": "sardina.engine.stop",
+          "when": "view == sardina.sdk && viewItem =~ /^sdk-engine(\\.running)?$/",
           "group": "inline"
         },
         {
-          "command": "sailfish.selectTarget",
-          "when": "view == sailfish.sdk && viewItem == sdk-targets-root"
+          "command": "sardina.selectTarget",
+          "when": "view == sardina.sdk && viewItem == sdk-targets-root"
         },
         {
-          "command": "sailfish.setSfdkDefaultTarget",
-          "when": "view == sailfish.sdk && viewItem == sdk-targets-root"
+          "command": "sardina.setSfdkDefaultTarget",
+          "when": "view == sardina.sdk && viewItem == sdk-targets-root"
         }
       ]
     },
@@ -1082,63 +1090,63 @@
     ],
     "walkthroughs": [
       {
-        "id": "sailfish.gettingStarted",
-        "title": "Get started with Sailfish OS",
-        "description": "Set up the Sailfish SDK, create a project, and build, deploy and run it.",
+        "id": "sardina.gettingStarted",
+        "title": "Get started with SFOS",
+        "description": "Set up the SFOS SDK, create a project, and build, deploy and run it.",
         "steps": [
           {
             "id": "installSdk",
-            "title": "Install and detect the Sailfish SDK",
-            "description": "Install the Sailfish SDK and point the extension at it.\n[Set SDK Path](command:sailfish.setSdkPath)",
+            "title": "Install and detect the SFOS SDK",
+            "description": "Install the SFOS SDK and point the extension at it.\n[Set SDK Path](command:sardina.setSdkPath)",
             "media": {
               "markdown": "media/walkthrough/installSdk.md"
             },
             "completionEvents": [
-              "onContext:sailfish.sdkAvailable"
+              "onContext:sardina.sdkAvailable"
             ]
           },
           {
             "id": "createProject",
             "title": "Create a project",
-            "description": "Create a new Sailfish OS application from a template.\n[New Project](command:sailfish.newProject)",
+            "description": "Create a new SFOS application from a template.\n[New Project](command:sardina.newProject)",
             "media": {
               "markdown": "media/walkthrough/createProject.md"
             },
             "completionEvents": [
-              "onCommand:sailfish.newProject"
+              "onCommand:sardina.newProject"
             ]
           },
           {
             "id": "selectTarget",
             "title": "Select a build target",
-            "description": "Choose which Sailfish OS build target to use.\n[Select Target](command:sailfish.selectTarget)",
+            "description": "Choose which SFOS build target to use.\n[Select Target](command:sardina.selectTarget)",
             "media": {
               "markdown": "media/walkthrough/selectTarget.md"
             },
             "completionEvents": [
-              "onContext:sailfish.hasTarget"
+              "onContext:sardina.hasTarget"
             ]
           },
           {
             "id": "startEmulator",
             "title": "Start the emulator",
-            "description": "Start the Sailfish OS emulator to deploy and test your app.\n[Start Emulator](command:sailfish.emulator.start)",
+            "description": "Start the SFOS emulator to deploy and test your app.\n[Start Emulator](command:sardina.emulator.start)",
             "media": {
               "markdown": "media/walkthrough/startEmulator.md"
             },
             "completionEvents": [
-              "onCommand:sailfish.emulator.start"
+              "onCommand:sardina.emulator.start"
             ]
           },
           {
             "id": "buildDeployRun",
             "title": "Build, deploy and run",
-            "description": "Build your app, deploy it, and run it in one step.\n[Build, Deploy and Run](command:sailfish.buildDeployRun)",
+            "description": "Build your app, deploy it, and run it in one step.\n[Build, Deploy and Run](command:sardina.buildDeployRun)",
             "media": {
               "markdown": "media/walkthrough/buildDeployRun.md"
             },
             "completionEvents": [
-              "onCommand:sailfish.buildDeployRun"
+              "onCommand:sardina.buildDeployRun"
             ]
           }
         ]
@@ -1146,10 +1154,10 @@
     ],
     "keybindings": [
       {
-        "command": "sailfish.buildDeployRun",
+        "command": "sardina.buildDeployRun",
         "key": "ctrl+alt+r",
         "mac": "cmd+alt+r",
-        "when": "sailfish.isProject"
+        "when": "sardina.isProject"
       }
     ]
   },

@@ -25,7 +25,7 @@ function services(): Services {
 }
 
 async function setSdkPathSetting(value: string | undefined): Promise<void> {
-  await vscode.workspace.getConfiguration('sailfish').update('sdkPath', value, vscode.ConfigurationTarget.Global);
+  await vscode.workspace.getConfiguration('sardina').update('sdkPath', value, vscode.ConfigurationTarget.Global);
 }
 
 /** A second, independent fake SDK root (its own bin/sfdk shim to the same fake binary). */
@@ -48,7 +48,7 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
     await services().sdk.refresh();
   });
 
-  test('M1.1: explicit sailfish.sdkPath wins over PATH/env discovery', async function () {
+  test('M1.1: explicit sardina.sdkPath wins over PATH/env discovery', async function () {
     this.timeout(15000);
     const altRoot = makeAltSdkRoot();
     await setSdkPathSetting(altRoot);
@@ -65,7 +65,7 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
     assert.notStrictEqual(fallback?.source, 'setting');
   });
 
-  test('M1.2: no SDK found shows exactly one guidance notification and sailfish.sdkAvailable=false', async function () {
+  test('M1.2: no SDK found shows exactly one guidance notification and sardina.sdkAvailable=false', async function () {
     this.timeout(15000);
     const messages = stubMessages();
     const emptyDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sailfish-empty-sdk-'));
@@ -82,7 +82,7 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
     delete process.env.SAILFISH_SDK_ROOT;
     try {
       await services().sdk.refresh();
-      await waitForContext('sailfish.sdkAvailable', false, 5000);
+      await waitForContext('sardina.sdkAvailable', false, 5000);
       const warnings = messages.calls.filter((c) => c.kind === 'warning');
       assert.strictEqual(warnings.length, 1, `expected exactly one warning, got: ${JSON.stringify(warnings)}`);
       // A second refresh while still not found must not show a second warning.
@@ -103,7 +103,7 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
       const info = services().sdk.current();
       assert.ok(info, 'expected sdk info even with a too-old version');
       assert.strictEqual(info?.version, '3.2.1');
-      assert.strictEqual(services().contextKeys.get('sailfish.sdkAvailable'), true);
+      assert.strictEqual(services().contextKeys.get('sardina.sdkAvailable'), true);
     });
   });
 
@@ -114,7 +114,7 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
       const info = services().sdk.current();
       assert.ok(info, 'expected sdk info even with an unparseable version');
       assert.strictEqual(info?.version, 'unknown');
-      assert.strictEqual(services().contextKeys.get('sailfish.sdkAvailable'), true);
+      assert.strictEqual(services().contextKeys.get('sardina.sdkAvailable'), true);
     });
   });
 
@@ -127,7 +127,7 @@ suite('sdk discovery & version gating (FR-1.1/1.2/1.4/1.7, M1.1-M1.4)', () => {
     });
   });
 
-  test('M1.4: changing sailfish.sdkPath re-runs the version probe (a second --version in the fake log)', async function () {
+  test('M1.4: changing sardina.sdkPath re-runs the version probe (a second --version in the fake log)', async function () {
     this.timeout(15000);
     await services().sdk.refresh();
     const root = services().sdk.current()?.root;

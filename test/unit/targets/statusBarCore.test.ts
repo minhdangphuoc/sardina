@@ -4,7 +4,7 @@ import { computeStatusBarState } from '../../../src/targets/statusBarCore';
 describe('computeStatusBarState (FR-4.1/FR-4.5)', () => {
   it('no target set: prompt text, visible iff isProject && sdkAvailable', () => {
     const state = computeStatusBarState({ isProject: true, sdkAvailable: true, target: '', knownTargetNames: undefined });
-    assert.strictEqual(state.text, '$(circuit-board) Select Sailfish target');
+    assert.strictEqual(state.text, '$(circuit-board) Select SFOS target');
     assert.strictEqual(state.visible, true);
     assert.strictEqual(state.tooltip, undefined);
   });

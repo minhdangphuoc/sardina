@@ -64,7 +64,7 @@ function toItem(c: Completion): vscode.CompletionItem {
 
 class QmlFeatures {
   private readonly indexes = new Map<string, TypeIndex>();
-  private readonly diagnostics = vscode.languages.createDiagnosticCollection('sailfish-qml');
+  private readonly diagnostics = vscode.languages.createDiagnosticCollection('sardina-qml');
   private readonly timers = new Map<string, NodeJS.Timeout>();
   private testRoot: string | undefined;
 
@@ -160,7 +160,7 @@ class QmlFeatures {
   }
 }
 
-/** Completion, hover and diagnostics for QML in Sailfish projects, read from the build target. */
+/** Completion, hover and diagnostics for QML in SFOS projects, read from the build target. */
 export function activateQmlFeatures(ctx: vscode.ExtensionContext, services: Services): QmlFeaturesTestApi {
   const features = new QmlFeatures(services);
   features.register(ctx);
