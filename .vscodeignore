@@ -15,12 +15,11 @@ eslint.config.mjs
 .git/**
 docs/**
 device-agent/**
-PLAN*.md
-HANDOFF.md
-REVIEW*.md
-AGENTS.md
-CLAUDE.md
+# Only the README, changelog and license ship as Markdown; no dot-folders ship.
+*.md
+!README.md
+!CHANGELOG.md
+!LICENSE.md
+.*/**
 reports/**
 research_notes/**
-.claude/**
-.github/**
