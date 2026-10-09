@@ -1,6 +1,7 @@
 import QtQuick 2.0
+import Sailfish.Silica.private 1.0 as Private
 
-StandinWindow {
+Private.StandinWindow {
     id: window
     property Item initialPage
     property alias pageCount: counter.count

@@ -1,0 +1,30 @@
+import QtQuick.tooling 1.2
+
+// Hand-written test fixture; not generated, not derived from any SDK.
+
+Module {
+    dependencies: ["QtQuick 2.0"]
+    Component {
+        name: "StandinWindow"
+        defaultProperty: "data"
+        prototype: "FxItem"
+        exports: ["Sailfish.Silica.private/StandinWindow 1.0"]
+        exportMetaObjectRevisions: [0]
+        Property { name: "orientation"; type: "int" }
+    }
+    Component {
+        name: "StandinText"
+        defaultProperty: "data"
+        prototype: "FxText"
+        exports: ["Sailfish.Silica.private/StandinText 1.0"]
+        exportMetaObjectRevisions: [0]
+        Enum {
+            name: "Truncation"
+            values: {
+                "None": 0,
+                "Fade": 1
+            }
+        }
+        Property { name: "truncationMode"; type: "Truncation" }
+    }
+}
