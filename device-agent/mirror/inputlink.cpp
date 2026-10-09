@@ -189,14 +189,6 @@ void InputLink::cancel()
     send(QJsonObject{ { QStringLiteral("cancel"), true } });
 }
 
-void InputLink::setCursorEnabled(bool enabled)
-{
-    if (enabled != m_cursor) {
-        m_cursor = enabled;
-        send(QJsonObject{ { QStringLiteral("cursor"), enabled } });
-    }
-}
-
 void InputLink::onEvent(const QJsonObject &line)
 {
     const QJsonValue state = line.value(QStringLiteral("state"));

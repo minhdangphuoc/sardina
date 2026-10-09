@@ -90,7 +90,6 @@ private:
     // stream refused for that reason). Returns the "input"/"inputLease"/"inputError" fields for the
     // "settings" message (leading comma, or empty when the request did not ask for input).
     QByteArray applyControlSetting(bool allowed);
-    void updateCursor();
     // The input fields of the status line, from the current state (read only).
     QByteArray inputFields() const;
     // The "settings" message (only when the request asked for "phoneState").

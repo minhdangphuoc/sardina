@@ -254,7 +254,7 @@ void Agent::onSettingChanged(const QString &key)
     } else if (mirror && key == QLatin1String("screenView") && !m_settings->screenView()) {
         mirror->end(QStringLiteral("screen view disabled on the phone"));
     } else if (mirror) {
-        // control and touchCursor go to the stream's hooks
+        // control goes to the stream's hooks
         mirror->send(QJsonObject{ { QStringLiteral("setting"),
                                     QJsonObject{ { QStringLiteral("key"), key },
                                                  { QStringLiteral("value"), QJsonValue::fromVariant(m_settings->toMap().value(key)) } } } });

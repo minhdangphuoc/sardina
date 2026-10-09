@@ -24,7 +24,6 @@ public:
     bool screenView() const { return m_screenView; }
     bool control() const { return m_control; }
     bool logs() const { return m_logs; }
-    bool touchCursor() const { return m_touchCursor; }
     bool idleMode() const { return m_idleMode; }
     // The mirror's frame rate limit (agent 1.10.7): 30 or 60.
     int maxFps() const { return m_maxFps; }
@@ -59,7 +58,6 @@ private:
     bool m_screenView;
     bool m_control;
     bool m_logs;
-    bool m_touchCursor;
     bool m_muteNotifications;
     bool m_idleMode;
     int m_maxFps;

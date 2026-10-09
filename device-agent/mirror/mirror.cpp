@@ -348,16 +348,6 @@ void MirrorStream::applySetting(const QString &key)
     }
     if (key == QLatin1String("control")) {
         sendPhoneSettings(applyControlSetting(m_settings->control()));
-    } else if (key == QLatin1String("touchCursor")) {
-        updateCursor();
-    }
-}
-
-// The phone's cursor exists only while the switch is on and control is active.
-void MirrorStream::updateCursor()
-{
-    if (m_input) {
-        m_input->setCursorEnabled(m_inputActive && m_settings && m_settings->touchCursor());
     }
 }
 
@@ -520,7 +510,6 @@ void MirrorStream::setInputActive(bool active)
         }
         m_inputActive = false;
         m_input->cancel();
-        updateCursor();
         sendPhoneSettings(inputFields());
         fprintf(stderr, "sailfish-devagent: mirror input inactive\n");
         emit stateChanged();
@@ -540,7 +529,6 @@ void MirrorStream::setInputActive(bool active)
     }
     m_inputActive = active;
     m_inputLease.start();
-    updateCursor();
     sendPhoneSettings(inputFields());
     fprintf(stderr, "sailfish-devagent: mirror input active\n");
     emit stateChanged();

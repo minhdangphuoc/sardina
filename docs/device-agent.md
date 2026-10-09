@@ -50,11 +50,7 @@ you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
    it. **Sailfish: Edit Keypad Layout** opens the file again, **Sailfish: Reset
    Keypad Layout** forgets it (the file is kept).
    While control is active, a circle in the mirror marks where you touch. The
-   phone itself shows nothing, unless its switch **Show remote touches as a
-   cursor** is on: the input module then creates a virtual mouse (through
-   `/dev/uinput`) and moves the phone's own pointer to each touch. It never
-   presses a button; it is removed when control ends. Without access to
-   `/dev/uinput` there is no cursor.
+   phone itself shows nothing (agent 1.11.1 and newer send the touches for it).
 7. **Remove the agent or one module.** **Sailfish: Uninstall Device Agent**
    asks what to remove: **Device agent and all modules** or one installed
    module (removing `mirror` also removes `input`). A module removal stops only

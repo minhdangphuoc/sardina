@@ -5,11 +5,8 @@ QT = core network
 
 SOURCES += \
     main.cpp \
-    mirrorinput.cpp \
-    virtualpointer.cpp
+    mirrorinput.cpp
 
 HEADERS += \
     mirrorinput.h \
-    virtualpointer.h \
-    ../common/pointertrack.h \
     ../common/keypadkeys.h

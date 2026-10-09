@@ -2,7 +2,7 @@
 
 ## v0.1.13
 
-- The touch marker is now drawn only in the VS Code mirror. The phone-side indicator is removed, because it could crash the phone's home screen (device agent 1.11.1). New phone switch `Show remote touches as a cursor` (off by default): while control is active the phone's own mouse cursor moves to where VS Code touches, through a virtual pointer that never presses a button. Not yet verified on a phone.
+- The touch marker is now drawn only in the VS Code mirror. The phone-side indicator is removed, because it could crash the phone's home screen (device agent 1.11.1).
 
 ## v0.1.12
 
