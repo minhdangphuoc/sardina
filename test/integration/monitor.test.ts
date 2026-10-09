@@ -240,6 +240,16 @@ suite('Device Monitor (I-M1..I-M10)', () => {
     });
   });
 
+  test('I-M7b logs-only 1.11 agent: no stats module, so the monitor polls and never asks for the stats stream', async function () {
+    this.timeout(40000);
+    await setSetting('monitor.pollIntervalSeconds', 2);
+    await withScenario('agent-modules-logs-only', async () => {
+      await openMonitor();
+      await waitFor(() => all('device_exec.sh').length >= 2, 15000);
+      assert.ok(!keys().includes('device_exec.sailfish-devagent.stats'), JSON.stringify(keys()));
+    });
+  });
+
   test('I-M8 logs off on the phone: Show logs gives the Allow system logs text and requests no stream', async function () {
     this.timeout(30000);
     await withScenario('monitor-logs-off', async () => {

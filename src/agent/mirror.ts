@@ -60,8 +60,8 @@ import {
   type MirrorSink,
   type MirrorTransport,
 } from './mirrorTransport';
-import { describeAgentRefusal, type AgentProbe, isPng } from './agentCore';
-import { ensureAgent, installAgentOn, offerAgentUpdate, onAgentInstall, probe, requireDevice } from './deviceAgent';
+import { describeAgentRefusal, hasModule, type AgentProbe, isPng } from './agentCore';
+import { NEED, ensureAgentProbe, installAgentOn, offerAgentUpdate, onAgentInstall, probe, requireDevice, updateAgentOn } from './deviceAgent';
 import { cachedSocketPath, privateDir, readPinnedKeys, resolveDeviceEndpoint, sweepOrphans } from './sshForward';
 import { forwardEligibility, hostKeyAlias } from './sshForwardCore';
 import { scaledHeight, type AdaptCause, type AdaptDecision } from './mirrorAdapt';
@@ -127,6 +127,8 @@ export interface MirrorSessionOptions {
   getEndpoint: () => Promise<SfdkDeviceInfo | undefined>;
   /** The strip's Update agent action: runs the install flow for this device. */
   updateAgent?: () => Promise<unknown>;
+  /** The strip's Install action when the mirror runs without the input module. */
+  installInput?: () => Promise<unknown>;
   keypadLayouts: KeypadLayouts;
   keypadContextChanged: () => void;
   /** The same path as the Edit command: edits the model's layout and refreshes every session of it. */
@@ -357,6 +359,11 @@ export class MirrorSession {
     if (process.env.TEST_MODE === 'full') this.onMessage(message);
   }
 
+  /** The mirror runs but the phone has no input module, so control is not offered. */
+  private inputModuleMissing(): boolean {
+    return hasModule(this.opts.probe, 'mirror') && !hasModule(this.opts.probe, 'input');
+  }
+
   keypadInfo(): KeypadInfo | undefined {
     // The keypad is shown only with the `key` capability, so an agent without the key path never gets presses.
     return supportsKeypad(this.opts.probe.mirrorInput) ? this.opts.probe.keypad : undefined;
@@ -496,6 +503,8 @@ export class MirrorSession {
     } else if (type === 'updateAgent') {
       // Offered by the strip only over the sfdk path with an outdated agent; the install flow asks for consent itself.
       if (this.state === 'live' && this.transportKind === 'sfdk' && isStaleAgentReason(this.fallbackReason)) void this.opts.updateAgent?.()?.catch(() => undefined);
+    } else if (type === 'installInput') {
+      if (this.state === 'live' && this.inputModuleMissing()) void this.opts.installInput?.()?.catch(() => undefined);
     } else if (type === 'editKeypadLayout') {
       const info = this.keypadInfo();
       if (info) void this.opts.editKeypadLayout(info);
@@ -1045,6 +1054,7 @@ export class MirrorSession {
       kbps: live && this.codec !== undefined ? this.byteRate.kbps(now) : undefined,
       video: live && this.video ? { ...this.video, reduced: this.videoReduced(this.video), reducedFor: this.adaptLimits } : undefined,
       keypadHint: live && this.keypadInfo() !== undefined ? this.keypadHint : undefined,
+      inputModuleMissing: live && this.inputModuleMissing() ? true : undefined,
     };
   }
 
@@ -1137,9 +1147,10 @@ function openMirror(
       }
 
       let state = await probe(services, device);
-      if (!(state.state === 'running' && state.developerMode)) {
-        if (!(await ensureAgent(ctx, services, device, 'screenView'))) return;
-        state = await probe(services, device);
+      if (!(state.state === 'running' && state.developerMode && hasModule(state, 'mirror'))) {
+        const ensured = await ensureAgentProbe(ctx, services, device, NEED.mirror, state);
+        if (!ensured) return;
+        state = ensured;
       }
       if (state.state !== 'running') return;
       if (!agentSupportsMirror(state.version)) {
@@ -1148,7 +1159,7 @@ function openMirror(
           INSTALL_AGENT,
         );
         if (choice !== INSTALL_AGENT) return;
-        if (!(await installAgentOn(ctx, services, device))) return;
+        if (!(await updateAgentOn(ctx, services, device, state))) return;
         state = await probe(services, device);
         if (state.state !== 'running' || !agentSupportsMirror(state.version)) return;
       }
@@ -1170,7 +1181,7 @@ function openMirror(
         device,
         panel,
         services,
-        { probe: state, forward, getEndpoint, updateAgent: () => installAgentOn(ctx, services, device), keypadLayouts, keypadContextChanged, editKeypadLayout },
+        { probe: state, forward, getEndpoint, updateAgent: () => updateAgentOn(ctx, services, device, state), installInput: () => installAgentOn(ctx, services, device, ['input']), keypadLayouts, keypadContextChanged, editKeypadLayout },
         (s) => {
           if (sessions.get(s.device) === s) sessions.delete(s.device);
           keypadContextChanged();

@@ -11,8 +11,9 @@ import { sfdkDeviceName } from '../devices/listParsing';
 import {
   AGENT_ARCHES,
   AGENT_BINARY,
+  AGENT_COPY_NAMES,
+  AGENT_MODULES,
   AGENT_PACKAGE,
-  AGENT_RPM_NAME,
   COPY_SCRIPT,
   INSTALL_SCRIPT,
   REMOVE_COPY_SCRIPT,
@@ -23,14 +24,21 @@ import {
   decodeBase64Output,
   describeAgentRefusal,
   describeProbe,
+  hasModule,
   installConsentDetail,
+  installedModules,
+  MODULE_PICK_DETAIL,
   isPng,
   isScreenshotPath,
   parseAgentReply,
   phoneRefusal,
   pickAgentRpms,
   screenshotFileName,
+  withRequiredModules,
   type AgentArch,
+  type AgentModule,
+  type AgentNeed,
+  type AgentPart,
   type AgentProbe,
 } from './agentCore';
 import { agentUpdateNotice, agentUpdateAvailable, bundledAgentVersion } from './mirrorCore';
@@ -44,10 +52,13 @@ import {
   restartHomeScreenAsk,
   restartHomeScreenConfirm,
   UNINSTALL_SCRIPT,
+  modulesToErase,
   parseCleanupReport,
+  sessionKindsOf,
+  uninstallModulesScript,
   uninstallSummary,
 } from './uninstallCore';
-import { deviceSessions, listLabels } from '../core/deviceSessions';
+import { deviceSessions, listLabels, type DeviceSessionKind } from '../core/deviceSessions';
 
 /**
  * The on-device developer agent (device-agent/): install, uninstall, status, screenshots and
@@ -56,6 +67,15 @@ import { deviceSessions, listLabels } from '../core/deviceSessions';
  */
 
 const INSTALL_AGENT = 'Install Device Agent';
+const REMOVE_ALL = 'Device agent and all modules';
+type RunningProbe = Extract<AgentProbe, { state: 'running' }>;
+
+/** What features need from the agent, for `ensureAgentProbe`. */
+export const NEED = {
+  screenshot: { module: 'screenshot', setting: 'screenView', feature: 'Screenshots' },
+  mirror: { module: 'mirror', setting: 'screenView', feature: 'The screen mirror' },
+  logs: { module: 'logs', setting: 'logs', feature: 'Device logs' },
+} as const satisfies Record<string, AgentNeed>;
 export const UPDATE_AGENT = 'Update Device Agent';
 /** Devices already told about an update in this session. */
 const updateOffered = new Set<string>();
@@ -151,23 +171,28 @@ export async function offerAgentUpdate(
   updateOffered.add(device);
   const choice = await services.prompts.showInformationMessage(agentUpdateNotice(device, probeState.version, bundled), UPDATE_AGENT);
   if (choice !== UPDATE_AGENT) return;
-  await installAgentOn(ctx, services, device);
+  await updateAgentOn(ctx, services, device, probeState);
 }
 
 /**
- * The agent's probe when it is running with Developer Mode on and the phone allows `need`.
- * Otherwise explains, offers the install when the agent is missing, and returns undefined.
+ * The agent's probe when it is running with Developer Mode on, has the module `need` names and the
+ * phone allows it. Otherwise explains, offers the install of what is missing (one prompt, one
+ * password) and returns undefined. `known` is a ping the caller already made.
  */
 export async function ensureAgentProbe(
   ctx: vscode.ExtensionContext,
   services: Services,
   device: string,
-  need?: 'screenView' | 'logs',
+  need: AgentNeed,
+  known?: AgentProbe,
 ): Promise<AgentProbe | undefined> {
-  const state = await probe(services, device);
+  const state = known ?? (await probe(services, device));
   if (state.state === 'running' && state.developerMode) {
+    if (!hasModule(state, need.module)) {
+      return offerInstall(ctx, services, device, need, `Sailfish: ${need.feature} needs the ${need.module} module of the device agent on "${device}".`, [need.module], false);
+    }
     // The phone's own settings win: say so before asking for something it will refuse.
-    const refusal = need ? phoneRefusal(state, need) : undefined;
+    const refusal = need.setting ? phoneRefusal(state, need.setting) : undefined;
     if (refusal) {
       void services.prompts.showErrorMessage(`Sailfish: "${device}": ${refusal}`);
       return undefined;
@@ -175,25 +200,41 @@ export async function ensureAgentProbe(
     return state;
   }
   if (state.state === 'not-installed' || state.state === 'not-running') {
-    const choice = await services.prompts.showWarningMessage(
-      `${describeProbe(device, state)} Screenshots and device logs need it.`,
-      INSTALL_AGENT,
-    );
-    if (choice === INSTALL_AGENT) {
-      return (await installAgentOn(ctx, services, device)) ? await probe(services, device) : undefined;
-    }
-    return undefined;
+    const message = `${describeProbe(device, state)} ${need.feature} needs it with the ${need.module} module.`;
+    return offerInstall(ctx, services, device, need, message, [need.module], true);
   }
   void services.prompts.showErrorMessage(
     state.state === 'running'
-      ? `Sailfish: Developer Mode is off on "${device}", so the device agent refuses screenshots and logs. Turn it on in Settings → Developer tools.`
+      ? `Sailfish: Developer Mode is off on "${device}", so the device agent refuses requests. Turn it on in Settings → Developer tools.`
       : describeProbe(device, state),
   );
   return undefined;
 }
 
+/** The prompt is the consent step: it names what the added modules can do. Returns the agent's new probe when it has the module. */
+async function offerInstall(
+  ctx: vscode.ExtensionContext,
+  services: Services,
+  device: string,
+  need: AgentNeed,
+  message: string,
+  modules: readonly AgentModule[],
+  withCore: boolean,
+): Promise<AgentProbe | undefined> {
+  const choice = await services.prompts.showWarningMessage(
+    message,
+    { modal: true, detail: installConsentDetail(device, modules) },
+    INSTALL_AGENT,
+  );
+  if (choice !== INSTALL_AGENT) return undefined;
+  const parts: AgentPart[] = withCore ? ['core', ...modules] : [...modules];
+  if (!(await installAgentOn(ctx, services, device, parts, true))) return undefined;
+  const after = await probe(services, device);
+  return hasModule(after, need.module) ? after : undefined;
+}
+
 /** True when `ensureAgentProbe` found a usable agent. */
-export async function ensureAgent(ctx: vscode.ExtensionContext, services: Services, device: string, need?: 'screenView' | 'logs'): Promise<boolean> {
+export async function ensureAgent(ctx: vscode.ExtensionContext, services: Services, device: string, need: AgentNeed): Promise<boolean> {
   return (await ensureAgentProbe(ctx, services, device, need)) !== undefined;
 }
 
@@ -234,19 +275,37 @@ async function copyRpm(services: Services, device: string, rpmPath: string, copy
   return result.exitCode === 0;
 }
 
-/**
- * The install itself: consent, architecture, copy, `devel-su rpm -U` (one password prompt), then a ping.
- * The root step and its outcome are announced through `onAgentInstall`.
- */
-export async function installAgentOn(ctx: vscode.ExtensionContext, services: Services, device: string): Promise<boolean> {
-  const consent = await services.prompts.showWarningMessage(
-    `Sailfish: install the device agent on "${device}"?`,
-    { modal: true, detail: installConsentDetail(device) },
-    INSTALL_AGENT,
-  );
-  if (consent !== INSTALL_AGENT) return false;
+function removeCopies(services: Services, device: string): Promise<SfdkResult> {
+  return services.runner.run({ args: ['device', 'exec', '--', 'sh', '-c', REMOVE_COPY_SCRIPT, 'sh', ...AGENT_COPY_NAMES], device, timeoutMs: REQUEST_TIMEOUT_MS });
+}
 
-  let copiedNames: string[] = [AGENT_RPM_NAME];
+/** The update: the core and the modules already there (a 1.10.x agent has them all). */
+export function updateAgentOn(ctx: vscode.ExtensionContext, services: Services, device: string, state: RunningProbe): Promise<boolean> {
+  return installAgentOn(ctx, services, device, ['core', ...installedModules(state)]);
+}
+
+/**
+ * The install itself: consent (unless the caller asked it already), architecture, copy of the RPMs
+ * of `parts`, `devel-su rpm -U` (one password prompt), then a ping. The root step and its outcome
+ * are announced through `onAgentInstall`.
+ */
+export async function installAgentOn(
+  ctx: vscode.ExtensionContext,
+  services: Services,
+  device: string,
+  parts: readonly AgentPart[],
+  consented = false,
+): Promise<boolean> {
+  if (!consented) {
+    const modules = AGENT_MODULES.filter((m) => parts.includes(m));
+    const consent = await services.prompts.showWarningMessage(
+      `Sailfish: install the device agent on "${device}"?`,
+      { modal: true, detail: installConsentDetail(device, modules) },
+      INSTALL_AGENT,
+    );
+    if (consent !== INSTALL_AGENT) return false;
+  }
+
   const prepared = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Sailfish: preparing the device agent for "${device}"…`, cancellable: true },
     async (progress, token): Promise<boolean> => {
@@ -265,12 +324,13 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
       } catch {
         files = [];
       }
-      const rpms = pickAgentRpms(arch, files);
+      const rpms = pickAgentRpms(arch, files, parts);
       if (!rpms) {
-        void services.prompts.showErrorMessage(`Sailfish: this extension build ships no ${AGENT_PACKAGE} RPM for ${arch} (expected in ${dir}).`);
+        void services.prompts.showErrorMessage(`Sailfish: this extension build ships no ${AGENT_PACKAGE} RPMs for ${arch} (expected in ${dir}).`);
         return false;
       }
-      copiedNames = rpms.map((r) => r.copyName);
+      // A copy left by an install that never finished would be installed with the new ones.
+      await removeCopies(services, device);
       for (const rpm of rpms) {
         progress.report({ message: `copying ${rpm.file}…` });
         if (!(await copyRpm(services, device, path.join(dir, rpm.file), rpm.copyName, token))) {
@@ -296,7 +356,7 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   if (exitCode !== 0) installEvents.fire({ device, phase: 'done' });
   if (exitCode === undefined) {
     // The root step never ran (password prompt cancelled, device offline): the copy is the user's, remove it with its folder.
-    await services.runner.run({ args: ['device', 'exec', '--', 'sh', '-c', REMOVE_COPY_SCRIPT, 'sh', ...copiedNames], device, timeoutMs: REQUEST_TIMEOUT_MS });
+    await removeCopies(services, device);
     return false;
   }
   if (exitCode !== 0) {
@@ -322,15 +382,24 @@ function installAgent(ctx: vscode.ExtensionContext, services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
-    await installAgentOn(ctx, services, device);
+    const state = await probe(services, device);
+    // Fresh phone: everything is offered; with an agent, what it has.
+    const have = state.state === 'running' ? installedModules(state) : AGENT_MODULES;
+    const picked = await services.prompts.showQuickPick(
+      AGENT_MODULES.map((m) => ({ label: m, description: MODULE_PICK_DETAIL[m], picked: have.includes(m) })),
+      { canPickMany: true, title: 'Install Device Agent', placeHolder: 'Modules to install' },
+    );
+    if (!picked || picked.length === 0) return;
+    const modules = withRequiredModules(picked.map((p) => p.label));
+    await installAgentOn(ctx, services, device, ['core', ...modules]);
   };
 }
 
 /** Stops the device's sessions that use the agent (mirror, logs, app monitor); debug and app sessions keep running. */
-async function stopAgentSessions(services: Services, device: string): Promise<void> {
+async function stopAgentSessions(services: Services, device: string, kinds: readonly DeviceSessionKind[] = AGENT_SESSION_KINDS): Promise<void> {
   const ids = deviceSessions
     .activeFor(device)
-    .filter((s) => AGENT_SESSION_KINDS.includes(s.kind))
+    .filter((s) => kinds.includes(s.kind))
     .map((s) => s.id);
   if (ids.length === 0) return;
   const results = await Promise.all(ids.map((id) => deviceSessions.stopOne(device, id)));
@@ -395,26 +464,47 @@ function restartHomeScreenCommand(services: Services) {
   };
 }
 
+/** The modules to remove: undefined means everything. With a modular agent running the owner picks; otherwise everything is all there is to remove. */
+async function pickRemoval(services: Services, device: string): Promise<{ modules?: AgentModule[] } | undefined> {
+  const state = await probe(services, device);
+  if (state.state !== 'running' || state.modules === undefined || state.modules.length === 0) return {};
+  const installed = state.modules;
+  const picked = await services.prompts.showQuickPick(
+    [
+      { label: REMOVE_ALL, modules: undefined as AgentModule[] | undefined },
+      ...installed.map((m) => ({ label: `${m} module`, description: MODULE_PICK_DETAIL[m], modules: modulesToErase(m, installed) })),
+    ],
+    { title: 'Uninstall Device Agent', placeHolder: 'What to remove' },
+  );
+  return picked ? { modules: picked.modules } : undefined;
+}
+
 function uninstallAgent(services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
+    const removal = await pickRemoval(services, device);
+    if (!removal) return;
+    const { modules } = removal;
     // Streams end before the package goes; a running one would otherwise see its socket vanish.
-    await stopAgentSessions(services, device);
+    await stopAgentSessions(services, device, modules ? sessionKindsOf(modules) : AGENT_SESSION_KINDS);
+    const what = modules ? `the ${modules.join(', ')} module${modules.length === 1 ? '' : 's'}` : 'the device agent';
     const exitCode = await runAsRootOnDevice(services, device, {
-      title: `Uninstall the device agent from "${device}"`,
+      title: `Uninstall ${what} from "${device}"`,
       prompt: 'Developer-mode password of the device (Settings → Developer tools).',
-      progressTitle: `Sailfish: remove the device agent from "${device}"`,
-      script: UNINSTALL_SCRIPT,
+      progressTitle: `Sailfish: remove ${what} from "${device}"`,
+      script: modules ? uninstallModulesScript(modules) : UNINSTALL_SCRIPT,
       timeoutMs: ROOT_TIMEOUT_MS,
     });
     if (exitCode === undefined) return;
-    if (exitCode === 0) {
-      await cleanUpAfterUninstall(services, device);
-    } else {
+    if (exitCode !== 0) {
       void services.prompts.showErrorMessage(
-        `Sailfish: removing the device agent from "${device}" failed (exit ${exitCode}). Check the password, and the Sailfish OS output channel for rpm's message.`,
+        `Sailfish: removing ${what} from "${device}" failed (exit ${exitCode}). Check the password, and the Sailfish OS output channel for rpm's message.`,
       );
+    } else if (modules) {
+      void services.prompts.showInformationMessage(`Sailfish: removed ${what} from "${device}".`);
+    } else {
+      await cleanUpAfterUninstall(services, device);
     }
   };
 }
@@ -432,7 +522,7 @@ function agentStatus(ctx: vscode.ExtensionContext, services: Services) {
       updateOffered.add(device);
       const message = `${describeProbe(device, state)} ${agentUpdateNotice(device, state.version, bundled).replace(/^Sailfish: /, 'Update available: ')}`;
       void services.prompts.showInformationMessage(message, UPDATE_AGENT).then((choice) => {
-        if (choice === UPDATE_AGENT) void installAgentOn(ctx, services, device);
+        if (choice === UPDATE_AGENT) void updateAgentOn(ctx, services, device, state);
       });
       return;
     }
@@ -486,7 +576,7 @@ function takeScreenshot(ctx: vscode.ExtensionContext, services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
-    if (!(await ensureAgent(ctx, services, device, 'screenView'))) return;
+    if (!(await ensureAgent(ctx, services, device, NEED.screenshot))) return;
 
     const png = await vscode.window.withProgress(
       { location: vscode.ProgressLocation.Notification, title: `Sailfish: taking a screenshot of "${device}"…`, cancellable: true },
@@ -524,7 +614,7 @@ function showLogs(ctx: vscode.ExtensionContext, services: Services) {
   return async (item?: unknown): Promise<void> => {
     const device = requireDevice(services, item);
     if (!device) return;
-    const agent = await ensureAgentProbe(ctx, services, device, 'logs');
+    const agent = await ensureAgentProbe(ctx, services, device, NEED.logs);
     if (agent) await deviceLog().show(device, agent);
   };
 }

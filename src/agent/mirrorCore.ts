@@ -4,7 +4,7 @@
  * bounds memory, the fps meter and the webview page.
  */
 
-import { AGENT_BINARY, AGENT_PACKAGE, clientName } from './agentCore';
+import { AGENT_BINARY, AGENT_PACKAGE, clientName, compareVersions } from './agentCore';
 import { MIRROR_CONTACT_TIMING, MIRROR_INPUT_MIN_AGENT_VERSION } from './mirrorInput';
 
 export const MIRROR_DEFAULTS = { fps: 4, width: 360, quality: 60 } as const;
@@ -43,24 +43,7 @@ export interface MirrorOptions {
   quality: number;
 }
 
-/** Numeric dotted comparison; missing parts are 0 and a non-numeric part compares as 0. */
-export function compareVersions(a: string, b: string): -1 | 0 | 1 {
-  const pa = a.trim().split('.');
-  const pb = b.trim().split('.');
-  const n = Math.max(pa.length, pb.length);
-  for (let i = 0; i < n; i++) {
-    const x = part(pa[i]);
-    const y = part(pb[i]);
-    if (x < y) return -1;
-    if (x > y) return 1;
-  }
-  return 0;
-}
-
-function part(s: string | undefined): number {
-  if (s === undefined || !/^\d+$/.test(s)) return 0;
-  return Number(s);
-}
+export { compareVersions };
 
 export function agentSupportsMirror(version: string): boolean {
   return compareVersions(version, MIRROR_MIN_AGENT_VERSION) >= 0;
@@ -617,6 +600,8 @@ export interface MirrorStatus {
   softError?: string;
   /** A keypad was reported and its layout is not usable: none chosen yet, or the chosen file is gone. */
   keypadHint?: 'create' | 'missing';
+  /** The phone has the mirror module without the input module. */
+  inputModuleMissing?: boolean;
 }
 
 /** No screen change for this long, with the agent saying the screen is unchanged: the strip says idle. */
@@ -703,7 +688,7 @@ export function logText(s: MirrorStatus): string {
 
 /** The strip's colour: live green, waiting grey, down red. */
 export type StripDot = 'live' | 'wait' | 'down';
-export type StripAction = 'update' | 'reconnect' | 'keypad' | 'keypadEdit';
+export type StripAction = 'update' | 'reconnect' | 'keypad' | 'keypadEdit' | 'installInput';
 
 export interface StripParts {
   dot: StripDot;
@@ -749,7 +734,7 @@ function reducedCauses(r: { reduced?: boolean; reducedFor?: readonly ('link' | '
   return 'link';
 }
 
-/** The single strip warning, by priority: slow path, phone CPU, link, capture, drops, phone error, then the keypad layout hint. */
+/** The single strip warning, by priority: slow path, phone CPU, link, capture, drops, phone error, then the keypad layout hint, then the missing input module. */
 function stripWarning(s: MirrorStatus): { text: string; action?: StripAction } | undefined {
   if (s.transport === 'sfdk') return isStaleAgentReason(s.fallbackReason) ? { text: 'Slow path', action: 'update' } : { text: 'Slow path' };
   const causes = [reducedCauses(s.video), reducedCauses(s.image)];
@@ -759,6 +744,7 @@ function stripWarning(s: MirrorStatus): { text: string; action?: StripAction } |
   if (s.softError) return { text: 'Phone error' };
   if (s.keypadHint === 'create') return { text: 'Keypad detected', action: 'keypad' };
   if (s.keypadHint === 'missing') return { text: 'Keypad layout missing', action: 'keypadEdit' };
+  if (s.inputModuleMissing) return { text: 'Control needs the input module', action: 'installInput' };
   return undefined;
 }
 
@@ -923,6 +909,7 @@ export function statusText(s: MirrorStatus, inputActive = false): string {
   if (p.warning) parts.push(p.warning);
   if (p.action === 'keypad') parts.push('Create layout');
   if (p.action === 'keypadEdit') parts.push('Edit');
+  if (p.action === 'installInput') parts.push('Install');
   const c = controlState(s, inputActive);
   if (c !== 'none') parts.push(CONTROL_PILL_TEXT[c]);
   return parts.join(' · ');
@@ -1243,6 +1230,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   var button = document.getElementById('reconnect');
   var keypadLayoutButton = document.getElementById('keypadLayout');
   var updateButton = document.getElementById('update');
+  var installInput = false;
   var controlEl = document.getElementById('control');
   var infoButton = document.getElementById('info');
   var detailsEl = document.getElementById('details');
@@ -1386,7 +1374,7 @@ export function mirrorHtml(nonce: string, device: string): string {
   img.addEventListener('error', function () { settled(false); });
   button.addEventListener('click', function () { vscode.postMessage({ type: 'reconnect' }); });
   keypadLayoutButton.addEventListener('click', function () { vscode.postMessage({ type: 'editKeypadLayout' }); });
-  updateButton.addEventListener('click', function () { vscode.postMessage({ type: 'updateAgent' }); });
+  updateButton.addEventListener('click', function () { vscode.postMessage({ type: installInput ? 'installInput' : 'updateAgent' }); });
   function renderControl() {
     var text = controlOff ? 'Control off on phone' : control ? 'Control' : '';
     controlEl.hidden = text === '';
@@ -1440,7 +1428,9 @@ export function mirrorHtml(nonce: string, device: string): string {
     warnText.textContent = hasWarn ? strip.warning : '';
     keypadLayoutButton.hidden = strip.action !== 'keypad' && strip.action !== 'keypadEdit';
     keypadLayoutButton.textContent = strip.action === 'keypadEdit' ? 'Edit' : 'Create layout';
-    updateButton.hidden = strip.action !== 'update';
+    installInput = strip.action === 'installInput';
+    updateButton.hidden = strip.action !== 'update' && !installInput;
+    updateButton.textContent = installInput ? 'Install' : 'Update agent';
     button.hidden = strip.action !== 'reconnect';
     controlOff = controlState === 'off';
     renderControl();
