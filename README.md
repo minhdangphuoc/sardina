@@ -7,6 +7,8 @@ Build, run and debug Sailfish OS apps from VS Code.
 > Sailfish OS is a trademark of Jolla; the name is used here only to say
 > which platform the extension works with.
 
+![Debugging on a Jolla Phone with the screen mirror and Device Monitor](media/screenshots/debug-mirror-monitor.png)
+
 ## What it does
 
 A VS Code extension that connects to the Sailfish SDK so you can develop
