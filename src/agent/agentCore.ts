@@ -153,14 +153,13 @@ export interface PhoneSettings {
   logs?: boolean;
   indicator?: IndicatorLevel;
   muteNotifications?: boolean;
-  touchIndicator?: boolean;
   /** Agent 1.10.6: whether the mirror goes idle while the screen is still. */
   idleMode?: boolean;
   /** Agent 1.10.7: the mirror's frame rate limit, 30 or 60. */
   maxFps?: 30 | 60;
 }
 
-const PHONE_BOOLEAN_KEYS = ['screenView', 'control', 'logs', 'muteNotifications', 'touchIndicator', 'idleMode'] as const;
+const PHONE_BOOLEAN_KEYS = ['screenView', 'control', 'logs', 'muteNotifications', 'idleMode'] as const;
 
 /** Keeps only the known keys with the right types; undefined when the value is not an object. */
 export function parsePhoneSettings(value: unknown): PhoneSettings | undefined {
@@ -395,7 +394,6 @@ export function describePhoneSettings(settings: PhoneSettings | undefined): stri
   }
   if (settings.indicator !== undefined && settings.indicator !== 'normal') parts.push(`session indicator ${settings.indicator}`);
   if (settings.muteNotifications === true) parts.push('agent notifications muted');
-  if (settings.touchIndicator === true) parts.push('touch indicator on');
   return parts.length > 0 ? ` On the phone: ${parts.join('; ')}.` : '';
 }
 

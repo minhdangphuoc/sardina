@@ -56,8 +56,6 @@ InputLink::InputLink(const QString &executable, QObject *parent)
     , m_keypad(false)
     , m_busy(false)
     , m_live(false)
-    , m_overlayEnabled(false)
-    , m_overlayWorks(true)
 {
     if (executable.isEmpty()) {
         m_error = QStringLiteral("input module not installed");
@@ -191,15 +189,6 @@ void InputLink::cancel()
     send(QJsonObject{ { QStringLiteral("cancel"), true } });
 }
 
-void InputLink::setOverlayEnabled(bool enabled)
-{
-    if (enabled == m_overlayEnabled) {
-        return;
-    }
-    m_overlayEnabled = enabled;
-    send(QJsonObject{ { QStringLiteral("overlay"), enabled } });
-}
-
 void InputLink::onEvent(const QJsonObject &line)
 {
     const QJsonValue state = line.value(QStringLiteral("state"));
@@ -213,11 +202,5 @@ void InputLink::onEvent(const QJsonObject &line)
         const QJsonObject c = contact.toObject();
         emit contactChanged(QPoint(c.value(QStringLiteral("x")).toInt(), c.value(QStringLiteral("y")).toInt()),
                             c.value(QStringLiteral("down")).toBool(false));
-        return;
-    }
-    const QJsonValue overlay = line.value(QStringLiteral("overlay"));
-    if (overlay.isBool() && overlay.toBool() != m_overlayWorks) {
-        m_overlayWorks = overlay.toBool();
-        emit overlayChanged();
     }
 }

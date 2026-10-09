@@ -228,7 +228,7 @@ unit tests run them without a VS Code window.
 | `stats/` | `-stats` (42 KB) | Per-app `/proc` statistics for the Device Monitor. |
 | `screenshot/` | `-screenshot` (37 KB) | One screenshot through Lipstick. |
 | `mirror/` | `-mirror` (101 KB) | The mirror stream: Lipstick recorder, VP8 and JPEG encoding, frame pacing. The only module that loads QtGui, Wayland and libvpx. |
-| `input/` | `-input` (60 KB) | Tap, swipe and key injection and the touch indicator; needs `-mirror`. |
+| `input/` | `-input` (60 KB) | Tap, swipe and key injection; needs `-mirror`. |
 | `settings/DeveloperAgentPage.qml` | core | The **Developer agent** page in Settings, System. |
 | `sailfish-devagent.service`, `rpm/`, `sailfish-devagent.pro` | | The systemd unit, the one RPM spec for all six packages, the qmake project. |
 | `build.sh` | | Builds the six RPMs for `aarch64`, `armv7hl` and `i486` and copies them to `media/agent/`. |

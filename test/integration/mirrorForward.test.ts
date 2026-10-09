@@ -691,7 +691,7 @@ suite('screen mirror over the SSH forward (F6)', () => {
     }
   });
 
-  test('I28 touch indicator fallback: agent 1.10.4 reports the mirror path, a contact record draws the marker, details say in mirror', async function () {
+  test('I28 touch indicator fallback: the mirror path follows control, a contact record draws the marker, details say in mirror', async function () {
     this.timeout(30000);
     const posted: unknown[] = [];
     const createPanel = vscode.window.createWebviewPanel.bind(vscode.window);

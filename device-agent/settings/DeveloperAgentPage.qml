@@ -305,17 +305,6 @@ Page {
                 onClicked: page.setBool("muteNotifications", !checked)
             }
 
-            TextSwitch {
-                id: touchSwitch
-                visible: page.has("input")
-                automaticCheck: false
-                enabled: page.available && page.st.control === true
-                checked: page.st.touchIndicator === true
-                text: "Show touch indicator"
-                description: "Draws a circle on the screen where VS Code touches it while control is active. For debugging; normally off."
-                onClicked: page.setBool("touchIndicator", !checked)
-            }
-
             SectionHeader {
                 text: "Status"
             }

@@ -220,12 +220,9 @@ export class MirrorSession {
   private inputCaptureSafe = false;
   private webviewFocused = false;
   private controlPosted: boolean | undefined;
-  private phoneTouchIndicator = false;
   private phoneIdleMode: boolean | undefined;
   /** The agent restarted the stream for an idle mode change: connect again once. */
   private restartReconnect = false;
-  private touchIndicatorPath: TouchIndicatorPath = 'off';
-  private touchIndicatorPathReported = false;
   private touchIndicatorPosted: TouchIndicatorPath | undefined;
   private keypadLayout: KeypadLayout | undefined;
   /** Unknown until the layout was resolved, so the strip never flashes a hint first. */
@@ -573,12 +570,9 @@ export class MirrorSession {
     this.leaseActive = false;
     this.inputAccepted = false;
     this.inputCaptureSafe = false;
-    this.phoneTouchIndicator = false;
     this.phoneIdleMode = undefined;
     this.phoneMaxFps = undefined;
     this.stageMeter.clear();
-    this.touchIndicatorPath = 'off';
-    this.touchIndicatorPathReported = false;
     this.inputFocus.update(false);
     this.postControl(false);
     this.frameMs = undefined;
@@ -750,13 +744,8 @@ export class MirrorSession {
         if ((this.controlOffReason !== undefined) !== before) {
           this.services.output.log('info', `mirror "${this.device}": control ${off ? 'turned off on the phone' : 'turned on again on the phone'}`);
         }
-        if (s.touchIndicator !== undefined) this.phoneTouchIndicator = s.touchIndicator;
         if (s.idleMode !== undefined) this.phoneIdleMode = s.idleMode;
         if (s.maxFps !== undefined) this.phoneMaxFps = s.maxFps;
-        if (s.touchIndicatorPath !== undefined) {
-          this.touchIndicatorPath = s.touchIndicatorPath;
-          this.touchIndicatorPathReported = true;
-        }
         this.onPhoneSettings(s);
         this.postTouchIndicator();
         this.postState();
@@ -764,9 +753,6 @@ export class MirrorSession {
       contact: (contact) => {
         if (!live() || !this.inputOn() || !this.screen) return;
         if (contact.x >= this.screen[0] || contact.y >= this.screen[1]) return;
-        this.touchIndicatorPath = 'mirror';
-        this.touchIndicatorPathReported = true;
-        this.postTouchIndicator();
         this.send({ type: 'contact', x: contact.x, y: contact.y, down: contact.down, screen: this.screen });
         this.postState();
       },
@@ -1010,9 +996,7 @@ export class MirrorSession {
   }
 
   private effectiveTouchIndicatorPath(): TouchIndicatorPath {
-    if (this.state !== 'live' || this.controlPosted !== true) return 'off';
-    if (this.touchIndicatorPathReported) return this.touchIndicatorPath;
-    return this.phoneTouchIndicator ? 'phone' : 'off';
+    return this.state === 'live' && this.controlPosted === true ? 'mirror' : 'off';
   }
 
   private postTouchIndicator(): void {

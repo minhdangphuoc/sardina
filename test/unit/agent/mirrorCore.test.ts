@@ -308,7 +308,7 @@ describe('mirrorCore detailRows', () => {
 
   it('lists every field of a live VP8 stream', () => {
     assert.deepStrictEqual(
-      rows({ state: 'live', transport: 'ssh', codec: 'vp8', fps: 29.84, paceFps: 30, kbps: 25.4, latencyMs: 24.6, frameMs: 19.2, dropped: 0, capture: 'native', touchIndicatorPath: 'phone', video: { width: 720, height: 1584, targetKbps: 2000 } }, true),
+      rows({ state: 'live', transport: 'ssh', codec: 'vp8', fps: 29.84, paceFps: 30, kbps: 25.4, latencyMs: 24.6, frameMs: 19.2, dropped: 0, capture: 'native', touchIndicatorPath: 'mirror', video: { width: 720, height: 1584, targetKbps: 2000 } }, true),
       {
         Transport: 'SSH forward',
         Video: 'VP8 · 720×1584 · 2000 kbit/s',
@@ -319,7 +319,7 @@ describe('mirrorCore detailRows', () => {
         Capture: 'native recorder',
         Dropped: '0',
         Control: 'on',
-        'Touch indicator': 'on phone',
+        'Touch indicator': 'in mirror',
       },
     );
   });
@@ -1064,8 +1064,8 @@ describe('phone settings (agent 1.9.0)', () => {
   });
 
   it('parses a settings line without and with the input fields', () => {
-    assert.deepStrictEqual(parseMirrorLine('{"settings":{"control":false,"touchIndicator":true,"touchIndicatorPath":"mirror"}}'), {
-      kind: 'settings', control: false, touchIndicator: true, touchIndicatorPath: 'mirror',
+    assert.deepStrictEqual(parseMirrorLine('{"settings":{"control":false,"touchIndicator":true,"touchIndicatorPath":"phone"}}'), {
+      kind: 'settings', control: false,
     });
     assert.deepStrictEqual(
       parseMirrorLine('{"settings":{"control":false},"input":false,"inputError":"control disabled on the phone"}'),
@@ -1086,7 +1086,6 @@ describe('phone settings (agent 1.9.0)', () => {
       '{"contact":{"x":0,"y":0,"down":"yes"}}',
       '{"contact":[]}',
     ]) assert.strictEqual(parseMirrorLine(bad), undefined, bad);
-    assert.deepStrictEqual(parseMirrorHeader({ settings: { touchIndicatorPath: 'elsewhere' } }, 'record'), { kind: 'settings' });
   });
 
   it('keeps input off without a valid lease, drops wrong types and sanitizes the reason', () => {

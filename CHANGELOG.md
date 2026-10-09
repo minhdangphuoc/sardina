@@ -2,7 +2,7 @@
 
 ## v0.1.13
 
-- The phone-side touch indicator no longer shows as a separate app in the switcher (device agent 1.11.1). It is now a standard toplevel tagged as an overlay, and the mirror draws the marker itself when the phone cannot. Not yet verified on a phone.
+- The touch marker is now drawn only in the VS Code mirror. The phone-side indicator is removed, because it could crash the phone's home screen (device agent 1.11.1).
 
 ## v0.1.12
 

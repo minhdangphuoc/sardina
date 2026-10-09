@@ -427,7 +427,7 @@ describe('agentCore scripts and messages', () => {
 });
 
 describe('agentCore phone settings (agent 1.9.0)', () => {
-  const ALL_ON = '"screenView":true,"control":true,"logs":true,"indicator":"normal","muteNotifications":false,"touchIndicator":false';
+  const ALL_ON = '"screenView":true,"control":true,"logs":true,"indicator":"normal","muteNotifications":false';
   const ping = (extra: string): string => `{"ok":true,"version":"1.9.0","developerMode":true${extra}}`;
 
   it('parseAgentReply keeps a valid settings object and settingsPage', () => {
@@ -439,7 +439,6 @@ describe('agentCore phone settings (agent 1.9.0)', () => {
       logs: true,
       indicator: 'normal',
       muteNotifications: false,
-      touchIndicator: false,
     });
   });
   it('keeps idleMode only as a boolean', () => {
@@ -477,9 +476,9 @@ describe('agentCore phone settings (agent 1.9.0)', () => {
     assert.match(describeProbe('d', { ...base, settings: { control: false } }), /the phone has turned off control \(Settings → System → Developer agent\)\.$/);
     assert.match(describeProbe('d', { ...base, settings: { screenView: false, control: false, logs: false } }), /turned off screen view, control, logs /);
   });
-  it('describePhoneSettings adds indicator, mute and touch indicator', () => {
-    const text = describePhoneSettings({ screenView: true, indicator: 'minimal', muteNotifications: true, touchIndicator: true });
-    assert.match(text, /session indicator minimal; agent notifications muted; touch indicator on\.$/);
+  it('describePhoneSettings adds indicator and mute', () => {
+    const text = describePhoneSettings({ screenView: true, indicator: 'minimal', muteNotifications: true });
+    assert.match(text, /session indicator minimal; agent notifications muted\.$/);
     assert.strictEqual(describePhoneSettings(undefined), '');
     assert.strictEqual(describePhoneSettings({ indicator: 'normal' }), '');
   });

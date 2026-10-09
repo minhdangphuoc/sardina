@@ -20,7 +20,6 @@ const qint64 FILE_MAX_BYTES = 4096;
 const char *const KEY_SCREEN_VIEW = "screenView";
 const char *const KEY_CONTROL = "control";
 const char *const KEY_LOGS = "logs";
-const char *const KEY_TOUCH = "touchIndicator";
 const char *const KEY_MUTE = "muteNotifications";
 const char *const KEY_IDLE_MODE = "idleMode";
 const char *const KEY_MAX_FPS = "maxFps";
@@ -53,7 +52,6 @@ Settings::Settings(QObject *parent)
     , m_screenView(true)
     , m_control(true)
     , m_logs(true)
-    , m_touchIndicator(false)
     , m_muteNotifications(false)
     , m_idleMode(true)
     , m_maxFps(30)
@@ -108,9 +106,8 @@ bool Settings::load()
         bool *value;
     };
     const BoolKey bools[] = { { KEY_SCREEN_VIEW, &m_screenView }, { KEY_CONTROL, &m_control },
-                              { KEY_LOGS, &m_logs },              { KEY_TOUCH, &m_touchIndicator },
-                              { KEY_MUTE, &m_muteNotifications },
-                              { KEY_IDLE_MODE, &m_idleMode } };
+                              { KEY_LOGS, &m_logs },
+                              { KEY_MUTE, &m_muteNotifications }, { KEY_IDLE_MODE, &m_idleMode } };
     for (const BoolKey &b : bools) {
         const QJsonValue v = o.value(QLatin1String(b.key));
         if (v.isUndefined()) {
@@ -144,9 +141,9 @@ bool Settings::load()
     }
     fprintf(stderr,
             "sailfish-devagent: settings: screenView %d, control %d, logs %d, indicator %s, "
-            "muteNotifications %d, touchIndicator %d, idleMode %d, maxFps %d\n",
+            "muteNotifications %d, idleMode %d, maxFps %d\n",
             m_screenView, m_control, m_logs, qPrintable(indicatorName(m_indicator)), m_muteNotifications,
-            m_touchIndicator, m_idleMode, m_maxFps);
+            m_idleMode, m_maxFps);
     return clean;
 }
 
@@ -159,8 +156,6 @@ bool Settings::setBool(const QString &key, bool value, QString *error)
         target = &m_control;
     } else if (key == QLatin1String(KEY_LOGS)) {
         target = &m_logs;
-    } else if (key == QLatin1String(KEY_TOUCH)) {
-        target = &m_touchIndicator;
     } else if (key == QLatin1String(KEY_MUTE)) {
         target = &m_muteNotifications;
     } else if (key == QLatin1String(KEY_IDLE_MODE)) {
@@ -241,7 +236,6 @@ QVariantMap Settings::toMap() const
     m.insert(QLatin1String(KEY_LOGS), m_logs);
     m.insert(QLatin1String(KEY_INDICATOR), indicatorName(m_indicator));
     m.insert(QLatin1String(KEY_MUTE), m_muteNotifications);
-    m.insert(QLatin1String(KEY_TOUCH), m_touchIndicator);
     m.insert(QLatin1String(KEY_IDLE_MODE), m_idleMode);
     m.insert(QLatin1String(KEY_MAX_FPS), m_maxFps);
     return m;

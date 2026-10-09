@@ -220,7 +220,6 @@ MirrorStream::MirrorStream(QLocalSocket *socket, int fps, int width, int quality
             });
         }
         connect(m_input, &InputLink::contactChanged, this, &MirrorStream::onContactChanged);
-        connect(m_input, &InputLink::overlayChanged, this, [this]() { sendPhoneSettings(inputFields()); });
     }
     if (m_leaseSeconds > 0) {
         m_lease.setSingleShot(true);
@@ -330,23 +329,10 @@ void MirrorStream::sendPhoneSettings(const QByteArray &fields)
         return;
     }
     const bool control = m_settings ? m_settings->control() : true;
-    const bool touch = m_settings ? m_settings->touchIndicator() : false;
-    writeMessage(QByteArray("{\"settings\":{\"control\":") + (control ? "true" : "false") + ",\"touchIndicator\":"
-                 + (touch ? "true" : "false") + ",\"touchIndicatorPath\":\"" + touchIndicatorPath()
-                 + "\",\"idleMode\":" + (idleModeOn() ? "true" : "false") + ",\"maxFps\":"
+    writeMessage(QByteArray("{\"settings\":{\"control\":") + (control ? "true" : "false")
+                 + ",\"idleMode\":" + (idleModeOn() ? "true" : "false") + ",\"maxFps\":"
                  + QByteArray::number(m_settings ? m_settings->maxFps() : 30) + "}" + fields
                  + "}");
-}
-
-QByteArray MirrorStream::touchIndicatorPath() const
-{
-    if (!m_input || !m_settings || !m_settings->touchIndicator() || !m_controlAllowed || !m_inputActive) {
-        return QByteArrayLiteral("off");
-    }
-    if (m_input->overlayOnPhone()) {
-        return QByteArrayLiteral("phone");
-    }
-    return m_phoneState ? QByteArrayLiteral("mirror") : QByteArrayLiteral("off");
 }
 
 void MirrorStream::applySetting(const QString &key)
@@ -362,11 +348,6 @@ void MirrorStream::applySetting(const QString &key)
     }
     if (key == QLatin1String("control")) {
         sendPhoneSettings(applyControlSetting(m_settings->control()));
-        return;
-    }
-    if (key == QLatin1String("touchIndicator")) {
-        applyTouchIndicatorSetting(m_settings->touchIndicator());
-        sendPhoneSettings(inputFields());
     }
 }
 
@@ -382,22 +363,14 @@ QByteArray MirrorStream::applyControlSetting(bool allowed)
     }
     m_controlAllowed = allowed;
     m_inputEnabled = allowed && m_input && m_input->available();
-    applyTouchIndicatorSetting(m_settings && m_settings->touchIndicator());
     fprintf(stderr, "sailfish-devagent: mirror: phone setting control = %s\n", allowed ? "true" : "false");
     return inputFields();
 }
 
-void MirrorStream::applyTouchIndicatorSetting(bool on)
-{
-    if (m_input) {
-        m_input->setOverlayEnabled(on && m_controlAllowed && m_inputActive);
-    }
-}
-
 void MirrorStream::onContactChanged(const QPoint &point, bool pressed)
 {
-    // The input module draws the circle on the phone itself; this is the in-mirror marker.
-    if (touchIndicatorPath() == QByteArrayLiteral("mirror")) {
+    // Only the agent's own injected contacts; the mirror draws the marker.
+    if (m_phoneState && m_controlAllowed && m_inputActive) {
         writeMessage(QByteArray("{\"contact\":{\"x\":") + QByteArray::number(point.x()) + ",\"y\":"
                      + QByteArray::number(point.y()) + ",\"down\":" + (pressed ? "true" : "false") + "}}");
     }
@@ -528,9 +501,6 @@ void MirrorStream::handleUpstreamLine(const QByteArray &line)
 void MirrorStream::setInputActive(bool active)
 {
     if (!active) {
-        if (m_input) {
-            m_input->setOverlayEnabled(false);
-        }
         if (m_indicator) {
             m_indicator->setInputActive(false);
         }
@@ -559,7 +529,6 @@ void MirrorStream::setInputActive(bool active)
     }
     m_inputActive = active;
     m_inputLease.start();
-    applyTouchIndicatorSetting(m_settings && m_settings->touchIndicator());
     sendPhoneSettings(inputFields());
     fprintf(stderr, "sailfish-devagent: mirror input active\n");
     emit stateChanged();
@@ -1011,9 +980,6 @@ void MirrorStream::cleanup()
     m_idle.stop();
     m_lease.stop();
     m_inputLease.stop();
-    if (m_input) {
-        m_input->setOverlayEnabled(false);
-    }
     if (m_inputActive) {
         setInputActive(false);
     }
