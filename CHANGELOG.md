@@ -3,6 +3,7 @@
 ## v0.1.13
 
 - The touch indicator is drawn on the phone again (device agent 1.11.2), as a window above apps and the lock screen that is not listed in the switcher; the mirror draws the marker itself when the phone cannot. Fixed a Lipstick crash the earlier indicator could cause after a control session or on a clipboard change. Tested on the emulator (sessions, killed sessions, clipboard changes, rotation, lock and display off, keyboard, taps and swipes passing through); not yet on a phone.
+- Removing one agent module leaves nothing of it: the module's package removes its own files from the agent's runtime folder (unfetched screenshots and lipstick's staging folder for `screenshot`, frame buffers for `mirror` and `input`), and VS Code then removes them too for older agents and checks read-only that none of the module's packages, files or processes is left, in the same kind of notification as a full removal. A full removal also removes the service's private `/tmp` folders if systemd left them, and checks for them. `device-agent/tools/emulator/uninstall-check.sh`, run as root on a device, lists anything of the agent still there. Not yet verified on the emulator or a phone.
 
 ## v0.1.12
 

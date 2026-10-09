@@ -69,6 +69,6 @@
   so it only reports false errors against Silica QML. Set
   `sailfish.qtqml.silenceQmlls` to `false` to keep it on.
 - **No QML or JavaScript debugging**, only C++.
-- **No Windows support.**
+- **Windows: N/A.** macOS is untested.
 - **No profiling yet.** Recording CPU, memory and QML profiles (Perfetto, perf, the QML profiler, heaptrack, Valgrind) from the Device Monitor is planned for a later version.
 

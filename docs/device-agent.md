@@ -56,7 +56,8 @@ you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
 7. **Remove the agent or one module.** **Sailfish: Uninstall Device Agent**
    asks what to remove: **Device agent and all modules** or one installed
    module (removing `mirror` also removes `input`). A module removal stops only
-   that module's sessions and erases only its package. Removing everything first stops the mirror, device logs and app monitor of that device,
+   that module's sessions, erases only its package, removes that module's own
+   files and checks that nothing of it is left. Removing everything first stops the mirror, device logs and app monitor of that device,
    then removes the package, its service, socket, settings and notifications,
    the extension's leftovers in the device user's home (`~/.cache/sailfish-tools`,
    staged screenshots, an RPM copy), and checks that nothing is left; one

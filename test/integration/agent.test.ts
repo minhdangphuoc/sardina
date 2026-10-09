@@ -444,7 +444,7 @@ suite('device agent (T4)', () => {
     });
   });
 
-  test('uninstall: one module goes with its own rpm -e and no user-level cleanup', async () => {
+  test('uninstall: one module goes with its own rpm -e, then its own user-level cleanup', async () => {
     await withScenario('agent-modules-logs-only', async () => {
       const messages = stubMessages();
       stubQuickPick(((items: readonly vscode.QuickPickItem[]) => items.find((i) => i.label === 'logs module')) as never);
@@ -453,7 +453,9 @@ suite('device agent (T4)', () => {
       const root = find('device_exec.devel-su');
       assert.ok(root?.argv.some((a) => a.startsWith('rpm -e sailfish-devagent-logs ||')), JSON.stringify(root?.argv));
       assert.ok(!root?.argv.some((a) => a.includes('rpm -e sailfish-devagent ')), JSON.stringify(root?.argv));
-      assert.ok(!keys().includes('device_exec.sh'), JSON.stringify(keys()));
+      assertInOrder(keys(), ['device_exec.devel-su', 'device_exec.sh']);
+      const clean = find('device_exec.sh');
+      assert.ok(clean?.argv.some((a) => a.includes('rpm -q $n') && a.includes('sailfish-devagent-logs') && !a.includes('/var/lib')), JSON.stringify(clean?.argv));
       assert.ok(messages.calls[messages.calls.length - 1].message.includes('removed the logs module from'), JSON.stringify(messages.calls));
     });
   });
