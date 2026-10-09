@@ -159,3 +159,74 @@ export function keypadLayoutFileName(model: string): string {
   const slug = model.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
   return `${slug.slice(0, 64) || 'keypad'}.json`;
 }
+
+export interface ResolvedKeypadLayout {
+  configured: boolean;
+  /** The remembered file is gone or unreadable; it stays remembered so a restored file is picked up. */
+  missing?: boolean;
+  layout?: KeypadLayout;
+}
+
+export type KeypadHint = 'create' | 'missing';
+
+/** The strip hint for a model; undefined until the layout was resolved, and once the user dismissed it. */
+export function keypadHint(resolved: ResolvedKeypadLayout | undefined, dismissed: boolean): KeypadHint | undefined {
+  if (!resolved || dismissed) return undefined;
+  if (!resolved.configured) return 'create';
+  return resolved.missing ? 'missing' : undefined;
+}
+
+/** Reports each distinct error once; a clean result re-arms it, so the same mistake made again is reported again. */
+export class ErrorReporter {
+  private last: string | undefined;
+
+  shouldReport(error: string | undefined): boolean {
+    if (error === undefined) {
+      this.last = undefined;
+      return false;
+    }
+    if (error === this.last) return false;
+    this.last = error;
+    return true;
+  }
+}
+
+/** One shared resource per key, released when its last owner lets go. */
+export class SharedResources {
+  private readonly byKey = new Map<string, { owners: Set<string>; release: () => void }>();
+  private readonly keyOf = new Map<string, string>();
+
+  acquire(owner: string, key: string, create: () => () => void): void {
+    if (this.keyOf.get(owner) === key) return;
+    this.release(owner);
+    let entry = this.byKey.get(key);
+    if (!entry) {
+      entry = { owners: new Set(), release: create() };
+      this.byKey.set(key, entry);
+    }
+    entry.owners.add(owner);
+    this.keyOf.set(owner, key);
+  }
+
+  release(owner: string): void {
+    const key = this.keyOf.get(owner);
+    if (key === undefined) return;
+    this.keyOf.delete(owner);
+    const entry = this.byKey.get(key);
+    if (!entry) return;
+    entry.owners.delete(owner);
+    if (entry.owners.size > 0) return;
+    entry.release();
+    this.byKey.delete(key);
+  }
+
+  owners(key: string): string[] {
+    return [...(this.byKey.get(key)?.owners ?? [])];
+  }
+
+  dispose(): void {
+    for (const entry of this.byKey.values()) entry.release();
+    this.byKey.clear();
+    this.keyOf.clear();
+  }
+}

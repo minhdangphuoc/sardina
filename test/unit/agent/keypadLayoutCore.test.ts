@@ -1,6 +1,9 @@
 import * as assert from 'assert';
 import {
   buildDefaultKeypadLayout,
+  ErrorReporter,
+  keypadHint,
+  SharedResources,
   keypadLayoutFileName,
   parseKeypadInfo,
   parseKeypadLayout,
@@ -89,5 +92,52 @@ describe('default keypad layout', () => {
     });
     assert.strictEqual(parseKeypadInfo({ model: 'X', keys: ['POWER'] }), undefined);
     assert.strictEqual(parseKeypadInfo({ model: 'X', keys: ['1', '1'] }), undefined);
+  });
+});
+
+describe('keypad hint', () => {
+  it('stays unknown until resolved and when dismissed', () => {
+    assert.strictEqual(keypadHint(undefined, false), undefined);
+    assert.strictEqual(keypadHint({ configured: false }, true), undefined);
+  });
+  it('asks to create without a layout and to edit when the file is missing', () => {
+    assert.strictEqual(keypadHint({ configured: false }, false), 'create');
+    assert.strictEqual(keypadHint({ configured: true, missing: true }, false), 'missing');
+    assert.strictEqual(keypadHint({ configured: true }, false), undefined);
+  });
+});
+
+describe('error reporter', () => {
+  it('reports each distinct error once and again after a clean read', () => {
+    const reporter = new ErrorReporter();
+    assert.strictEqual(reporter.shouldReport('a'), true);
+    assert.strictEqual(reporter.shouldReport('a'), false);
+    assert.strictEqual(reporter.shouldReport('b'), true);
+    assert.strictEqual(reporter.shouldReport(undefined), false);
+    assert.strictEqual(reporter.shouldReport('b'), true);
+  });
+});
+
+describe('shared resources', () => {
+  it('creates one per key and releases it with the last owner', () => {
+    const shared = new SharedResources();
+    let created = 0;
+    let released = 0;
+    const create = (): (() => void) => { created++; return () => { released++; }; };
+    shared.acquire('m1', 'file', create);
+    shared.acquire('m2', 'file', create);
+    shared.acquire('m1', 'file', create);
+    assert.deepStrictEqual([created, released, shared.owners('file')], [1, 0, ['m1', 'm2']]);
+    shared.release('m1');
+    assert.strictEqual(released, 0);
+    shared.release('m2');
+    assert.deepStrictEqual([released, shared.owners('file')], [1, []]);
+  });
+  it('moves an owner to another key', () => {
+    const shared = new SharedResources();
+    let released = 0;
+    shared.acquire('m', 'a', () => () => { released++; });
+    shared.acquire('m', 'b', () => () => undefined);
+    assert.deepStrictEqual([released, shared.owners('a'), shared.owners('b')], [1, [], ['m']]);
   });
 });

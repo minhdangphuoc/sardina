@@ -5,26 +5,23 @@ import {
   keypadLayoutFileName,
   parseKeypadLayout,
   validateKeypadLayout,
+  ErrorReporter,
+  SharedResources,
   type KeypadInfo,
   type KeypadLayout,
+  type ResolvedKeypadLayout,
 } from './keypadLayoutCore';
 
-export interface ResolvedKeypadLayout {
-  configured: boolean;
-  layout?: KeypadLayout;
-}
-
-interface LayoutWatch {
-  uri: vscode.Uri;
-  disposables: vscode.Disposable[];
-}
-
 const STATE_PREFIX = 'sailfish.keypadLayout.';
+const DISMISSED_PREFIX = 'sailfish.keypadHintDismissed.';
+const OVERWRITE = 'Overwrite';
 
 export class KeypadLayouts implements vscode.Disposable {
   private readonly logged = new Set<string>();
   private readonly changed = new vscode.EventEmitter<string>();
-  private readonly watches = new Map<string, LayoutWatch>();
+  private readonly watches = new SharedResources();
+  private readonly lastValid = new Map<string, KeypadLayout>();
+  private readonly reporters = new Map<string, ErrorReporter>();
   readonly onDidChange = this.changed.event;
 
   constructor(
@@ -36,25 +33,30 @@ export class KeypadLayouts implements vscode.Disposable {
     return this.layoutUri(model) !== undefined;
   }
 
+  hintDismissed(model: string): boolean {
+    return this.ctx.workspaceState.get<boolean>(`${DISMISSED_PREFIX}${model}`) === true;
+  }
+
   async resolve(info: KeypadInfo): Promise<ResolvedKeypadLayout> {
     const uri = this.layoutUri(info.model);
     if (!uri) return { configured: false };
     this.watch(info.model, uri);
     try {
       const text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
-      return { configured: true, layout: this.validated(text, info, uri.fsPath) };
+      return { configured: true, layout: this.accept(info, uri.fsPath, this.validated(text, info, uri.fsPath)) };
     } catch (err) {
       if (this.notFound(err)) {
-        await this.forget(info.model);
-        return { configured: false };
+        this.lastValid.delete(info.model);
+        this.reporter(info.model).shouldReport(undefined);
+        return { configured: true, missing: true };
       }
-      this.logOnce(`${uri.toString()}:read:${this.message(err)}`, `keypad layout ${uri.fsPath}: ${this.message(err)}; keypad hidden`);
-      return { configured: true };
+      return { configured: true, layout: this.accept(info, uri.fsPath, { error: this.message(err) }) };
     }
   }
 
   /** Opens the remembered layout, or creates a starter when this model has none. */
   async edit(info: KeypadInfo): Promise<boolean> {
+    await this.ctx.workspaceState.update(`${DISMISSED_PREFIX}${info.model}`, true);
     const uri = this.layoutUri(info.model);
     if (!uri) return this.create(info);
     try {
@@ -62,10 +64,7 @@ export class KeypadLayouts implements vscode.Disposable {
       await this.open(uri);
       return false;
     } catch (err) {
-      if (this.notFound(err)) {
-        await this.forget(info.model);
-        return this.create(info);
-      }
+      if (this.notFound(err)) return this.create(info);
       await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be opened: ${this.message(err)}`);
       return false;
     }
@@ -80,8 +79,7 @@ export class KeypadLayouts implements vscode.Disposable {
   }
 
   dispose(): void {
-    for (const watch of this.watches.values()) this.disposeWatch(watch);
-    this.watches.clear();
+    this.watches.dispose();
     this.changed.dispose();
   }
 
@@ -99,11 +97,13 @@ export class KeypadLayouts implements vscode.Disposable {
       saveLabel: 'Create Keypad Layout',
     });
     if (!uri) return false;
-    const starter = `${JSON.stringify(buildDefaultKeypadLayout(info), null, 2)}\n`;
     try {
-      await vscode.workspace.fs.writeFile(uri, Buffer.from(starter, 'utf8'));
-      await this.ctx.workspaceState.update(this.stateKey(info.model), uri.toString());
-      this.watch(info.model, uri);
+      const existing = await this.existing(uri, info);
+      if (existing === 'invalid' && !await this.confirmOverwrite(uri)) return false;
+      await this.remember(info.model, uri);
+      if (existing !== 'valid') {
+        await vscode.workspace.fs.writeFile(uri, Buffer.from(`${JSON.stringify(buildDefaultKeypadLayout(info), null, 2)}\n`, 'utf8'));
+      }
     } catch (err) {
       await this.services.prompts.showErrorMessage(`Sailfish: keypad layout could not be created: ${this.message(err)}`);
       return false;
@@ -116,6 +116,33 @@ export class KeypadLayouts implements vscode.Disposable {
     return true;
   }
 
+  /** A picked file that already holds a valid layout is adopted as is. */
+  private async existing(uri: vscode.Uri, info: KeypadInfo): Promise<'absent' | 'valid' | 'invalid'> {
+    let text: string;
+    try {
+      text = Buffer.from(await vscode.workspace.fs.readFile(uri)).toString('utf8');
+    } catch (err) {
+      if (this.notFound(err)) return 'absent';
+      throw err;
+    }
+    return this.validated(text, info, uri.fsPath).layout ? 'valid' : 'invalid';
+  }
+
+  private async confirmOverwrite(uri: vscode.Uri): Promise<boolean> {
+    const choice = await this.services.prompts.showWarningMessage(
+      `Sailfish: ${uri.fsPath} is not a valid keypad layout. Overwrite it with a starter?`,
+      { modal: true },
+      OVERWRITE,
+    );
+    return choice === OVERWRITE;
+  }
+
+  /** Watches before the first write so the save is never missed. */
+  private async remember(model: string, uri: vscode.Uri): Promise<void> {
+    this.watch(model, uri);
+    await this.ctx.workspaceState.update(this.stateKey(model), uri.toString());
+  }
+
   private async open(uri: vscode.Uri): Promise<void> {
     const document = await vscode.workspace.openTextDocument(uri);
     await vscode.window.showTextDocument(document, { preview: false });
@@ -123,9 +150,9 @@ export class KeypadLayouts implements vscode.Disposable {
 
   private async forget(model: string): Promise<void> {
     await this.ctx.workspaceState.update(this.stateKey(model), undefined);
-    const watch = this.watches.get(model);
-    if (watch) this.disposeWatch(watch);
-    this.watches.delete(model);
+    this.watches.release(model);
+    this.lastValid.delete(model);
+    this.reporter(model).shouldReport(undefined);
   }
 
   private stateKey(model: string): string {
@@ -149,38 +176,44 @@ export class KeypadLayouts implements vscode.Disposable {
       : vscode.Uri.joinPath(this.ctx.globalStorageUri, 'keypads');
   }
 
-  private validated(text: string, info: KeypadInfo, source: string): KeypadLayout | undefined {
+  private validated(text: string, info: KeypadInfo, source: string): { layout?: KeypadLayout; error?: string } {
     const parsed = parseKeypadLayout(text);
-    if (parsed.error) {
-      this.logOnce(`${source}:parse:${parsed.error}`, `keypad layout ${source}: ${parsed.error}; keypad hidden`);
-      return undefined;
-    }
+    if (parsed.error) return { error: parsed.error };
     const checked = validateKeypadLayout(parsed.value, info.keys, info.model);
     this.logWarnings(source, checked.warnings);
-    if (!checked.layout) {
-      this.logOnce(`${source}:invalid:${checked.errors.join('|')}`, `keypad layout ${source}: ${checked.errors.join('; ')}; keypad hidden`);
+    return checked.layout ? { layout: checked.layout } : { error: checked.errors.join('; ') };
+  }
+
+  /** A broken edit keeps the last valid layout on screen and is reported once. */
+  private accept(info: KeypadInfo, source: string, result: { layout?: KeypadLayout; error?: string }): KeypadLayout | undefined {
+    const { model } = info;
+    if (this.reporter(model).shouldReport(result.error)) {
+      this.services.output.log('warn', `keypad layout ${source}: ${result.error}`);
+      void this.services.prompts.showErrorMessage(`Sailfish: keypad layout ${source} is invalid: ${result.error}`);
     }
-    return checked.layout;
+    if (result.layout) this.lastValid.set(model, result.layout);
+    return result.layout ?? this.lastValid.get(model);
+  }
+
+  private reporter(model: string): ErrorReporter {
+    let reporter = this.reporters.get(model);
+    if (!reporter) {
+      reporter = new ErrorReporter();
+      this.reporters.set(model, reporter);
+    }
+    return reporter;
   }
 
   private watch(model: string, uri: vscode.Uri): void {
-    const current = this.watches.get(model);
-    if (current?.uri.toString() === uri.toString()) return;
-    if (current) this.disposeWatch(current);
-    const slash = uri.path.lastIndexOf('/');
-    const dir = uri.with({ path: slash > 0 ? uri.path.slice(0, slash) : '/', query: '', fragment: '' });
-    const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(dir, '*'));
-    const changed = (candidate: vscode.Uri): void => {
-      if (candidate.toString() === uri.toString()) this.changed.fire(model);
-    };
-    this.watches.set(model, {
-      uri,
-      disposables: [watcher, watcher.onDidChange(changed), watcher.onDidCreate(changed), watcher.onDidDelete(changed)],
+    const key = uri.toString();
+    this.watches.acquire(model, key, () => {
+      const slash = uri.path.lastIndexOf('/');
+      const dir = uri.with({ path: slash > 0 ? uri.path.slice(0, slash) : '/', query: '', fragment: '' });
+      const watcher = vscode.workspace.createFileSystemWatcher(new vscode.RelativePattern(dir, uri.path.slice(slash + 1)));
+      const fire = (): void => { for (const owner of this.watches.owners(key)) this.changed.fire(owner); };
+      const subscriptions = [watcher, watcher.onDidChange(fire), watcher.onDidCreate(fire), watcher.onDidDelete(fire)];
+      return () => { for (const d of subscriptions) d.dispose(); };
     });
-  }
-
-  private disposeWatch(watch: LayoutWatch): void {
-    for (const disposable of watch.disposables) disposable.dispose();
   }
 
   private logWarnings(source: string, warnings: readonly string[]): void {
