@@ -1,5 +1,5 @@
 Name:       sailfish-devagent
-Summary:    Developer agent for VS Code: screen, logs, and a Settings page
+Summary:    Developer agent for VS Code: the service and its Settings page
 Version:    1.11.0
 Release:    1
 License:    GPL-3.0-or-later
@@ -19,17 +19,41 @@ BuildRequires:  pkgconfig(vpx)
 
 %description
 A small service for developers, installed from the Sailfish OS Tools extension
-for VS Code. It takes screenshots through lipstick, streams a live view of the
-screen (through lipstick's Wayland recorder, as JPEG images or VP8 video
-through libvpx) and streams the system journal, over a Unix socket that only the device user can open; VS Code reaches
-it through the SDK's existing SSH login. It runs as defaultuser with the
-privileged and systemd-journal groups only, serves only while Developer Mode
-(jolla-developer-mode) is installed, and opens no network port.
+for VS Code. It listens on a Unix socket that only the device user can open;
+VS Code reaches it through the SDK's existing SSH login. Each feature is a
+module package of its own, started only for one request or stream. It runs as
+defaultuser with the privileged and systemd-journal groups only, serves only
+while Developer Mode (jolla-developer-mode) is installed, and opens no network
+port.
 
 A page in Settings > System > Developer agent lets the person at the phone
 allow or refuse screen view, control and system logs, choose how a session is
 indicated, and stop every session at once. Only the Settings app (the
 privileged group) can change these settings; VS Code's SSH login cannot.
+
+%package logs
+Summary:    Developer agent module: system logs
+Requires:   %{name} = %{version}-%{release}
+
+%description logs
+Streams the system journal to VS Code through the developer agent, while
+"Allow system logs" is on in Settings > System > Developer agent.
+
+%package stats
+Summary:    Developer agent module: app statistics
+Requires:   %{name} = %{version}-%{release}
+
+%description stats
+Streams CPU and memory numbers of the app being debugged, read from /proc, to
+the VS Code Device Monitor through the developer agent.
+
+%package screenshot
+Summary:    Developer agent module: screenshots
+Requires:   %{name} = %{version}-%{release}
+
+%description screenshot
+Takes screenshots through lipstick for VS Code through the developer agent,
+while "Allow screen view" is on in Settings > System > Developer agent.
 
 %prep
 %setup -q -n %{name}-%{version}
@@ -101,10 +125,25 @@ if [ "$1" = "0" ]; then
     pkill -u defaultuser -x jolla-settings >/dev/null 2>&1 || :
 fi
 
+# A removed module's running stream ends with it; the daemon sees its process exit.
+%preun logs
+if [ "$1" = "0" ]; then
+    pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-logs( |$)' >/dev/null 2>&1 || :
+fi
+
+%preun stats
+if [ "$1" = "0" ]; then
+    pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-stats( |$)' >/dev/null 2>&1 || :
+fi
+
+%preun screenshot
+if [ "$1" = "0" ]; then
+    pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-screenshot( |$)' >/dev/null 2>&1 || :
+fi
+
 %files
 %defattr(-,root,root,-)
 %{_bindir}/sailfish-devagent
-%{_libexecdir}/sailfish-devagent
 /usr/lib/systemd/system/sailfish-devagent.service
 /usr/lib/systemd/system/multi-user.target.wants/sailfish-devagent.service
 /usr/share/jolla-settings/entries/sailfish-devagent.json
@@ -113,3 +152,18 @@ fi
 /usr/share/sailfish-devagent/settings/DeveloperAgentPage.qml
 %dir %attr(0770,root,privileged) /var/lib/sailfish-devagent
 %ghost %attr(0660,defaultuser,privileged) /var/lib/sailfish-devagent/settings.json
+
+%files logs
+%defattr(-,root,root,-)
+%dir %{_libexecdir}/sailfish-devagent
+%{_libexecdir}/sailfish-devagent/sailfish-devagent-logs
+
+%files stats
+%defattr(-,root,root,-)
+%dir %{_libexecdir}/sailfish-devagent
+%{_libexecdir}/sailfish-devagent/sailfish-devagent-stats
+
+%files screenshot
+%defattr(-,root,root,-)
+%dir %{_libexecdir}/sailfish-devagent
+%{_libexecdir}/sailfish-devagent/sailfish-devagent-screenshot

@@ -15,6 +15,12 @@ Page {
     readonly property bool mirrorActive: available && st.mirrorActive === true
     readonly property bool restarting: available && st.mirrorRestarting === true
     readonly property int logStreams: available && st.logStreams !== undefined ? st.logStreams : 0
+    // The installed modules (agent 1.11.0); everything is shown while the status is unknown.
+    readonly property var modules: available && Array.isArray(st.modules) ? st.modules : null
+
+    function has(module) {
+        return modules === null || modules.indexOf(module) >= 0
+    }
 
     function levelIndex(level) {
         return level === "quiet" ? 1 : level === "minimal" ? 2 : 0
@@ -175,16 +181,20 @@ Page {
 
             TextSwitch {
                 id: screenViewSwitch
+                visible: page.has("mirror") || page.has("screenshot")
                 automaticCheck: false
                 enabled: page.available && !page.restarting
                 checked: page.st.screenView === true
                 text: "Allow screen view"
-                description: "Live mirror and screenshots in VS Code. Turning this off ends a running mirror at once."
+                description: page.has("mirror")
+                             ? "Live mirror and screenshots in VS Code. Turning this off ends a running mirror at once."
+                             : "Screenshots in VS Code."
                 onClicked: page.setBool("screenView", !checked)
             }
 
             TextSwitch {
                 id: controlSwitch
+                visible: page.has("input")
                 automaticCheck: false
                 enabled: page.available && page.st.screenView === true
                 checked: page.st.control === true
@@ -195,6 +205,7 @@ Page {
 
             TextSwitch {
                 id: logsSwitch
+                visible: page.has("logs")
                 automaticCheck: false
                 enabled: page.available
                 checked: page.st.logs === true
@@ -204,11 +215,12 @@ Page {
             }
 
             SectionHeader {
+                visible: page.has("mirror")
                 text: "Mirror"
             }
 
             Label {
-                visible: page.restarting
+                visible: page.restarting && page.has("mirror")
                 x: Theme.horizontalPageMargin
                 width: parent.width - 2 * x
                 wrapMode: Text.Wrap
@@ -219,6 +231,7 @@ Page {
 
             TextSwitch {
                 id: idleModeSwitch
+                visible: page.has("mirror")
                 automaticCheck: false
                 enabled: page.available && !page.restarting
                 checked: page.st.idleMode !== false
@@ -229,6 +242,7 @@ Page {
 
             ComboBox {
                 id: maxFpsBox
+                visible: page.has("mirror")
                 enabled: page.available && !page.restarting
                 label: "Frame rate limit"
                 description: "The most frames per second the mirror sends. 60 needs a fast phone. Changing this restarts a running mirror."
@@ -293,6 +307,7 @@ Page {
 
             TextSwitch {
                 id: touchSwitch
+                visible: page.has("input")
                 automaticCheck: false
                 enabled: page.available && page.st.control === true
                 checked: page.st.touchIndicator === true
@@ -322,6 +337,12 @@ Page {
             }
 
             DetailItem {
+                label: "Modules"
+                value: page.modules === null ? "—" : page.modules.length > 0 ? page.modules.join(", ") : "None"
+            }
+
+            DetailItem {
+                visible: page.has("mirror")
                 label: "Screen"
                 value: !page.mirrorActive ? "Not in use"
                        : (page.st.mirrorControl ? "Viewed and controlled since " : "Viewed since ")
@@ -329,6 +350,7 @@ Page {
             }
 
             DetailItem {
+                visible: page.has("logs")
                 label: "Logs"
                 value: page.logStreams === 0 ? "Not in use"
                        : page.logStreams === 1 ? "1 stream" : page.logStreams + " streams"

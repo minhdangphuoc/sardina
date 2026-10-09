@@ -41,6 +41,36 @@ USAGE
 
 die() { echo "build.sh: $*" >&2; exit 1; }
 
+# One build gives the core and one package per module, all with the same version.
+packages="sailfish-devagent sailfish-devagent-logs sailfish-devagent-stats sailfish-devagent-screenshot"
+
+# collect_rpms DIR ARCH DEST: checks that DIR holds exactly the expected RPMs of ARCH (release 1,
+# debuginfo ignored) and, unless DEST is empty, replaces the RPMs in DEST with them.
+collect_rpms() {
+    src=$1; rpm_arch=$2; dest=$3
+    set -- "$src"/sailfish-devagent-[0-9]*-1."$rpm_arch".rpm
+    [ -f "$1" ] || { echo "no core RPM with release 1 for $rpm_arch in $src" >&2; return 1; }
+    [ $# = 1 ] || { echo "more than one core RPM for $rpm_arch in $src" >&2; return 1; }
+    ver=$(basename "$1" | sed "s/^sailfish-devagent-\(.*\)-1\.$rpm_arch\.rpm$/\1/")
+    found=$(cd "$src" && ls ./*.rpm | sed 's#^\./##' | grep -v -- '-debug\(info\|source\)-' | sort)
+    expected=$(for p in $packages; do echo "$p-$ver-1.$rpm_arch.rpm"; done | sort)
+    if [ "$found" != "$expected" ]; then
+        echo "RPMs for $rpm_arch differ from the expected set:" >&2
+        printf 'found:\n%s\nexpected:\n%s\n' "$found" "$expected" >&2
+        return 1
+    fi
+    if [ -n "$dest" ]; then
+        mkdir -p "$dest"
+        rm -f "$dest"/*.rpm
+        for f in $expected; do
+            cp "$src/$f" "$dest/"
+            echo "-> $dest/$f"
+        done
+    else
+        for f in $expected; do echo "-> $src/$f"; done
+    fi
+}
+
 mode=sdk
 archs=$all_archs
 out=
@@ -109,13 +139,7 @@ build_sdk() {
         clean
         # sfdk ignores SIGTERM, hence SIGKILL; no-fix-version stops it stamping the git tag.
         timeout -s KILL 900 "$sfdk" -c "target=$release-$arch" -c no-fix-version build </dev/null
-        set -- "$here"/RPMS/sailfish-devagent-*."$arch".rpm
-        [ -f "$1" ] || { echo "no RPM produced for $arch" >&2; exit 1; }
-        dest="$root/media/agent/$arch"
-        mkdir -p "$dest"
-        rm -f "$dest"/*.rpm
-        cp "$1" "$dest/"
-        echo "-> $dest/$(basename "$1")"
+        collect_rpms "$here/RPMS" "$arch" "$root/media/agent/$arch" || exit 1
     done
 }
 
@@ -247,22 +271,10 @@ RUN
         chmod 755 "$work/out"
 
         # Release must be 1 (matches the sfdk build with no-fix-version).
-        set -- "$work"/out/sailfish-devagent-*-1."$arch".rpm
-        if [ ! -f "$1" ]; then
-            echo "no RPM with release 1 produced for $arch" >&2; failed=1; continue
-        fi
-        rpm_file=$1
         check_rpmlint "$work/out/rpmlint.txt" || failed=1
-
-        if [ "$install" = 1 ]; then
-            dest="$root/media/agent/$arch"
-            mkdir -p "$dest"
-            rm -f "$dest"/*.rpm
-            cp "$rpm_file" "$dest/"
-            echo "-> $dest/$(basename "$rpm_file")"
-        else
-            echo "-> $rpm_file"
-        fi
+        dest=
+        [ "$install" = 0 ] || dest="$root/media/agent/$arch"
+        collect_rpms "$work/out" "$arch" "$dest" || failed=1
     done
     [ "$failed" = 0 ] || exit 1
 }

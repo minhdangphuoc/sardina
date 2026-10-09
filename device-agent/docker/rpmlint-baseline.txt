@@ -13,9 +13,8 @@
 #   `systemctl enable` link in /etc left by agents up to 1.10.0 (the package now ships the link).
 # - unstripped-binary / position-independent-executable-suggested / invalid-license /
 #   no-changelogname-tag: SDK defaults and the SPDX licence name; harmless.
-# - description-line-too-long: cosmetic; the line is listed verbatim, so it reappears as new if
-#   the %description is rewrapped (then just drop it here).
-E: description-line-too-long through libvpx) and streams the system journal, over a Unix socket that only the device user can open; VS Code reaches
+# - The module packages (agent 1.11.0) add the same unstripped-binary and
+#   position-independent-executable findings for their executables in /usr/libexec.
 E: no-changelogname-tag
 E: non-readable /var/lib/sailfish-devagent/settings.json 660
 E: non-standard-dir-perm /var/lib/sailfish-devagent 770
@@ -26,4 +25,14 @@ W: non-standard-gid /var/lib/sailfish-devagent privileged
 W: non-standard-gid /var/lib/sailfish-devagent/settings.json privileged
 W: non-standard-uid /var/lib/sailfish-devagent/settings.json defaultuser
 W: position-independent-executable-suggested /usr/bin/sailfish-devagent
+W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-input
+W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-logs
+W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-mirror
+W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-screenshot
+W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-stats
 W: unstripped-binary-or-object /usr/bin/sailfish-devagent
+W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-input
+W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-logs
+W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-mirror
+W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-screenshot
+W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-stats
