@@ -5,7 +5,7 @@
 
 struct wl_display;
 
-// The connection steps the recorder uses to reach lipstick's compositor.
+// The connection steps the recorder and the touch overlay share with lipstick's compositor.
 namespace WaylandUtil {
 
 // Opens the socket itself rather than through wl_display_connect, so the agent needs no

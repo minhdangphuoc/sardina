@@ -1,5 +1,6 @@
 #include "mirrorinput.h"
 #include "modulehost.h"
+#include "touchoverlay.h"
 
 #include <QCoreApplication>
 #include <QJsonArray>
@@ -37,6 +38,7 @@ public:
         : m_host(host)
     {
         connect(&m_input, &MirrorInput::contactChanged, this, [this](const QPoint &p, bool down) {
+            m_overlay.setContact(p, down);
             m_host->sendEvent(QJsonObject{ { QStringLiteral("contact"),
                                              QJsonObject{ { QStringLiteral("x"), p.x() },
                                                           { QStringLiteral("y"), p.y() },
@@ -53,7 +55,9 @@ public:
     {
         if (line.contains(QStringLiteral("screen"))) {
             const QJsonArray size = line.value(QStringLiteral("screen")).toArray();
-            m_input.setScreen(QSize(size.at(0).toInt(), size.at(1).toInt()), true);
+            const QSize screen(size.at(0).toInt(), size.at(1).toInt());
+            m_input.setScreen(screen, true);
+            m_overlay.setScreen(screen);
         } else if (line.contains(QStringLiteral("tap"))) {
             m_input.tap(point(line.value(QStringLiteral("tap"))));
         } else if (line.contains(QStringLiteral("swipe"))) {
@@ -71,6 +75,13 @@ public:
             m_input.keyUp(line.value(QStringLiteral("keyUp")).toString());
         } else if (line.contains(QStringLiteral("cancel"))) {
             m_input.cancel();
+        } else if (line.contains(QStringLiteral("overlay"))) {
+            const bool enabled = line.value(QStringLiteral("overlay")).toBool(false);
+            m_overlay.setEnabled(enabled);
+            if (enabled) {
+                m_host->sendEvent(QJsonObject{ { QStringLiteral("overlay"), m_overlay.showingOnPhone() } });
+            }
+            return;
         }
         sendState(); // also after a refused command, so the mirror's guess is corrected
     }
@@ -87,6 +98,7 @@ private:
 
     ModuleHost *m_host;
     MirrorInput m_input;
+    TouchOverlay m_overlay;
 };
 
 }

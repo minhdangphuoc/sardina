@@ -1,12 +1,20 @@
 TEMPLATE = app
 TARGET = sailfish-devagent-input
 include(../common/module.pri)
-QT = core network
+# QtGui is for the touch overlay's QPainter.
+QT = core network gui
 
 SOURCES += \
     main.cpp \
-    mirrorinput.cpp
+    mirrorinput.cpp \
+    touchoverlay.cpp \
+    ../common/waylandutil.cpp
 
 HEADERS += \
     mirrorinput.h \
-    ../common/keypadkeys.h
+    touchoverlay.h \
+    ../common/keypadkeys.h \
+    ../common/waylandutil.h
+
+WAYLAND_CLIENT_PROTOCOLS = protocol/surface-extension.xml
+include(../common/wayland.pri)

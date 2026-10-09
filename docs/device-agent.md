@@ -49,8 +49,10 @@ you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
    `Keypad layout missing` with **Edit**. The strip hint goes away once you use
    it. **Sailfish: Edit Keypad Layout** opens the file again, **Sailfish: Reset
    Keypad Layout** forgets it (the file is kept).
-   While control is active, a circle in the mirror marks where you touch. The
-   phone itself shows nothing (agent 1.11.1 and newer send the touches for it).
+   With **Show touch indicator** on in the phone's Developer agent settings, a
+   circle marks where you touch: on the phone itself, or (agent 1.10.4, when
+   the phone cannot show it) in the mirror. The ⓘ details show `Touch
+   indicator: on phone`, `in mirror` or `off`.
 7. **Remove the agent or one module.** **Sailfish: Uninstall Device Agent**
    asks what to remove: **Device agent and all modules** or one installed
    module (removing `mirror` also removes `input`). A module removal stops only

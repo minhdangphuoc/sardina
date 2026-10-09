@@ -10,7 +10,7 @@
 class LineLink;
 
 // The mirror's handle on the input module (sailfish-devagent-input): the calls MirrorStream made on
-// the evdev injector, sent as lines to that process. Actions are fire and
+// the evdev injector and the touch overlay, sent as lines to that process. Actions are fire and
 // forget; busy() and liveContact() are a local guess the module corrects after every command.
 class InputLink : public QObject
 {
@@ -37,8 +37,14 @@ public:
     void keyUp(const QString &key);
     void cancel();
 
+    // The debug touch circle, drawn by the input module on the phone.
+    void setOverlayEnabled(bool enabled);
+    bool overlayOnPhone() const { return m_overlayEnabled && m_overlayWorks; }
+
 signals:
     void contactChanged(const QPoint &point, bool pressed);
+    // The overlay turned out not to work on the phone.
+    void overlayChanged();
 
 private:
     bool start(const QString &executable);
@@ -53,6 +59,8 @@ private:
     QString m_error;
     bool m_busy;
     bool m_live;
+    bool m_overlayEnabled;
+    bool m_overlayWorks;
 };
 
 #endif

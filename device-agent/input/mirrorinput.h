@@ -54,9 +54,9 @@ public:
     void cancel();
 
 signals:
-    // Fixed-panel screen coordinates after validation, for the marker in the VS Code mirror.
-    // A false state is emitted even if the evdev release write fails, so the marker never stays
-    // after the injector has abandoned a contact.
+    // Fixed-panel screen coordinates after validation, for the optional debug touch overlay.
+    // A false state is emitted even if the evdev release write fails, so an overlay never remains
+    // visible after the injector has abandoned a contact.
     void contactChanged(const QPoint &point, bool pressed);
     // busy() or liveContact() changed.
     void stateChanged();

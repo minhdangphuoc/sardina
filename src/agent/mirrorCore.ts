@@ -137,21 +137,23 @@ export function mirrorRequestArgs(
 }
 
 /**
- * Agent 1.9.0, requests with `phoneState`: the phone's `control` switch right after
+ * Agent 1.9.0, requests with `phoneState`: the phone's `control`/`touchIndicator` switches right after
  * the status and on every change, with the input fields the status line has (only when input was asked).
  */
 export interface PhoneSettingsLine {
   kind: 'settings';
   control?: boolean;
+  touchIndicator?: boolean;
   idleMode?: boolean;
   /** Agent 1.10.7: the phone's frame rate limit (30 or 60). */
   maxFps?: 30 | 60;
+  touchIndicatorPath?: TouchIndicatorPath;
   input?: boolean;
   inputLease?: number;
   inputError?: string;
 }
 
-export type TouchIndicatorPath = 'mirror' | 'off';
+export type TouchIndicatorPath = 'phone' | 'mirror' | 'off';
 
 export interface ContactLine {
   kind: 'contact';
@@ -338,8 +340,12 @@ function parseSettings(o: Record<string, unknown>): PhoneSettingsLine | undefine
   const v = inner as Record<string, unknown>;
   const m: PhoneSettingsLine = { kind: 'settings' };
   if (typeof v.control === 'boolean') m.control = v.control;
+  if (typeof v.touchIndicator === 'boolean') m.touchIndicator = v.touchIndicator;
   if (typeof v.idleMode === 'boolean') m.idleMode = v.idleMode;
   if (v.maxFps === 30 || v.maxFps === 60) m.maxFps = v.maxFps;
+  if (v.touchIndicatorPath === 'phone' || v.touchIndicatorPath === 'mirror' || v.touchIndicatorPath === 'off') {
+    m.touchIndicatorPath = v.touchIndicatorPath;
+  }
   if (o.input === true) {
     // Input on needs a valid lease; without one it stays off (fail closed).
     const ok = isNum(o.inputLease) && Number.isInteger(o.inputLease) && o.inputLease >= 1 && o.inputLease <= 30;
@@ -819,7 +825,7 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   rows.push({ label: 'Control', value: control === 'off' ? `off (${s.controlOffReason})` : control === 'active' ? 'on' : 'view only' });
   rows.push({
     label: 'Touch indicator',
-    value: s.touchIndicatorPath === 'mirror' ? 'in mirror' : 'off',
+    value: s.touchIndicatorPath === 'phone' ? 'on phone' : s.touchIndicatorPath === 'mirror' ? 'in mirror' : 'off',
   });
   if (s.softError) rows.push({ label: 'Phone error', value: s.softError });
   return rows;
@@ -1621,7 +1627,7 @@ export function mirrorHtml(nonce: string, device: string): string {
       cancelKey();
       renderKeypad(m.layout);
     } else if (m.type === 'touchIndicator') {
-      touchPath = m.path === 'mirror' ? 'mirror' : 'off';
+      touchPath = m.path === 'mirror' ? 'mirror' : m.path === 'phone' ? 'phone' : 'off';
       if (touchPath !== 'mirror') hideTouch();
     } else if (m.type === 'contact') {
       if (touchPath === 'mirror' && control && Array.isArray(m.screen) && m.screen.length === 2 &&

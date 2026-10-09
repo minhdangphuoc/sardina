@@ -48,8 +48,8 @@ public:
     // disconnects and cleans up.
     void finish(const QString &error);
 
-    // The phone's settings (agent 1.9.0). Called for each change the daemon forwards: "screenView" off ends the stream; "control" goes to the
-    // input hook below and, when the request opted in with "phoneState":true, a "settings"
+    // The phone's settings (agent 1.9.0). Called for each change the daemon forwards: "screenView" off ends the stream; "control" and "touchIndicator" go to the
+    // input hooks below and, when the request opted in with "phoneState":true, a "settings"
     // message tells the client (PLAN-settings-page.md section 7.3).
     void applySetting(const QString &key);
     // The phone's idle mode switch (agent 1.10.6); on when there are no settings.
@@ -90,10 +90,13 @@ private:
     // stream refused for that reason). Returns the "input"/"inputLease"/"inputError" fields for the
     // "settings" message (leading comma, or empty when the request did not ask for input).
     QByteArray applyControlSetting(bool allowed);
+    // S7: show or hide the debug touch circle at once (it never draws unless control is active).
+    void applyTouchIndicatorSetting(bool on);
     // The input fields of the status line, from the current state (read only).
     QByteArray inputFields() const;
     // The "settings" message (only when the request asked for "phoneState").
     void sendPhoneSettings(const QByteArray &inputFields);
+    QByteArray touchIndicatorPath() const;
 
     void writeLine(const QByteArray &line);
     void writeRecord(const QByteArray &headerJson, const QByteArray &payload);
