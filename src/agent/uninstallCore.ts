@@ -6,11 +6,40 @@
  * texts here.
  */
 
-import { AGENT_BINARY, AGENT_PACKAGE, AGENT_PACKAGES, DEVICE_TOOLS_DIR, DEVICE_USER, LEGACY_REMOTE_RPM } from './agentCore';
+import { AGENT_BINARY, AGENT_MODULES, AGENT_PACKAGE, AGENT_PACKAGES, DEVICE_TOOLS_DIR, DEVICE_USER, LEGACY_REMOTE_RPM, type AgentModule } from './agentCore';
 import type { DeviceSessionKind } from '../core/deviceSessions';
 
 /** Device sessions that talk to the agent; they are stopped before it is removed. Debug and app sessions are not. */
 export const AGENT_SESSION_KINDS: readonly DeviceSessionKind[] = ['mirror', 'logs', 'monitor'];
+
+/** The device sessions each module serves (screenshot has none: it is a single request). */
+const MODULE_SESSION_KINDS: Readonly<Record<AgentModule, readonly DeviceSessionKind[]>> = {
+  logs: ['logs'],
+  stats: ['monitor'],
+  screenshot: [],
+  mirror: ['mirror'],
+  input: ['mirror'],
+};
+
+/** The modules that go when `module` is removed: the input module cannot outlive the mirror. */
+export function modulesToErase(module: AgentModule, installed: readonly AgentModule[]): AgentModule[] {
+  return AGENT_MODULES.filter((m) => installed.includes(m) && (m === module || (module === 'mirror' && m === 'input')));
+}
+
+/** The sessions to stop before `modules` go. */
+export function sessionKindsOf(modules: readonly AgentModule[]): DeviceSessionKind[] {
+  return [...new Set(modules.flatMap((m) => MODULE_SESSION_KINDS[m]))];
+}
+
+/**
+ * Root (devel-su) script for removing modules only: the packages are fixed names, and their
+ * processes are stopped too (the package scriptlet does it as well). The core stays.
+ */
+export function uninstallModulesScript(modules: readonly AgentModule[]): string {
+  const packages = modules.map((m) => `${AGENT_PACKAGE}-${m}`).join(' ');
+  const running = `^/usr/libexec/${AGENT_PACKAGE}/${AGENT_PACKAGE}-(${modules.join('|')})( |$)`;
+  return `rpm -e ${packages} || exit $?; pkill -u ${DEVICE_USER} -f '${running}' >/dev/null 2>&1; exit 0`;
+}
 
 /** The agent's D-Bus name on the session bus (the Settings page's service, agent 1.9.0). */
 export const AGENT_DBUS_NAME = 'io.github.minhdangphuoc.SailfishDevAgent';

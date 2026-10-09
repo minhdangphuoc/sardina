@@ -5,6 +5,11 @@ import * as path from 'node:path';
 import { execFileSync } from 'node:child_process';
 import {
   AGENT_BINARY,
+  AGENT_MODULES,
+  hasModule,
+  installedModules,
+  withRequiredModules,
+  type AgentProbe,
   AGENT_PACKAGE,
   AGENT_RPM_NAME,
   LEGACY_REMOTE_RPM,
@@ -95,20 +100,47 @@ describe('agentCore.pickAgentRpm', () => {
 });
 
 describe('agentCore.pickAgentRpms', () => {
-  it('the core first, then each module of the same version, with fixed copy names', () => {
-    const six = AGENT_PACKAGES.map((p) => `${p}-1.11.0-1.i486.rpm`);
-    const rpms = pickAgentRpms('i486', [...six, 'sailfish-devagent-logs-1.10.9-1.i486.rpm', 'sailfish-devagent-mirror-1.11.0-1.aarch64.rpm']);
-    assert.deepStrictEqual(
-      rpms?.map((r) => r.copyName),
-      ['sailfish-devagent.rpm', 'sailfish-devagent-logs.rpm', 'sailfish-devagent-stats.rpm', 'sailfish-devagent-screenshot.rpm', 'sailfish-devagent-mirror.rpm', 'sailfish-devagent-input.rpm'],
-    );
-    assert.deepStrictEqual(rpms?.map((r) => r.file), six);
+  const six = AGENT_PACKAGES.map((p) => `${p}-1.11.0-1.i486.rpm`);
+  const noise = ['sailfish-devagent-logs-1.10.9-1.i486.rpm', 'sailfish-devagent-mirror-1.11.0-1.aarch64.rpm'];
+  it('the core first, then each wanted module of the same version, with fixed copy names', () => {
+    const rpms = pickAgentRpms('i486', [...six, ...noise], ['core', 'input', 'logs']);
+    assert.deepStrictEqual(rpms?.map((r) => r.copyName), ['sailfish-devagent.rpm', 'sailfish-devagent-logs.rpm', 'sailfish-devagent-input.rpm']);
+    assert.deepStrictEqual(rpms?.map((r) => r.file), [six[0], six[1], six[5]]);
   });
-  it('an older bundle: the core alone; nothing without a core', () => {
-    assert.deepStrictEqual(pickAgentRpms('aarch64', ['sailfish-devagent-1.10.8-1.aarch64.rpm']), [
-      { file: 'sailfish-devagent-1.10.8-1.aarch64.rpm', copyName: 'sailfish-devagent.rpm' },
-    ]);
-    assert.strictEqual(pickAgentRpms('i486', ['sailfish-devagent-logs-1.11.0-1.i486.rpm']), undefined);
+  it('a module alone leaves the core out', () => {
+    assert.deepStrictEqual(pickAgentRpms('i486', six, ['input'])?.map((r) => r.copyName), ['sailfish-devagent-input.rpm']);
+  });
+  it('undefined without a core or when a wanted part is not shipped', () => {
+    assert.strictEqual(pickAgentRpms('i486', ['sailfish-devagent-logs-1.11.0-1.i486.rpm'], ['logs']), undefined);
+    assert.strictEqual(pickAgentRpms('aarch64', ['sailfish-devagent-1.10.8-1.aarch64.rpm'], ['core', 'logs']), undefined);
+    assert.strictEqual(pickAgentRpms('aarch64', ['sailfish-devagent-1.10.8-1.aarch64.rpm'], ['core'])?.length, 1);
+  });
+});
+
+describe('agentCore modules', () => {
+  const running = (extra: object, version = '1.11.0'): Extract<AgentProbe, { state: 'running' }> => ({ state: 'running', version, developerMode: true, ...extra });
+  it('ping lists only the known modules', () => {
+    const r = classifyPing({ exitCode: 0, stdout: '{"ok":true,"version":"1.11.0","modules":["input","logs","bogus"]}', stderr: '' });
+    assert.deepStrictEqual(r.state === 'running' ? r.modules : undefined, ['logs', 'input']);
+  });
+  it('a 1.10.x agent without modules has every module; a 1.11 agent without them has none', () => {
+    assert.ok(AGENT_MODULES.every((m) => hasModule(running({}, '1.10.8'), m)));
+    assert.ok(AGENT_MODULES.every((m) => !hasModule(running({}), m)));
+    assert.deepStrictEqual(installedModules(running({ modules: ['logs'] })), ['logs']);
+    assert.strictEqual(hasModule({ state: 'not-installed' }, 'logs'), false);
+  });
+  it('input brings the mirror along, in the fixed order', () => {
+    assert.deepStrictEqual(withRequiredModules(['input', 'logs']), ['logs', 'mirror', 'input']);
+    assert.deepStrictEqual(withRequiredModules(['stats']), ['stats']);
+  });
+  it('refusal text for a missing module', () => {
+    assert.match(describeAgentRefusal('mirror module not installed'), /mirror module of the device agent is not installed/);
+    assert.strictEqual(describeAgentRefusal('weird module not installed'), 'weird module not installed');
+  });
+  it('status lists installed and missing modules; a 1.10.x agent shows none', () => {
+    assert.match(describeProbe('D', running({ modules: ['logs', 'screenshot'] })), /running on "D" with logs, screenshot \(not installed: stats, mirror, input\); Developer Mode is on/);
+    assert.match(describeProbe('D', running({ modules: AGENT_MODULES })), /running on "D" with logs, stats, screenshot, mirror, input;/);
+    assert.match(describeProbe('D', running({ modules: [] })), /with no modules \(not installed: logs/);
   });
 });
 
@@ -377,13 +409,13 @@ describe('agentCore scripts and messages', () => {
     assert.ok(!INSTALL_SCRIPT.includes('/tmp'));
     assert.ok(!INSTALL_SCRIPT.includes('`'));
   });
-  it('installConsentDetail names the device and package', () => {
-    const t = installConsentDetail('My Phone');
-    assert.ok(t.includes('"My Phone"'));
-    assert.ok(t.includes('sailfish-devagent'));
-    assert.ok(/Developer Mode/.test(t));
-    assert.ok(t.includes('taps and swipes'));
-    assert.ok(t.includes('loses focus'));
+  it('installConsentDetail lists only what the chosen modules do', () => {
+    const t = installConsentDetail('My Phone', ['logs']);
+    assert.ok(t.includes('"My Phone"') && t.includes('sailfish-devagent') && /Developer Mode/.test(t));
+    assert.ok(t.includes('system log') && t.includes('systemd-journal'));
+    assert.ok(!/screen|touch|taps/.test(t), t);
+    const all = installConsentDetail('My Phone', AGENT_MODULES);
+    for (const word of ['screenshots', 'mirror the screen', 'taps, swipes', 'loses focus', 'touchscreen']) assert.ok(all.includes(word), word);
   });
   it('describeProbe covers every state', () => {
     assert.match(describeProbe('D', { state: 'running', version: '1.0.0', developerMode: true }), /1\.0\.0 is running.*Developer Mode is on/);

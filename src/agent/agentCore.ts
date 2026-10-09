@@ -22,6 +22,8 @@ export const AGENT_MODULES = ['logs', 'stats', 'screenshot', 'mirror', 'input'] 
 export type AgentModule = (typeof AGENT_MODULES)[number];
 /** The core first, then every module package. */
 export const AGENT_PACKAGES: readonly string[] = [AGENT_PACKAGE, ...AGENT_MODULES.map((m) => `${AGENT_PACKAGE}-${m}`)];
+/** The first agent that reports `modules`; older agents are monolithic: every module is there. */
+export const MODULES_MIN_AGENT_VERSION = '1.11.0';
 /** Where extensions before 0.1.9 copied the RPM; only ever removed now. */
 export const LEGACY_REMOTE_RPM = '/tmp/sailfish-devagent.rpm';
 
@@ -53,6 +55,22 @@ export function archFromRpmQuery(output: string): AgentArch | undefined {
   return archFromOutput(line.slice(line.lastIndexOf('.') + 1));
 }
 
+/** Numeric dotted comparison; missing parts are 0 and a non-numeric part compares as 0. */
+export function compareVersions(a: string, b: string): -1 | 0 | 1 {
+  const pa = a.trim().split('.');
+  const pb = b.trim().split('.');
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const x = versionPart(pa[i]);
+    const y = versionPart(pb[i]);
+    if (x !== y) return x < y ? -1 : 1;
+  }
+  return 0;
+}
+
+function versionPart(s: string | undefined): number {
+  return s === undefined || !/^\d+$/.test(s) ? 0 : Number(s);
+}
+
 const RPM_NAME = /^sailfish-devagent(?:-(logs|stats|screenshot|mirror|input))?-(\d+(?:\.\d+)*)-(\d+)\.([a-z0-9_]+)\.rpm$/;
 
 /** Picks the core agent RPM for `arch` among the files shipped in `media/agent/<arch>/` (module RPMs never match). */
@@ -70,21 +88,34 @@ export interface AgentRpm {
   copyName: string;
 }
 
-/**
- * The core RPM for `arch` and the module RPMs of the same version and release beside it (agent
- * 1.11.0 ships six per architecture; an older bundle only the core). Undefined without a core.
- */
-export function pickAgentRpms(arch: AgentArch, fileNames: readonly string[]): AgentRpm[] | undefined {
+/** What an install puts on the device: the core and/or a module package. */
+export type AgentPart = 'core' | AgentModule;
+
+/** Input only works inside a mirror stream, so picking it brings the mirror along. */
+export function withRequiredModules(modules: readonly AgentModule[]): AgentModule[] {
+  const wanted = new Set(modules);
+  if (wanted.has('input')) wanted.add('mirror');
+  return AGENT_MODULES.filter((m) => wanted.has(m));
+}
+
+/** The RPMs for `parts` and `arch` of one bundled version (the core's); undefined when the core or a part is not shipped. */
+export function pickAgentRpms(arch: AgentArch, fileNames: readonly string[], parts: readonly AgentPart[]): AgentRpm[] | undefined {
   const core = pickAgentRpm(arch, fileNames);
   const coreMatch = core === undefined ? null : RPM_NAME.exec(core);
   if (core === undefined || coreMatch === null) return undefined;
-  const rpms: AgentRpm[] = [{ file: core, copyName: AGENT_RPM_NAME }];
-  for (const module of AGENT_MODULES) {
-    const file = `${AGENT_PACKAGE}-${module}-${coreMatch[2]}-${coreMatch[3]}.${arch}.rpm`;
-    if (fileNames.includes(file)) rpms.push({ file, copyName: `${AGENT_PACKAGE}-${module}.rpm` });
+  const rpms: AgentRpm[] = [];
+  for (const part of ['core', ...AGENT_MODULES] as const) {
+    if (!parts.includes(part)) continue;
+    const suffix = part === 'core' ? '' : `-${part}`;
+    const file = part === 'core' ? core : `${AGENT_PACKAGE}${suffix}-${coreMatch[2]}-${coreMatch[3]}.${arch}.rpm`;
+    if (!fileNames.includes(file)) return undefined;
+    rpms.push({ file, copyName: `${AGENT_PACKAGE}${suffix}.rpm` });
   }
   return rpms;
 }
+
+/** Every copy name an install may leave in the tools folder. */
+export const AGENT_COPY_NAMES: readonly string[] = AGENT_PACKAGES.map((p) => `${p}.rpm`);
 
 export interface AgentReply {
   ok: boolean;
@@ -108,6 +139,8 @@ export interface AgentReply {
   logFormats?: string[];
   /** Agent 1.10.0+: true when the agent offers the `stats` stream. */
   stats?: boolean;
+  /** Agent 1.11.0+: the installed modules. Absent on older agents, which have every feature. */
+  modules?: AgentModule[];
 }
 
 export const INDICATOR_LEVELS = ['normal', 'quiet', 'minimal'] as const;
@@ -174,6 +207,7 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
       if (typeof parsed.settingsPage === 'boolean') reply.settingsPage = parsed.settingsPage;
       if (Array.isArray(parsed.logFormats) && parsed.logFormats.every((e) => typeof e === 'string')) reply.logFormats = parsed.logFormats;
       if (typeof parsed.stats === 'boolean') reply.stats = parsed.stats;
+      if (Array.isArray(parsed.modules)) reply.modules = AGENT_MODULES.filter((m) => (parsed.modules as unknown[]).includes(m));
       return reply;
     } catch {
       return undefined;
@@ -183,10 +217,22 @@ export function parseAgentReply(stdout: string): AgentReply | undefined {
 }
 
 export type AgentProbe =
-  | { state: 'running'; version: string; developerMode: boolean; socket?: string; mirrorEncodings?: string[]; mirrorInput?: string[]; keypad?: KeypadInfo; settings?: PhoneSettings; settingsPage?: boolean; logFormats?: string[]; stats?: boolean }
+  | { state: 'running'; version: string; developerMode: boolean; socket?: string; mirrorEncodings?: string[]; mirrorInput?: string[]; keypad?: KeypadInfo; settings?: PhoneSettings; settingsPage?: boolean; logFormats?: string[]; stats?: boolean; modules?: AgentModule[] }
   | { state: 'not-running' }
   | { state: 'not-installed' }
   | { state: 'unreachable'; detail: string };
+
+type RunningProbe = Extract<AgentProbe, { state: 'running' }>;
+
+/** The installed modules; a 1.10.x agent without `modules` is monolithic and counts as having all. */
+export function installedModules(probe: RunningProbe): readonly AgentModule[] {
+  if (probe.modules !== undefined) return probe.modules;
+  return compareVersions(probe.version, MODULES_MIN_AGENT_VERSION) < 0 ? AGENT_MODULES : [];
+}
+
+export function hasModule(probe: AgentProbe, module: AgentModule): boolean {
+  return probe.state === 'running' && installedModules(probe).includes(module);
+}
 
 /** Classifies `sailfish-devagent --request ping` (client exit codes: 0 ok, 3 no daemon; 127 = no binary). */
 export function classifyPing(result: { exitCode: number; stdout: string; stderr: string }): AgentProbe {
@@ -201,6 +247,7 @@ export function classifyPing(result: { exitCode: number; stdout: string; stderr:
     if (reply.settingsPage !== undefined) running.settingsPage = reply.settingsPage;
     if (reply.logFormats !== undefined) running.logFormats = reply.logFormats;
     if (reply.stats !== undefined) running.stats = reply.stats;
+    if (reply.modules !== undefined) running.modules = reply.modules;
     return running;
   }
   if (result.exitCode === 3 || reply?.error === 'agent not running') {
@@ -275,13 +322,33 @@ export const INSTALL_SCRIPT =
   `rpm -U --replacepkgs --oldpackage "$d"/${AGENT_PACKAGE}*.rpm || r=$?; rm -f "$d"/${AGENT_PACKAGE}*.rpm; rmdir "$d" 2>/dev/null; exit $r`;
 // The uninstall scripts live in uninstallCore.ts.
 
-/** What the consent dialog says the agent can do (the security model's "install is the consent step"). */
-export function installConsentDetail(device: string): string {
+const MODULE_ABILITY: Readonly<Record<AgentModule, string>> = {
+  logs: 'read the system log of the device without asking for the password each time',
+  stats: 'read the CPU and memory use of apps',
+  screenshot: 'take screenshots',
+  mirror: 'mirror the screen',
+  input: 'send taps, swipes and key presses from a focused mirror panel',
+};
+
+/** One line per module for the install pick. */
+export const MODULE_PICK_DETAIL: Readonly<Record<AgentModule, string>> = {
+  logs: 'Show Device Logs',
+  stats: 'App CPU and memory in the Device Monitor',
+  screenshot: 'Take Device Screenshot',
+  mirror: 'Mirror the screen',
+  input: 'Control the phone from the mirror (needs mirror)',
+};
+
+/** What the consent dialog says the agent can do with `modules` (the security model's "install is the consent step"). */
+export function installConsentDetail(device: string, modules: readonly AgentModule[]): string {
+  const can = modules.map((m) => MODULE_ABILITY[m]).join(', ');
+  const touch = modules.includes('input') ? ', whose normal groups include access to the touchscreen,' : '';
+  const stops = modules.includes('input') ? ', and input stops when the mirror loses focus' : '';
   return (
-    `The agent is a small service (${AGENT_PACKAGE}) that lets VS Code mirror the screen, send taps and swipes from a focused mirror panel, ` +
-    `and read the system log of "${device}" without asking for the password each time. It runs as defaultuser, whose normal groups include ` +
-    'access to the touchscreen, with "privileged" as its primary group and "systemd-journal" added. It answers only on a local socket ' +
-    '(nothing new is opened on the network), only while Developer Mode is on, and input stops when the mirror loses focus. ' +
+    `The agent is a small service (${AGENT_PACKAGE}) that lets VS Code ${can || 'connect'} on "${device}". ` +
+    `It runs as defaultuser${touch} with "privileged" as its primary group` +
+    `${modules.includes('logs') ? ' and "systemd-journal" added' : ''}. It answers only on a local socket ` +
+    `(nothing new is opened on the network) and only while Developer Mode is on${stops}. ` +
     'You will be asked for the device\'s developer-mode password once. "Uninstall Device Agent" removes it again.'
   );
 }
@@ -297,8 +364,12 @@ const REFUSAL_TEXT: Readonly<Record<string, string>> = {
   'developer mode is off': 'Developer Mode is off on the phone. Turn it on in Settings → Developer tools.',
 };
 
+const MODULE_NOT_INSTALLED = /^(logs|stats|screenshot|mirror|input) module not installed$/;
+
 /** A user-facing text for an agent error string; unknown errors are returned as they are. */
 export function describeAgentRefusal(error: string): string {
+  const module = MODULE_NOT_INSTALLED.exec(error)?.[1];
+  if (module) return `The ${module} module of the device agent is not installed. Run "Install Device Agent" and pick it.`;
   return REFUSAL_TEXT[error] ?? error;
 }
 
@@ -342,11 +413,26 @@ export function clientName(host: string): string {
   return host.replace(/[^A-Za-z0-9 ._-]/g, '').trim().slice(0, 64).trim();
 }
 
+/** What a feature needs from the agent: its module, the phone switch that may refuse it, and its name for prompts. */
+export interface AgentNeed {
+  module: AgentModule;
+  setting?: 'screenView' | 'logs';
+  feature: string;
+}
+
+/** " with logs (not installed: …)"; nothing for a 1.10.x agent, which has every feature in one piece. */
+function describeModules(probe: RunningProbe): string {
+  if (probe.modules === undefined) return '';
+  const have = probe.modules;
+  const missing = AGENT_MODULES.filter((m) => !have.includes(m));
+  return missing.length === 0 ? ` with ${have.join(', ')}` : ` with ${have.join(', ') || 'no modules'} (not installed: ${missing.join(', ')})`;
+}
+
 /** One line for the status notification. */
 export function describeProbe(device: string, probe: AgentProbe): string {
   switch (probe.state) {
     case 'running':
-      return `Sailfish: device agent ${probe.version} is running on "${device}"; Developer Mode is ${probe.developerMode ? 'on' : 'off, so screenshots and logs are refused'}.${describePhoneSettings(probe.settings)}`;
+      return `Sailfish: device agent ${probe.version} is running on "${device}"${describeModules(probe)}; Developer Mode is ${probe.developerMode ? 'on' : 'off, so screenshots and logs are refused'}.${describePhoneSettings(probe.settings)}`;
     case 'not-running':
       return `Sailfish: the device agent is installed on "${device}" but not running (try "Install Device Agent" again, or on the device: systemctl status sailfish-devagent).`;
     case 'not-installed':

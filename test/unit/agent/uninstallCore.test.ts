@@ -13,12 +13,37 @@ import {
   restartHomeScreenAsk,
   restartHomeScreenConfirm,
   UNINSTALL_SCRIPT,
+  modulesToErase,
+  sessionKindsOf,
+  uninstallModulesScript,
   parseCleanupReport,
   uninstallSummary,
   type CleanupReport,
 } from '../../../src/agent/uninstallCore';
 
 const report = (r: Partial<CleanupReport> = {}): CleanupReport => ({ removed: [], closed: [], left: [], unchecked: [], complete: true, ...r });
+
+describe('uninstallCore modules', () => {
+  it('removing the mirror takes the input module with it, never the other way round', () => {
+    assert.deepStrictEqual(modulesToErase('mirror', ['logs', 'mirror', 'input']), ['mirror', 'input']);
+    assert.deepStrictEqual(modulesToErase('input', ['mirror', 'input']), ['input']);
+    assert.deepStrictEqual(modulesToErase('logs', ['logs', 'mirror']), ['logs']);
+  });
+  it('a module stops only its own sessions', () => {
+    assert.deepStrictEqual(sessionKindsOf(['logs']), ['logs']);
+    assert.deepStrictEqual(sessionKindsOf(['stats']), ['monitor']);
+    assert.deepStrictEqual(sessionKindsOf(['screenshot']), []);
+    assert.deepStrictEqual(sessionKindsOf(['mirror', 'input']), ['mirror']);
+  });
+  it('uninstallModulesScript erases fixed package names, kills their processes, keeps the core', () => {
+    const script = uninstallModulesScript(['mirror', 'input']);
+    assert.strictEqual(
+      script,
+      "rpm -e sailfish-devagent-mirror sailfish-devagent-input || exit $?; pkill -u defaultuser -f '^/usr/libexec/sailfish-devagent/sailfish-devagent-(mirror|input)( |$)' >/dev/null 2>&1; exit 0",
+    );
+    assert.ok(!script.includes('\n'));
+  });
+});
 
 describe('uninstallCore scripts', () => {
   it('UNINSTALL_SCRIPT is one fixed line: rpm -e only when installed, then root-owned leftovers', () => {

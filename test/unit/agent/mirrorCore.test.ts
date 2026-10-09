@@ -239,6 +239,13 @@ describe('mirrorCore status strip', () => {
     assert.strictEqual(stripParts({ ...live, keypadHint: 'create', softError: 'boom' }).warning, 'Phone error');
     assert.strictEqual(stripParts({ ...live, keypadHint: 'create', transport: 'sfdk' }).warning, 'Slow path');
   });
+  it('hints at the missing input module last, below every other warning', () => {
+    assert.deepStrictEqual(stripParts({ ...live, inputModuleMissing: true }), {
+      dot: 'live', label: 'Live', fps: '30 fps', warning: 'Control needs the input module', action: 'installInput',
+    });
+    assert.strictEqual(statusText({ ...live, inputModuleMissing: true }), 'Live · 30 fps · Control needs the input module · Install');
+    assert.strictEqual(stripParts({ ...live, inputModuleMissing: true, softError: 'boom' }).warning, 'Phone error');
+  });
   it('old agent: Slow path with the update action; other sfdk reasons have no action', () => {
     const old: MirrorStatus = { state: 'live', transport: 'sfdk', fallbackReason: 'agent 1.1.0 — update for the fast mirror', fps: 4 };
     assert.deepStrictEqual(stripParts(old), { dot: 'live', label: 'Live', fps: '4 fps', warning: 'Slow path', action: 'update' });
@@ -982,6 +989,7 @@ describe('bundled agent version', () => {
       '1.10.0',
     );
     assert.strictEqual(bundledAgentVersion(['other-1.0.0-1.i486.rpm']), undefined);
+    assert.strictEqual(bundledAgentVersion(['sailfish-devagent-logs-1.11.0-1.i486.rpm', 'sailfish-devagent-input-1.11.0-1.i486.rpm']), undefined, 'module RPMs are not the agent');
     assert.strictEqual(bundledAgentVersion([]), undefined);
   });
 
