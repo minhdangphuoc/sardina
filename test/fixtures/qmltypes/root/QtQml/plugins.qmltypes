@@ -1,0 +1,42 @@
+import QtQuick.tooling 1.2
+
+// Hand-written test fixture; not generated, not derived from any SDK.
+
+Module {
+    dependencies: []
+    Component {
+        name: "QObject"
+        Property { name: "objectName"; type: "string" }
+        Signal { name: "objectNameChanged" }
+        Signal {
+            name: "destroyed"
+            Parameter { name: "obj"; type: "QObject"; isPointer: true }
+        }
+        Method { name: "deleteLater" }
+    }
+    Component {
+        name: "FxObject"
+        prototype: "QObject"
+        exports: ["QtQml/QtObject 2.0"]
+        exportMetaObjectRevisions: [0]
+    }
+    Component {
+        name: "FxTimer"
+        prototype: "QObject"
+        exports: ["QtQml/Timer 2.0"]
+        exportMetaObjectRevisions: [0]
+        Property { name: "interval"; type: "int" }
+        Property { name: "running"; type: "bool" }
+        Property { name: "repeat"; type: "bool" }
+        Signal { name: "triggered" }
+        Method { name: "start" }
+        Method { name: "stop" }
+    }
+    Component {
+        name: "FxConnections"
+        prototype: "QObject"
+        exports: ["QtQml/Connections 2.0"]
+        exportMetaObjectRevisions: [0]
+        Property { name: "target"; type: "QObject"; isPointer: true }
+    }
+}

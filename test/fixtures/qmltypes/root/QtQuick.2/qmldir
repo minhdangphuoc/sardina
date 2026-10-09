@@ -1,0 +1,5 @@
+module QtQuick
+plugin fxquickplugin
+classname FxQuickPlugin
+typeinfo plugins.qmltypes
+designersupported

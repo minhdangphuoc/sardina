@@ -1,0 +1,25 @@
+import QtQuick.tooling 1.2
+
+// Hand-written test fixture; not generated, not derived from any SDK.
+
+Module {
+    Component {
+        name: "Qt"
+        prototype: "QObject"
+        Enum {
+            name: "Orientation"
+            values: {
+                "Horizontal": 1,
+                "Vertical": 2
+            }
+        }
+        Method {
+            name: "rgba"
+            Parameter { name: "r"; type: "double" }
+            Parameter { name: "g"; type: "double" }
+            Parameter { name: "b"; type: "double" }
+            Parameter { name: "a"; type: "double" }
+        }
+        Method { name: "quit" }
+    }
+}

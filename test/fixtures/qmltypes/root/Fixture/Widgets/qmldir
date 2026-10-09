@@ -1,0 +1,10 @@
+module Fixture.Widgets
+plugin fixturewidgetsplugin
+typeinfo plugins.qmltypes
+depends QtQuick 2.0
+Panel 1.0 Panel.qml
+Knob 1.0 Knob.qml
+Knob 1.1 Knob.qml
+singleton Palette 1.0 Palette.qml
+internal Hidden Hidden.qml
+Helpers 1.0 helpers.js
