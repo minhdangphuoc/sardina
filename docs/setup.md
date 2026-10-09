@@ -19,7 +19,7 @@
 
 | What | Version | Notes |
 |---|---|---|
-| Computer | Linux or macOS | **Windows is not supported.** The `sailfish.experimental.enableWindows` setting only lifts the Windows block and looks for the SDK in `C:\SailfishOS`; nothing else is implemented or tested, so leave it off. |
+| Computer | Linux (tested), macOS (untested) | **Windows: N/A.** The `sailfish.experimental.enableWindows` setting only lifts the Windows block and looks for the SDK in `C:\SailfishOS`; nothing else is implemented or tested, so leave it off. |
 | Free disk space | about 15 GB | For the SDK with its default components. |
 | Memory | 4 GB or more | Recommended by the SDK. |
 | [VirtualBox](https://www.virtualbox.org/wiki/Downloads) | 6.1 or newer | **Install before the SDK.** Needed for the emulator, and for the build engine unless you choose Docker. Tested with 7.2.20. |

@@ -27,7 +27,7 @@ on a device or the emulator without leaving the editor.
 
 1. Install [VirtualBox](https://www.virtualbox.org/wiki/Downloads) and the
    [Sailfish SDK](https://docs.sailfishos.org/Tools/Sailfish_SDK/Installation/)
-   (3.10+). VS Code 1.94+, Linux or macOS.
+   (3.10+). VS Code 1.94+ on Linux (macOS untested).
 2. Install the extension from its `.vsix` file (see [Setup](docs/setup.md)).
 3. Open a Sailfish project folder.
 4. Pick a build target and a device in the status bar.
@@ -53,8 +53,11 @@ on a device or the emulator without leaving the editor.
 
 ## Status
 
-Version 0.1.11. Linux and macOS; Windows is not supported. Not on the
-VS Code Marketplace yet.
+Version 0.1.12. Not on the VS Code Marketplace yet.
+
+| Linux | macOS | Windows |
+|---|---|---|
+| Tested | Untested | N/A |
 
 ## License
 
