@@ -1,4 +1,5 @@
 #include "videoencoder.h"
+#include "yuvrows.h"
 
 #include <QThread>
 #include <condition_variable>
@@ -13,7 +14,9 @@
 namespace {
 
 const int MIN_SIDE = 16;
-// A fixed speed avoids automatic changes that overshoot the target bitrate during scrolling.
+// A fixed speed avoids automatic changes that overshoot the target bitrate during scrolling. Faster
+// speeds lose the rate control on screen content (host, 720x1584, 2000 kbit/s CBR): -8 saves about
+// 15 % of the encode time but sends twice the target, -12 and -16 five times.
 const int CPU_USED = -6;
 // Macroblocks this similar to the last frame are skipped (screen content; WebRTC uses 100).
 const int STATIC_THRESHOLD = 100;
@@ -24,38 +27,15 @@ int evenDown(int v)
     return v & ~1;
 }
 
-inline uchar clampByte(int v)
+// Half the cores, at most four: the other half is the compositor's and the mirrored app's.
+int encoderThreads()
 {
-    return static_cast<uchar>(v < 0 ? 0 : (v > 255 ? 255 : v));
+    return qBound(1, QThread::idealThreadCount() / 2, 4);
 }
 
-inline uchar lumaOf(int r, int g, int b)
+vp8e_token_partitions tokenPartitions(int threads)
 {
-    return static_cast<uchar>(((66 * r + 129 * g + 25 * b + 128) >> 8) + 16);
-}
-
-// Y for two rows, and U and V from each 2x2 block (sums of four pixels; BT.601, limited range).
-// `step` is the distance between pixels in bytes (4 for the recorder's RGBX rows, 3 for scaled rows).
-void emitRowPair(const uchar *a, const uchar *b, int step, int width, uchar *y0, uchar *y1, uchar *u, uchar *v)
-{
-    for (int x = 0; x < width; x += 2) {
-        const uchar *p = a + x * step;
-        const uchar *q = b + x * step;
-        const int r0 = p[0], g0 = p[1], b0 = p[2];
-        const int r1 = p[step], g1 = p[step + 1], b1 = p[step + 2];
-        const int r2 = q[0], g2 = q[1], b2 = q[2];
-        const int r3 = q[step], g3 = q[step + 1], b3 = q[step + 2];
-        y0[x] = lumaOf(r0, g0, b0);
-        y0[x + 1] = lumaOf(r1, g1, b1);
-        y1[x] = lumaOf(r2, g2, b2);
-        y1[x + 1] = lumaOf(r3, g3, b3);
-        const int rs = r0 + r1 + r2 + r3;
-        const int gs = g0 + g1 + g2 + g3;
-        const int bs = b0 + b1 + b2 + b3;
-        // (128 << 10) + 512: the chroma offset and rounding, which also keeps the sum positive.
-        u[x >> 1] = clampByte((-38 * rs - 74 * gs + 112 * bs + 131584) >> 10);
-        v[x >> 1] = clampByte((112 * rs - 94 * gs - 18 * bs + 131584) >> 10);
-    }
+    return threads >= 4 ? VP8_FOUR_TOKENPARTITION : threads >= 2 ? VP8_TWO_TOKENPARTITION : VP8_ONE_TOKENPARTITION;
 }
 
 // Bilinear taps for `out` samples over `in` (centres aligned), 8-bit weights for the second tap.
@@ -170,7 +150,7 @@ VideoEncoder::VideoEncoder()
     , m_current(0)
     , m_hasLast(false)
     , m_threads(1)
-    , m_workers(new ConvertWorkers(qBound(1, QThread::idealThreadCount() / 2, 4) - 1))
+    , m_workers(new ConvertWorkers(encoderThreads() - 1))
 {
     m_threads += m_workers->size();
     std::memset(m_cfg, 0, sizeof(*m_cfg));
@@ -211,11 +191,10 @@ bool VideoEncoder::open(const QSize &size, int bitrateKbps, QString *error)
     m_cfg->g_h = static_cast<unsigned>(size.height());
     m_cfg->g_timebase.num = 1;
     m_cfg->g_timebase.den = 1000; // pts in milliseconds
-    // Half the cores, at most three: the other half is the compositor's and the mirrored app's.
-    // libvpx splits a frame by macroblock rows; more threads land on little cores and wait for row
-    // sync. On the 2-core emulator a second thread doubled the encode time (it competes with
-    // lipstick). The conversion uses up to four threads while libvpx's are idle.
-    m_cfg->g_threads = static_cast<unsigned>(qBound(1, QThread::idealThreadCount() / 2, 3));
+    // libvpx splits a frame by macroblock rows. On the 2-core emulator a second thread doubled the
+    // encode time (it competes with lipstick), so it keeps one. The conversion uses the same number
+    // of threads while libvpx's are idle.
+    m_cfg->g_threads = static_cast<unsigned>(encoderThreads());
     m_cfg->g_lag_in_frames = 0;
     m_cfg->g_error_resilient = 0;
     m_cfg->g_pass = VPX_RC_ONE_PASS;
@@ -246,8 +225,8 @@ bool VideoEncoder::open(const QSize &size, int bitrateKbps, QString *error)
     vpx_codec_control(m_codec, VP8E_SET_CPUUSED, CPU_USED);
     vpx_codec_control(m_codec, VP8E_SET_NOISE_SENSITIVITY, 0);
     vpx_codec_control(m_codec, VP8E_SET_STATIC_THRESHOLD, STATIC_THRESHOLD);
-    // One token partition: partitions help a multi-threaded decoder, not the encoder's threads.
-    vpx_codec_control(m_codec, VP8E_SET_TOKEN_PARTITIONS, static_cast<int>(VP8_ONE_TOKENPARTITION));
+    // One token partition per encoder thread (VP8 allows 1, 2, 4 or 8) so the threads tokenise in parallel.
+    vpx_codec_control(m_codec, VP8E_SET_TOKEN_PARTITIONS, static_cast<int>(tokenPartitions(encoderThreads())));
     vpx_codec_control(m_codec, VP8E_SET_MAX_INTRA_BITRATE_PCT, MAX_INTRA_PCT);
     vpx_codec_control(m_codec, VP8E_SET_SCREEN_CONTENT_MODE, 1);
 
@@ -352,8 +331,8 @@ void VideoEncoder::convertBand(const uchar *rows, int width, int height, int byt
     };
     if (w == evenDown(width) && h == evenDown(height)) {
         for (int y = y0; y < y1; y += 2) {
-            emitRowPair(sourceRow(y), sourceRow(y + 1), 4, w, yPlane + y * w, yPlane + (y + 1) * w,
-                        uPlane + (y / 2) * (w / 2), vPlane + (y / 2) * (w / 2));
+            emitRowPairRgbx(sourceRow(y), sourceRow(y + 1), w, yPlane + y * w, yPlane + (y + 1) * w,
+                            uPlane + (y / 2) * (w / 2), vPlane + (y / 2) * (w / 2));
         }
         return;
     }

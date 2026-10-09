@@ -45,6 +45,7 @@ HEADERS += \
     src/mirror.h \
     src/idleplan.h \
     src/pacer.h \
+    src/yuvrows.h \
     src/retrybudget.h \
     src/mirrorinput.h \
     src/touchoverlay.h \
