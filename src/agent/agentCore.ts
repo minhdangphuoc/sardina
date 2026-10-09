@@ -15,8 +15,13 @@ export const DEVICE_USER = 'defaultuser';
  * extension writes there (outside the agent's package) goes into it, mode 0700.
  */
 export const DEVICE_TOOLS_DIR = '.cache/sailfish-tools';
-/** The RPM's file name in DEVICE_TOOLS_DIR before `rpm -U`; a fixed name, never user input. */
+/** The core RPM's file name in DEVICE_TOOLS_DIR before `rpm -U`; a fixed name, never user input. */
 export const AGENT_RPM_NAME = 'sailfish-devagent.rpm';
+/** Agent 1.11.0: the feature modules, each its own package `sailfish-devagent-<module>`. */
+export const AGENT_MODULES = ['logs', 'stats', 'screenshot', 'mirror', 'input'] as const;
+export type AgentModule = (typeof AGENT_MODULES)[number];
+/** The core first, then every module package. */
+export const AGENT_PACKAGES: readonly string[] = [AGENT_PACKAGE, ...AGENT_MODULES.map((m) => `${AGENT_PACKAGE}-${m}`)];
 /** Where extensions before 0.1.9 copied the RPM; only ever removed now. */
 export const LEGACY_REMOTE_RPM = '/tmp/sailfish-devagent.rpm';
 
@@ -48,10 +53,37 @@ export function archFromRpmQuery(output: string): AgentArch | undefined {
   return archFromOutput(line.slice(line.lastIndexOf('.') + 1));
 }
 
-/** Picks the agent RPM for `arch` among the files shipped in `media/agent/<arch>/`. */
+const RPM_NAME = /^sailfish-devagent(?:-(logs|stats|screenshot|mirror|input))?-(\d+(?:\.\d+)*)-(\d+)\.([a-z0-9_]+)\.rpm$/;
+
+/** Picks the core agent RPM for `arch` among the files shipped in `media/agent/<arch>/` (module RPMs never match). */
 export function pickAgentRpm(arch: AgentArch, fileNames: readonly string[]): string | undefined {
-  const candidates = fileNames.filter((f) => f.startsWith(`${AGENT_PACKAGE}-`) && f.endsWith(`.${arch}.rpm`)).sort();
-  return candidates[candidates.length - 1];
+  const candidates = fileNames.filter((f) => {
+    const m = RPM_NAME.exec(f);
+    return m !== null && m[1] === undefined && m[4] === arch;
+  });
+  return candidates.sort()[candidates.length - 1];
+}
+
+/** One RPM to install and the fixed name its copy gets on the device. */
+export interface AgentRpm {
+  file: string;
+  copyName: string;
+}
+
+/**
+ * The core RPM for `arch` and the module RPMs of the same version and release beside it (agent
+ * 1.11.0 ships six per architecture; an older bundle only the core). Undefined without a core.
+ */
+export function pickAgentRpms(arch: AgentArch, fileNames: readonly string[]): AgentRpm[] | undefined {
+  const core = pickAgentRpm(arch, fileNames);
+  const coreMatch = core === undefined ? null : RPM_NAME.exec(core);
+  if (core === undefined || coreMatch === null) return undefined;
+  const rpms: AgentRpm[] = [{ file: core, copyName: AGENT_RPM_NAME }];
+  for (const module of AGENT_MODULES) {
+    const file = `${AGENT_PACKAGE}-${module}-${coreMatch[2]}-${coreMatch[3]}.${arch}.rpm`;
+    if (fileNames.includes(file)) rpms.push({ file, copyName: `${AGENT_PACKAGE}-${module}.rpm` });
+  }
+  return rpms;
 }
 
 export interface AgentReply {
@@ -230,16 +262,17 @@ export const COPY_SCRIPT =
   `case $1 in */*|'') exit 2 ;; esac; d=$HOME/${DEVICE_TOOLS_DIR}; f=$d/$1; n=$2; ` +
   'mkdir -p "$d" && chmod 700 "$d" && base64 -d > "$f" && [ "$(wc -c < "$f")" -eq "$n" ]';
 
-/** Removes the copy `$1` (a plain file name) and the private folder when it is then empty: an install that never reached rpm. */
-export const REMOVE_COPY_SCRIPT = `case $1 in */*|'') exit 2 ;; esac; d=$HOME/${DEVICE_TOOLS_DIR}; rm -f "$d/$1"; rmdir "$d" 2>/dev/null; exit 0`;
+/** Removes the copies named in the arguments (plain file names) and the private folder when it is then empty: an install that never reached rpm. */
+export const REMOVE_COPY_SCRIPT = `d=$HOME/${DEVICE_TOOLS_DIR}; for n in "$@"; do case $n in */*|'') exit 2 ;; esac; rm -f "$d/$n"; done; rmdir "$d" 2>/dev/null; exit 0`;
 
 /**
- * Root (devel-su) script; the device user, folder and file name are constants. The copy is
- * removed whatever rpm says, and the private folder too when that leaves it empty.
+ * Root (devel-su) script; the device user, folder and file names are constants. All copied RPMs
+ * (the core and its modules) go in one transaction; the copies are removed whatever rpm says, and
+ * the private folder too when that leaves it empty.
  */
 export const INSTALL_SCRIPT =
-  `f=$(getent passwd ${DEVICE_USER} | cut -d: -f6)/${DEVICE_TOOLS_DIR}/${AGENT_RPM_NAME}; r=0; ` +
-  `rpm -U --replacepkgs --oldpackage "$f" || r=$?; rm -f "$f"; rmdir "\${f%/*}" 2>/dev/null; exit $r`;
+  `d=$(getent passwd ${DEVICE_USER} | cut -d: -f6)/${DEVICE_TOOLS_DIR}; r=0; ` +
+  `rpm -U --replacepkgs --oldpackage "$d"/${AGENT_PACKAGE}*.rpm || r=$?; rm -f "$d"/${AGENT_PACKAGE}*.rpm; rmdir "$d" 2>/dev/null; exit $r`;
 // The uninstall scripts live in uninstallCore.ts.
 
 /** What the consent dialog says the agent can do (the security model's "install is the consent step"). */

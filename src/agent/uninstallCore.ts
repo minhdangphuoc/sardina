@@ -6,7 +6,7 @@
  * texts here.
  */
 
-import { AGENT_BINARY, AGENT_PACKAGE, DEVICE_TOOLS_DIR, DEVICE_USER, LEGACY_REMOTE_RPM } from './agentCore';
+import { AGENT_BINARY, AGENT_PACKAGE, AGENT_PACKAGES, DEVICE_TOOLS_DIR, DEVICE_USER, LEGACY_REMOTE_RPM } from './agentCore';
 import type { DeviceSessionKind } from '../core/deviceSessions';
 
 /** Device sessions that talk to the agent; they are stopped before it is removed. Debug and app sessions are not. */
@@ -47,7 +47,8 @@ export const DEVICE_RUNTIME_BASE = '/run/user';
  * gets no positional arguments.
  */
 export const UNINSTALL_SCRIPT = [
-  `if rpm -q ${AGENT_PACKAGE} >/dev/null 2>&1; then rpm -e ${AGENT_PACKAGE} || exit $?; fi`,
+  // Modules need the core (agent 1.11.0), so they leave in the same transaction.
+  `if rpm -q ${AGENT_PACKAGE} >/dev/null 2>&1; then m=; for n in ${AGENT_PACKAGES.slice(1).join(' ')}; do rpm -q $n >/dev/null 2>&1 && m="$m $n"; done; rpm -e ${AGENT_PACKAGE}$m || exit $?; fi`,
   `rm -f ${LEGACY_REMOTE_RPM}`,
   `[ -L ${LEGACY_WANTS_LINK} ] && rm -f ${LEGACY_WANTS_LINK}`,
   `rm -rf /var/lib/${AGENT_PACKAGE}`,
@@ -68,6 +69,7 @@ const ROOT_PATHS = [
   LEGACY_WANTS_LINK,
   `/usr/share/jolla-settings/entries/${AGENT_PACKAGE}.json`,
   `/usr/share/${AGENT_PACKAGE}`,
+  `/usr/libexec/${AGENT_PACKAGE}`,
   `/var/lib/${AGENT_PACKAGE}`,
 ];
 
@@ -100,9 +102,10 @@ export const CLEANUP_SCRIPT = [
   `  else echo "${MARK}:unchecked:notifications"; fi`,
   `  ds --dest=org.freedesktop.DBus /org/freedesktop/DBus org.freedesktop.DBus.NameHasOwner string:${AGENT_DBUS_NAME} 2>/dev/null | grep -q 'boolean true' && echo "${MARK}:left:D-Bus name ${AGENT_DBUS_NAME}"`,
   `else echo "${MARK}:unchecked:notifications"; fi`,
-  `rpm -q ${AGENT_PACKAGE} >/dev/null 2>&1 && echo "${MARK}:left:package ${AGENT_PACKAGE}"`,
+  `for n in ${AGENT_PACKAGES.join(' ')}; do rpm -q $n >/dev/null 2>&1 && echo "${MARK}:left:package $n"; done`,
   `for p in ${ROOT_PATHS.join(' ')}; do { [ -e "$p" ] || [ -L "$p" ]; } && echo "${MARK}:left:$p"; done`,
   `pidof ${AGENT_BINARY} >/dev/null 2>&1 && echo "${MARK}:left:running process ${AGENT_BINARY}"`,
+  `pgrep -u ${DEVICE_USER} -f '^/usr/libexec/${AGENT_PACKAGE}/' >/dev/null 2>&1 && echo "${MARK}:left:running module process"`,
   `echo "${MARK}:done"`,
 ].join('\n');
 

@@ -23,7 +23,8 @@ const report = (r: Partial<CleanupReport> = {}): CleanupReport => ({ removed: []
 describe('uninstallCore scripts', () => {
   it('UNINSTALL_SCRIPT is one fixed line: rpm -e only when installed, then root-owned leftovers', () => {
     assert.ok(!UNINSTALL_SCRIPT.includes('\n'));
-    assert.ok(UNINSTALL_SCRIPT.startsWith('if rpm -q sailfish-devagent >/dev/null 2>&1; then rpm -e sailfish-devagent || exit $?; fi;'));
+    assert.ok(UNINSTALL_SCRIPT.startsWith('if rpm -q sailfish-devagent >/dev/null 2>&1; then m=; for n in sailfish-devagent-logs sailfish-devagent-stats sailfish-devagent-screenshot sailfish-devagent-mirror sailfish-devagent-input; do'));
+    assert.ok(UNINSTALL_SCRIPT.includes('rpm -e sailfish-devagent$m || exit $?; fi;'), 'modules leave with the core');
     assert.ok(UNINSTALL_SCRIPT.includes('rm -rf /var/lib/sailfish-devagent'));
     assert.ok(UNINSTALL_SCRIPT.includes('rm -f /tmp/sailfish-devagent.rpm;'), 'the copy of extensions before 0.1.9');
     assert.ok(

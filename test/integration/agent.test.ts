@@ -335,9 +335,13 @@ suite('device agent (T4)', () => {
       await vscode.commands.executeCommand('sailfish.agent.install');
       assert.ok(!keys().includes('device_exec.devel-su'), JSON.stringify(keys()));
       const sh = readFakeLog().invocations.filter((i) => i.key === 'device_exec.sh');
-      assert.strictEqual(sh.length, 2, JSON.stringify(keys()));
-      assert.deepStrictEqual(sh[1].argv.slice(-2), ['sh', 'sailfish-devagent.rpm'], JSON.stringify(sh[1].argv));
-      assert.ok(sh[1].argv.some((a) => a.includes('rm -f "$d/$1"')), JSON.stringify(sh[1].argv));
+      // One copy per bundled RPM (the core and its modules), then one removal of them all.
+      const copies = sh.length - 1;
+      assert.ok(copies >= 1, JSON.stringify(keys()));
+      const remove = sh[sh.length - 1];
+      const core = remove.argv.indexOf('sailfish-devagent.rpm');
+      assert.ok(core > 0 && remove.argv[core - 1] === 'sh' && remove.argv.length - core === copies, JSON.stringify(remove.argv));
+      assert.ok(remove.argv.some((a) => a.includes('rm -f "$d/$n"')), JSON.stringify(remove.argv));
     });
   });
 });

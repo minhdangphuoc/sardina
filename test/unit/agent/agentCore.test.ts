@@ -26,6 +26,8 @@ import {
   isScreenshotPath,
   parseAgentReply,
   pickAgentRpm,
+  pickAgentRpms,
+  AGENT_PACKAGES,
   sanitizeDeviceName,
   screenshotFileName,
 } from '../../../src/agent/agentCore';
@@ -84,6 +86,29 @@ describe('agentCore.pickAgentRpm', () => {
   it('undefined when nothing matches', () => {
     assert.strictEqual(pickAgentRpm('aarch64', ['other-1.aarch64.rpm', 'sailfish-devagent-1.i486.rpm']), undefined);
     assert.strictEqual(pickAgentRpm('i486', []), undefined);
+  });
+  it('never picks a module RPM as the core', () => {
+    const six = AGENT_PACKAGES.map((p) => `${p}-1.11.0-1.i486.rpm`);
+    assert.strictEqual(pickAgentRpm('i486', six), 'sailfish-devagent-1.11.0-1.i486.rpm');
+    assert.strictEqual(pickAgentRpm('i486', six.slice(1)), undefined);
+  });
+});
+
+describe('agentCore.pickAgentRpms', () => {
+  it('the core first, then each module of the same version, with fixed copy names', () => {
+    const six = AGENT_PACKAGES.map((p) => `${p}-1.11.0-1.i486.rpm`);
+    const rpms = pickAgentRpms('i486', [...six, 'sailfish-devagent-logs-1.10.9-1.i486.rpm', 'sailfish-devagent-mirror-1.11.0-1.aarch64.rpm']);
+    assert.deepStrictEqual(
+      rpms?.map((r) => r.copyName),
+      ['sailfish-devagent.rpm', 'sailfish-devagent-logs.rpm', 'sailfish-devagent-stats.rpm', 'sailfish-devagent-screenshot.rpm', 'sailfish-devagent-mirror.rpm', 'sailfish-devagent-input.rpm'],
+    );
+    assert.deepStrictEqual(rpms?.map((r) => r.file), six);
+  });
+  it('an older bundle: the core alone; nothing without a core', () => {
+    assert.deepStrictEqual(pickAgentRpms('aarch64', ['sailfish-devagent-1.10.8-1.aarch64.rpm']), [
+      { file: 'sailfish-devagent-1.10.8-1.aarch64.rpm', copyName: 'sailfish-devagent.rpm' },
+    ]);
+    assert.strictEqual(pickAgentRpms('i486', ['sailfish-devagent-logs-1.11.0-1.i486.rpm']), undefined);
   });
 });
 
@@ -338,15 +363,17 @@ describe('agentCore scripts and messages', () => {
       assert.strictEqual(fs.statSync(dir).mode & 0o777, 0o700);
       assert.throws(() => execFileSync('sh', ['-c', COPY_SCRIPT, 'sh', '../x', '3'], { env, input: 'YWJj', stdio: 'pipe' }));
       assert.ok(!fs.existsSync(path.join(home, '.cache', 'x')));
-      execFileSync('sh', ['-c', REMOVE_COPY_SCRIPT, 'sh', AGENT_RPM_NAME], { env });
+      execFileSync('sh', ['-c', COPY_SCRIPT, 'sh', 'sailfish-devagent-logs.rpm', '3'], { env, input: 'YWJj' });
+      assert.throws(() => execFileSync('sh', ['-c', REMOVE_COPY_SCRIPT, 'sh', '../x'], { env, stdio: 'pipe' }));
+      execFileSync('sh', ['-c', REMOVE_COPY_SCRIPT, 'sh', AGENT_RPM_NAME, 'sailfish-devagent-logs.rpm'], { env });
       assert.ok(!fs.existsSync(dir), 'the empty private folder goes too');
     } finally {
       fs.rmSync(home, { recursive: true, force: true });
     }
   });
   it('INSTALL_SCRIPT installs from the private folder of defaultuser and always removes the copy', () => {
-    assert.ok(INSTALL_SCRIPT.startsWith('f=$(getent passwd defaultuser | cut -d: -f6)/.cache/sailfish-tools/sailfish-devagent.rpm;'));
-    assert.ok(INSTALL_SCRIPT.includes('rpm -U --replacepkgs --oldpackage "$f" || r=$?; rm -f "$f";'));
+    assert.ok(INSTALL_SCRIPT.startsWith('d=$(getent passwd defaultuser | cut -d: -f6)/.cache/sailfish-tools;'));
+    assert.ok(INSTALL_SCRIPT.includes('rpm -U --replacepkgs --oldpackage "$d"/sailfish-devagent*.rpm || r=$?; rm -f "$d"/sailfish-devagent*.rpm;'));
     assert.ok(!INSTALL_SCRIPT.includes('/tmp'));
     assert.ok(!INSTALL_SCRIPT.includes('`'));
   });

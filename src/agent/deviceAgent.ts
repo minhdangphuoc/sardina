@@ -28,7 +28,7 @@ import {
   isScreenshotPath,
   parseAgentReply,
   phoneRefusal,
-  pickAgentRpm,
+  pickAgentRpms,
   screenshotFileName,
   type AgentArch,
   type AgentProbe,
@@ -222,10 +222,10 @@ export async function detectArch(
 }
 
 /** Copies the RPM as base64 over the `device exec` stdin (no scp, no second channel) into `~/.cache/sailfish-tools` and checks its size on the device. */
-async function copyRpm(services: Services, device: string, rpmPath: string, token: vscode.CancellationToken): Promise<boolean> {
+async function copyRpm(services: Services, device: string, rpmPath: string, copyName: string, token: vscode.CancellationToken): Promise<boolean> {
   const bytes = await fs.readFile(rpmPath);
   const result = await services.runner.run({
-    args: ['device', 'exec', '--', 'sh', '-c', COPY_SCRIPT, 'sh', AGENT_RPM_NAME, String(bytes.length)],
+    args: ['device', 'exec', '--', 'sh', '-c', COPY_SCRIPT, 'sh', copyName, String(bytes.length)],
     device,
     stdin: bytes.toString('base64'),
     timeoutMs: COPY_TIMEOUT_MS,
@@ -246,6 +246,7 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   );
   if (consent !== INSTALL_AGENT) return false;
 
+  let copiedNames: string[] = [AGENT_RPM_NAME];
   const prepared = await vscode.window.withProgress(
     { location: vscode.ProgressLocation.Notification, title: `Sailfish: preparing the device agent for "${device}"…`, cancellable: true },
     async (progress, token): Promise<boolean> => {
@@ -264,17 +265,20 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
       } catch {
         files = [];
       }
-      const rpm = pickAgentRpm(arch, files);
-      if (!rpm) {
+      const rpms = pickAgentRpms(arch, files);
+      if (!rpms) {
         void services.prompts.showErrorMessage(`Sailfish: this extension build ships no ${AGENT_PACKAGE} RPM for ${arch} (expected in ${dir}).`);
         return false;
       }
-      progress.report({ message: `copying ${rpm}…` });
-      if (!(await copyRpm(services, device, path.join(dir, rpm), token))) {
-        if (!token.isCancellationRequested) {
-          void services.prompts.showErrorMessage(`Sailfish: copying ${rpm} to "${device}" failed (see the Sailfish OS output).`);
+      copiedNames = rpms.map((r) => r.copyName);
+      for (const rpm of rpms) {
+        progress.report({ message: `copying ${rpm.file}…` });
+        if (!(await copyRpm(services, device, path.join(dir, rpm.file), rpm.copyName, token))) {
+          if (!token.isCancellationRequested) {
+            void services.prompts.showErrorMessage(`Sailfish: copying ${rpm.file} to "${device}" failed (see the Sailfish OS output).`);
+          }
+          return false;
         }
-        return false;
       }
       return true;
     },
@@ -292,7 +296,7 @@ export async function installAgentOn(ctx: vscode.ExtensionContext, services: Ser
   if (exitCode !== 0) installEvents.fire({ device, phase: 'done' });
   if (exitCode === undefined) {
     // The root step never ran (password prompt cancelled, device offline): the copy is the user's, remove it with its folder.
-    await services.runner.run({ args: ['device', 'exec', '--', 'sh', '-c', REMOVE_COPY_SCRIPT, 'sh', AGENT_RPM_NAME], device, timeoutMs: REQUEST_TIMEOUT_MS });
+    await services.runner.run({ args: ['device', 'exec', '--', 'sh', '-c', REMOVE_COPY_SCRIPT, 'sh', ...copiedNames], device, timeoutMs: REQUEST_TIMEOUT_MS });
     return false;
   }
   if (exitCode !== 0) {
