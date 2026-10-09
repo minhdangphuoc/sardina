@@ -1,4 +1,4 @@
-// Host test of the still-screen decision (device-agent/src/idleplan.h). Not shipped.
+// Host test of the still-screen decision (device-agent/common/idleplan.h). Not shipped.
 
 #include "idleplan.h"
 

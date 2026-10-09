@@ -1,6 +1,6 @@
-// Host test of the stats stream's arithmetic and validation (device-agent/src/statsmath.h). Not shipped.
+// Host test of the stats stream's arithmetic and validation (device-agent/stats/statsmath.h). Not shipped.
 //
-//   g++ -std=c++11 -Wall -Wextra -I device-agent/src device-agent/tools/stats-test.cpp -o /tmp/stats-test && /tmp/stats-test
+//   g++ -std=c++11 -Wall -Wextra -I device-agent/stats device-agent/tools/stats-test.cpp -o /tmp/stats-test && /tmp/stats-test
 
 #include "statsmath.h"
 

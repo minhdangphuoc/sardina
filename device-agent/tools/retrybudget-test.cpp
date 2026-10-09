@@ -1,4 +1,4 @@
-// Host test of the recorder retry budget (device-agent/src/retrybudget.h). Not shipped.
+// Host test of the recorder retry budget (device-agent/mirror/retrybudget.h). Not shipped.
 
 #include "retrybudget.h"
 

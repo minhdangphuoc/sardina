@@ -1,4 +1,4 @@
-// Host test of the mirror's RGB to I420 rows (device-agent/src/yuvrows.h). Not shipped.
+// Host test of the mirror's RGB to I420 rows (device-agent/mirror/yuvrows.h). Not shipped.
 //
 // The vectorisable full-size path must give the same bytes as the general one, and its speed is
 // printed next to it (relative evidence only: the phone is an aarch64 build).

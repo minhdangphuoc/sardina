@@ -1,6 +1,6 @@
-// Host test of the mirror's frame pacing decision (device-agent/src/pacer.h). Not shipped.
+// Host test of the mirror's frame pacing decision (device-agent/mirror/pacer.h). Not shipped.
 //
-//   g++ -std=c++11 -Wall -Wextra -I device-agent/src device-agent/tools/pacer-test.cpp -o /tmp/pacer-test && /tmp/pacer-test
+//   g++ -std=c++11 -Wall -Wextra -I device-agent/mirror device-agent/tools/pacer-test.cpp -o /tmp/pacer-test && /tmp/pacer-test
 //
 // Each scenario feeds a simulated stream: a frame every max(slot, cost) ms, its convert + encode
 // cost given by the scenario. The numbers come from the Jolla Phone (about 30 ms per frame at

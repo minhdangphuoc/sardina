@@ -1,4 +1,4 @@
-// Host test of the client's first-line collector (device-agent/src/firstline.h). Not shipped.
+// Host test of the client's first-line collector (device-agent/common/firstline.h). Not shipped.
 //
 //   make -C device-agent/tools test
 
