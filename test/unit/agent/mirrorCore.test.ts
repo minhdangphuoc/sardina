@@ -227,10 +227,17 @@ describe('mirrorCore status strip', () => {
     assert.strictEqual(stripParts({ ...live, video: { ...live.video!, reduced: false, reducedFor: ['cpu'] } }).warning, undefined);
   });
   it('offers a layout when a keypad is detected without one', () => {
-    assert.deepStrictEqual(stripParts({ ...live, keypadLayoutMissing: true }), {
+    assert.deepStrictEqual(stripParts({ ...live, keypadHint: 'create' }), {
       dot: 'live', label: 'Live', fps: '30 fps', warning: 'Keypad detected', action: 'keypad',
     });
-    assert.strictEqual(statusText({ ...live, keypadLayoutMissing: true }), 'Live · 30 fps · Keypad detected · Create layout');
+    assert.strictEqual(statusText({ ...live, keypadHint: 'create' }), 'Live · 30 fps · Keypad detected · Create layout');
+  });
+  it('offers Edit when the chosen layout file is missing, below every real warning', () => {
+    assert.deepStrictEqual(stripParts({ ...live, keypadHint: 'missing' }), {
+      dot: 'live', label: 'Live', fps: '30 fps', warning: 'Keypad layout missing', action: 'keypadEdit',
+    });
+    assert.strictEqual(stripParts({ ...live, keypadHint: 'create', softError: 'boom' }).warning, 'Phone error');
+    assert.strictEqual(stripParts({ ...live, keypadHint: 'create', transport: 'sfdk' }).warning, 'Slow path');
   });
   it('old agent: Slow path with the update action; other sfdk reasons have no action', () => {
     const old: MirrorStatus = { state: 'live', transport: 'sfdk', fallbackReason: 'agent 1.1.0 — update for the fast mirror', fps: 4 };
@@ -324,7 +331,7 @@ describe('mirrorCore detailRows', () => {
     assert.strictEqual(r.Control, 'off (disabled on the phone)');
     assert.strictEqual(r['Touch indicator'], 'off');
     assert.strictEqual(r['Phone error'], 'frame failed');
-    assert.strictEqual(rows({ state: 'live', keypadLayoutMissing: true }).Keypad, 'detected · Create layout');
+    assert.strictEqual(rows({ state: 'live', keypadHint: 'create' }).Keypad, 'detected · Create layout');
     assert.strictEqual(rows({ state: 'live', video: { width: 540, height: 1200, targetKbps: 800, reduced: true, reducedFor: ['cpu'] } }).Video, 'VP8 · 540×1200 · 800 kbit/s (reduced for the phone CPU)');
   });
   it('carries every value the log text can show', () => {

@@ -615,8 +615,8 @@ export interface MirrorStatus {
   paceFps?: number;
   /** A frame the phone could not produce (its error text); shown in the details. */
   softError?: string;
-  /** The agent reported a keypad, but this workspace has no user-selected layout for its model. */
-  keypadLayoutMissing?: boolean;
+  /** A keypad was reported and its layout is not usable: none chosen yet, or the chosen file is gone. */
+  keypadHint?: 'create' | 'missing';
 }
 
 /** No screen change for this long, with the agent saying the screen is unchanged: the strip says idle. */
@@ -703,7 +703,7 @@ export function logText(s: MirrorStatus): string {
 
 /** The strip's colour: live green, waiting grey, down red. */
 export type StripDot = 'live' | 'wait' | 'down';
-export type StripAction = 'update' | 'reconnect' | 'keypad';
+export type StripAction = 'update' | 'reconnect' | 'keypad' | 'keypadEdit';
 
 export interface StripParts {
   dot: StripDot;
@@ -749,15 +749,16 @@ function reducedCauses(r: { reduced?: boolean; reducedFor?: readonly ('link' | '
   return 'link';
 }
 
-/** The single strip warning, by priority: a missing keypad layout, slow path, phone CPU, link, capture, drops, phone error. */
+/** The single strip warning, by priority: slow path, phone CPU, link, capture, drops, phone error, then the keypad layout hint. */
 function stripWarning(s: MirrorStatus): { text: string; action?: StripAction } | undefined {
-  if (s.keypadLayoutMissing) return { text: 'Keypad detected', action: 'keypad' };
   if (s.transport === 'sfdk') return isStaleAgentReason(s.fallbackReason) ? { text: 'Slow path', action: 'update' } : { text: 'Slow path' };
   const causes = [reducedCauses(s.video), reducedCauses(s.image)];
   if (causes.includes('cpu')) return { text: 'Reduced for phone' };
   if (causes.includes('link')) return { text: 'Reduced for link' };
   if (s.dropped !== undefined && s.dropped > 0) return { text: `${s.dropped} dropped` };
   if (s.softError) return { text: 'Phone error' };
+  if (s.keypadHint === 'create') return { text: 'Keypad detected', action: 'keypad' };
+  if (s.keypadHint === 'missing') return { text: 'Keypad layout missing', action: 'keypadEdit' };
   return undefined;
 }
 
@@ -833,7 +834,7 @@ export function detailRows(s: MirrorStatus, inputActive = false): DetailRow[] {
   if (s.dropped !== undefined) rows.push({ label: 'Dropped', value: String(s.dropped) });
   if (s.idleMode !== undefined) rows.push({ label: 'Idle mode', value: s.idleMode ? 'on' : 'off' });
   if (s.maxFps !== undefined) rows.push({ label: 'Frame rate limit', value: String(s.maxFps) });
-  if (s.keypadLayoutMissing) rows.push({ label: 'Keypad', value: 'detected · Create layout' });
+  if (s.keypadHint) rows.push({ label: 'Keypad', value: s.keypadHint === 'create' ? 'detected · Create layout' : 'layout missing · Edit' });
   const control = controlState(s, inputActive);
   rows.push({ label: 'Control', value: control === 'off' ? `off (${s.controlOffReason})` : control === 'active' ? 'on' : 'view only' });
   rows.push({
@@ -905,6 +906,7 @@ export function statusText(s: MirrorStatus, inputActive = false): string {
   if (p.fps) parts.push(p.fps);
   if (p.warning) parts.push(p.warning);
   if (p.action === 'keypad') parts.push('Create layout');
+  if (p.action === 'keypadEdit') parts.push('Edit');
   const c = controlState(s, inputActive);
   if (c !== 'none') parts.push(CONTROL_PILL_TEXT[c]);
   return parts.join(' · ');
@@ -1420,7 +1422,8 @@ export function mirrorHtml(nonce: string, device: string): string {
     warnEl.hidden = !hasWarn;
     warnSep.hidden = !hasWarn;
     warnText.textContent = hasWarn ? strip.warning : '';
-    keypadLayoutButton.hidden = strip.action !== 'keypad';
+    keypadLayoutButton.hidden = strip.action !== 'keypad' && strip.action !== 'keypadEdit';
+    keypadLayoutButton.textContent = strip.action === 'keypadEdit' ? 'Edit' : 'Create layout';
     updateButton.hidden = strip.action !== 'update';
     button.hidden = strip.action !== 'reconnect';
     controlOff = controlState === 'off';
