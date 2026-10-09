@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import type { Services } from '../core/services';
+import { BoundedSet } from '../core/bounded';
 import {
   buildDefaultKeypadLayout,
   keypadLayoutFileName,
@@ -15,9 +16,10 @@ import {
 const STATE_PREFIX = 'sailfish.keypadLayout.';
 const DISMISSED_PREFIX = 'sailfish.keypadHintDismissed.';
 const OVERWRITE = 'Overwrite';
+const LOGGED_DIAGNOSTICS_MAX = 256;
 
 export class KeypadLayouts implements vscode.Disposable {
-  private readonly logged = new Set<string>();
+  private readonly logged = new BoundedSet<string>(LOGGED_DIAGNOSTICS_MAX);
   private readonly changed = new vscode.EventEmitter<string>();
   private readonly watches = new SharedResources();
   private readonly lastValid = new Map<string, KeypadLayout>();

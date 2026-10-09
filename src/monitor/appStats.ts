@@ -1,3 +1,5 @@
+import { BoundedSet } from '../core/bounded';
+
 /**
  * Pure parsers and counters for the Device Monitor's App section: the polling script's output
  * (`/proc/<pid>/stat`, `status`, `uptime`), the agent's stats stream, CPU arithmetic and the
@@ -312,6 +314,8 @@ export interface AppCounters {
   crashes: number;
 }
 
+export const APP_PID_HISTORY_MAX = 256;
+
 /**
  * Counts restarts and crashes for one panel's lifetime from pid transitions and exit facts.
  * - `pidSeen(pid, sessionActive)`: a pid different from the previous non-zero pid is a restart when
@@ -322,7 +326,7 @@ export interface AppCounters {
 export class AppCounter {
   private lastPid = 0;
   private everSeen = false;
-  private readonly crashed = new Set<number>();
+  private readonly crashed = new BoundedSet<number>(APP_PID_HISTORY_MAX);
   private readonly counters: AppCounters = { restarts: 0, crashes: 0 };
 
   get value(): Readonly<AppCounters> {

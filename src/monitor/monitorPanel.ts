@@ -5,7 +5,7 @@ import type { ProjectDescriptor, SfdkDeviceInfo } from '../core/types';
 import { deviceSessions, type DeviceSessionInfo, type DeviceSessions } from '../core/deviceSessions';
 import { AppStatsSource, chooseStatsMode, isValidExe, pollIntervalMs, type StatsMode } from './statsSource';
 import { clearOverviewCache, probeOverview, type DeviceOverview } from './deviceProbe';
-import { AppCounter, type AppCounters } from './appStats';
+import { APP_PID_HISTORY_MAX, AppCounter, type AppCounters } from './appStats';
 import { coredumpEvent, type AppIdentity } from './logModel';
 import { ActionGuard, PageMessageGate, monitorHtml } from './monitorCore';
 import { actionStates, connectionState, headerLine, pickApp, statsView, type ActionState, type AppRef } from './panelModel';
@@ -15,6 +15,7 @@ import type { AgentProbe } from '../agent/agentCore';
 import { onAppExit } from '../tasks/appTerminal';
 import { relaunchInstalled } from '../tasks/commands';
 import { onDeviceLogEntries } from './deviceLog';
+import { BoundedSet } from '../core/bounded';
 
 export const VIEW_TYPE = 'sailfish.deviceMonitor';
 export const APP_RUNNING_KEY = 'sailfish.monitor.appRunning';
@@ -56,7 +57,7 @@ export class MonitorPanel {
   private statsMode: StatsMode = 'poll';
   private lastStats: AppStatsView | null = null;
   private app: AppRef | undefined;
-  private pids = new Set<number>();
+  private pids = new BoundedSet<number>(APP_PID_HISTORY_MAX);
   private counter = new AppCounter();
   private banner: { text: string; actions: BannerAction[] } | undefined;
   private offlineBanner = false;
@@ -304,7 +305,7 @@ export class MonitorPanel {
     const modeNow: StatsMode = chooseStatsMode(this.agent?.state === 'running' && this.agent.developerMode ? this.agent.stats : undefined);
     this.app = next;
     if (identityChanged) {
-      this.pids = new Set();
+      this.pids = new BoundedSet(APP_PID_HISTORY_MAX);
       this.counter = new AppCounter();
       this.lastStats = null;
     }

@@ -69,6 +69,7 @@ import { LogRateLimiter, parseDecodingSize, sanitizeLogText } from './mirrorLog'
 import { InputFocusSchedule, InputRateLimiter, captureAllowsInput, mapGesture, parseWebviewFocus, parseWebviewGesture, parseWebviewKey, phoneInputAccepted, supportsKeypad, supportsLiveContacts } from './mirrorInput';
 import { KeypadLayouts } from './keypadLayout';
 import { keypadHint, type KeypadHint, type KeypadInfo, type KeypadLayout } from './keypadLayoutCore';
+import { CallbackSet } from '../core/bounded';
 
 export { FORWARD_FIRST_BYTE_MS, FORWARD_IDLE_MS, FORWARD_READY_TIMEOUT_MS, FORWARD_TIMING, MIRROR_TIMING, SFDK_STDIN_KEEPALIVE };
 
@@ -177,7 +178,7 @@ export class MirrorSession {
   private latencies: { at: number; ms: number }[] = [];
   /** The codecs the page reported (`ready`); undefined until it has. */
   private codecs: string[] | undefined;
-  private codecWaiters: (() => void)[] = [];
+  private readonly codecWaiters = new CallbackSet();
   /** Video failed to decode in this panel: JPEG from now on. */
   private videoOff = false;
   private readonly decodeErrors = new DecodeErrors();
@@ -432,7 +433,7 @@ export class MirrorSession {
       const first = this.codecs === undefined;
       this.codecs = pageCodecs(m);
       if (first) this.log(`the panel decodes ${this.codecs.length > 0 ? this.codecs.join(', ') : 'no video codec'}`);
-      for (const w of this.codecWaiters.splice(0)) w();
+      this.codecWaiters.drain();
       // A (re)loaded page has nothing in flight and no image: start the gate over and show what we have.
       this.gate = new LatestFrame<FrameMessage>();
       this.videoInFlight = 0;
@@ -528,16 +529,21 @@ export class MirrorSession {
     if (this.codecs !== undefined) return Promise.resolve(this.codecs.includes(codec));
     return new Promise<boolean>((resolve) => {
       let done = false;
+      const cleanup: { timer?: NodeJS.Timeout; sub?: vscode.Disposable } = {};
       const finish = (): void => {
         if (done) return;
         done = true;
-        clearTimeout(timer);
-        sub.dispose();
+        this.codecWaiters.delete(finish);
+        if (cleanup.timer) clearTimeout(cleanup.timer);
+        cleanup.sub?.dispose();
         resolve(this.codecs?.includes(codec) ?? false);
       };
-      const timer = setTimeout(finish, CODECS_WAIT_MS);
-      const sub = token.onCancellationRequested(finish);
-      this.codecWaiters.push(finish);
+      cleanup.timer = setTimeout(finish, CODECS_WAIT_MS);
+      this.codecWaiters.add(finish);
+      cleanup.sub = token.onCancellationRequested(finish);
+      // A token already cancelled may invoke its event synchronously, before the subscription is stored.
+      if (done) cleanup.sub.dispose();
+      else if (token.isCancellationRequested) finish();
     });
   }
 
