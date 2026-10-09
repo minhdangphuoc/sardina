@@ -138,13 +138,18 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   service, whose SIGTERM handler closes its notifications and removes the socket directory and any
   staged screenshot, then closes the agent's notifications as `defaultuser`; `%postun` removes
   `/var/lib/sailfish-devagent`, the RPM copy in `/tmp`, a socket directory or staged screenshots a
-  crashed daemon left, the `multi-user.target.wants` link and the unit's failed state, and closes a
+  crashed daemon left, the `multi-user.target.wants` link, the unit's failed state and any
+  PrivateTmp folder systemd left, and closes a
   running Settings app (`pkill -u defaultuser -x jolla-settings`, never lipstick) so it drops the
   entry. `%post` closes it too, so a new or changed page shows the next time Settings opens. VS
   Code repeats the root steps for agents whose scriptlets predate them (1.10.0), then removes what
   the device user may remove (`~/.cache/sailfish-tools` included), closes leftover notifications
   over the session bus and checks read-only that nothing is left. The journal keeps the agent's past
   log lines; they rotate out like any other service's.
+- A removed module's `%postun` removes its own files from the runtime directory (`screenshot`:
+  `shot-*.png` there and in the staging folder; `mirror`: `recorder-*`; `input`: `touch-overlay-*`);
+  VS Code repeats that as the device user and checks the module is gone.
+  `tools/emulator/uninstall-check.sh` (as root) prints anything of the agent still on a device.
 
 ## Protocol
 
