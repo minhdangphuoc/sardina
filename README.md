@@ -7,8 +7,7 @@ emulator or a phone. An optional helper on the phone, the **device agent**,
 adds screenshots, a live system log and a screen mirror you can tap and swipe
 from VS Code.
 
-Version 0.1.7, with 0.1.8 in progress (see the
-[changelog](CHANGELOG.md)). Linux and macOS. The extension is not on the Marketplace yet;
+Version 0.1.11 (see the [changelog](CHANGELOG.md)). Linux and macOS. The extension is not on the Marketplace yet;
 see [Part 3](#part-3-install-vs-code-and-this-extension) to build it.
 
 > **Independent project.** This is a personal hobby project. It is not
@@ -937,6 +936,7 @@ with test fixtures, but not yet confirmed on a real phone:
 | Strip says `Disconnected: native screen capture unavailable: …` | Lipstick's screen recorder cannot be used on this phone. | The **Sailfish OS** output has the reason. Press **Reconnect** once the phone is unlocked and awake; update the agent if it is older than 1.10.5. |
 | Strip says `Reduced for link` | The link is too slow for full quality. | Move closer to the access point, use USB or a 5 GHz network, or ignore it; it recovers by itself. |
 | Strip says `Reduced for phone` | The phone could not encode the full-size picture in time. | Close busy apps on the phone, or ignore it; it recovers by itself. |
+| The phone gets hot, slow or freezes after a while | VS Code **Remote-SSH** is connected to the phone: its server and file search (`~/.vscode-server`, `rg --follow`) keep the CPU busy. This extension does not need it. | Close the remote window on the phone and remove `~/.vscode-server` there. |
 
 ## Known issues
 
@@ -959,6 +959,7 @@ with test fixtures, but not yet confirmed on a real phone:
   `sailfish.qtqml.silenceQmlls` to `false` to keep it on.
 - **No QML or JavaScript debugging**, only C++.
 - **No Windows support.**
+- **No profiling yet.** Recording CPU, memory and QML profiles (Perfetto, perf, the QML profiler, heaptrack, Valgrind) from the Device Monitor is planned for a later version.
 
 ## Telemetry
 
