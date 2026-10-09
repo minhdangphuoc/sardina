@@ -1,0 +1,6 @@
+module Sailfish.Silica
+plugin silicastandinplugin
+typeinfo plugins.qmltypes
+ApplicationWindow 1.0 ApplicationWindow.qml
+Page 1.0 Page.qml
+Label 1.0 Label.qml

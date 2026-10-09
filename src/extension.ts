@@ -18,6 +18,7 @@ import { activateDeviceAgent } from './agent/deviceAgent';
 import { activateMonitor } from './monitor/index';
 import { FORWARD_TIMING, MIRROR_TIMING } from './agent/mirror';
 import { activateQtQml } from './qtqml/silence';
+import { activateQmlFeatures } from './qml';
 import { activateWalkthrough } from './walkthrough/index';
 import { getShownMessages } from './ui/prompts';
 import { getLastTargetList, resetLastTargetListForTests } from './targets/targetListCache';
@@ -48,6 +49,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   activateMonitor(ctx, services);
   watchDeviceChange(ctx, services);
   activateQtQml(ctx, services);
+  const qmlFeatures = activateQmlFeatures(ctx, services);
   activateWalkthrough(ctx, services);
 
   // NFR-1: never awaited here — a fire-and-forget, once-per-install check.
@@ -71,6 +73,7 @@ export function activate(ctx: vscode.ExtensionContext) {
       forwardTiming: FORWARD_TIMING,
       /** The offline guard's TCP probe (tests point it at a fake answer for fixture devices). */
       offlineGuard: OFFLINE_GUARD,
+      qml: qmlFeatures,
     },
   };
 }

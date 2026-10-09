@@ -1,0 +1,3 @@
+module Sailfish.Silica.private
+plugin silicastandinprivateplugin
+typeinfo plugins.qmltypes

@@ -1,0 +1,45 @@
+import QtQuick.tooling 1.2
+
+// Hand-written test fixture; not generated, not derived from any SDK.
+
+Module {
+    dependencies: ["QtQuick 2.0"]
+    Component {
+        name: "WidgetGauge"
+        defaultProperty: "data"
+        prototype: "FxItem"
+        exports: ["Fixture.Widgets/Gauge 1.0", "Fixture.Widgets/Gauge 1.1"]
+        exportMetaObjectRevisions: [0, 1]
+        attachedType: "WidgetGaugeAttached"
+        Enum {
+            name: "Mode"
+            values: {
+                "Linear": 0,
+                "Radial": 1
+            }
+        }
+        Property { name: "value"; type: "double" }
+        Property { name: "mode"; type: "Mode" }
+        Property { name: "label"; type: "string"; revision: 1 }
+        Signal { name: "valueReached" }
+        Method {
+            name: "reset"
+            Parameter { name: "to"; type: "double" }
+        }
+    }
+    Component {
+        name: "WidgetGaugeAttached"
+        prototype: "QObject"
+        Property { name: "group"; type: "string" }
+    }
+    Component {
+        name: "WidgetTheme"
+        prototype: "QObject"
+        exports: ["Fixture.Widgets/Theme 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [0]
+        Property { name: "spacing"; type: "int"; isReadonly: true }
+        Property { name: "accent"; type: "QColor"; isReadonly: true }
+    }
+}

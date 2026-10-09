@@ -1,0 +1,16 @@
+import QtQuick.tooling 1.2
+
+// Hand-written test fixture; not generated, not derived from any SDK.
+
+Module {
+    dependencies: ["QtQuick 2.0", "Sailfish.Silica.private 1.0"]
+    Component {
+        name: "StandinPalette"
+        prototype: "QObject"
+        exports: ["Sailfish.Silica/Palette 1.0"]
+        isCreatable: false
+        isSingleton: true
+        exportMetaObjectRevisions: [0]
+        Property { name: "paddingLarge"; type: "double"; isReadonly: true }
+    }
+}

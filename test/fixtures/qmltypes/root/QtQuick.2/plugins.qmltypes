@@ -1,0 +1,138 @@
+import QtQuick.tooling 1.2
+
+// Hand-written test fixture; not generated, not derived from any SDK.
+
+Module {
+    dependencies: []
+    Component {
+        name: "FxAnchors"
+        prototype: "QObject"
+        Property { name: "left"; type: "QQuickAnchorLine" }
+        Property { name: "right"; type: "QQuickAnchorLine" }
+        Property { name: "margins"; type: "double" }
+        Property { name: "fill"; type: "FxItem"; isPointer: true }
+    }
+    Component {
+        name: "FxItem"
+        defaultProperty: "data"
+        prototype: "QObject"
+        exports: ["QtQuick/Item 2.0", "QtQuick/Item 2.1"]
+        exportMetaObjectRevisions: [0, 1]
+        Property { name: "x"; type: "double" }
+        Property { name: "y"; type: "double" }
+        Property { name: "width"; type: "double" }
+        Property { name: "height"; type: "double" }
+        Property { name: "visible"; type: "bool" }
+        Property { name: "parent"; type: "FxItem"; isPointer: true }
+        Property { name: "children"; type: "FxItem"; isReadonly: true; isList: true }
+        Property { name: "anchors"; type: "FxAnchors"; isReadonly: true; isPointer: true }
+        Property { name: "enabled"; type: "bool"; revision: 1 }
+        Signal { name: "widthChanged" }
+        Signal {
+            name: "childrenRectChanged"
+            Parameter { name: "rect"; type: "QRectF" }
+        }
+        Method {
+            name: "forceActiveFocus"
+            Parameter { name: "reason"; type: "Qt::FocusReason" }
+        }
+        Method { name: "forceActiveFocus" }
+    }
+    Component {
+        name: "FxRectangle"
+        defaultProperty: "data"
+        prototype: "FxItem"
+        exports: ["QtQuick/Rectangle 2.0"]
+        exportMetaObjectRevisions: [0]
+        Property { name: "color"; type: "QColor" }
+        Property { name: "radius"; type: "double" }
+    }
+    Component {
+        name: "FxText"
+        defaultProperty: "data"
+        prototype: "FxItem"
+        exports: ["QtQuick/Text 2.0", "QtQuick/Text 2.1"]
+        exportMetaObjectRevisions: [0, 1]
+        Enum {
+            name: "Align"
+            values: {
+                "AlignLeft": 1,
+                "AlignRight": 2,
+                "AlignHCenter": 4
+            }
+        }
+        Property { name: "text"; type: "string" }
+        Property { name: "color"; type: "QColor" }
+        Property { name: "horizontalAlignment"; type: "Align" }
+        Signal {
+            name: "linkActivated"
+            Parameter { name: "link"; type: "string" }
+        }
+    }
+    Component {
+        name: "FxMouseArea"
+        defaultProperty: "data"
+        prototype: "FxItem"
+        exports: ["QtQuick/MouseArea 2.0"]
+        exportMetaObjectRevisions: [0]
+        Property { name: "pressed"; type: "bool"; isReadonly: true }
+        Signal { name: "clicked" }
+        Signal {
+            name: "pressAndHold"
+            Parameter { name: "mouse"; type: "FxKeyEvent"; isPointer: true }
+        }
+    }
+    Component {
+        name: "FxFlickable"
+        defaultProperty: "flickableData"
+        prototype: "FxItem"
+        exports: ["QtQuick/Flickable 2.0"]
+        exportMetaObjectRevisions: [0]
+        Property { name: "contentWidth"; type: "double" }
+        Property { name: "contentHeight"; type: "double" }
+        Property { name: "flicking"; type: "bool"; isReadonly: true }
+        Method { name: "flick" }
+    }
+    Component {
+        name: "FxListView"
+        defaultProperty: "data"
+        prototype: "FxFlickable"
+        exports: ["QtQuick/ListView 2.0"]
+        exportMetaObjectRevisions: [0]
+        attachedType: "FxListViewAttached"
+        Property { name: "model"; type: "QVariant" }
+        Property { name: "count"; type: "int"; isReadonly: true }
+    }
+    Component {
+        name: "FxListViewAttached"
+        prototype: "QObject"
+        Property { name: "isCurrentItem"; type: "bool"; isReadonly: true }
+        Property { name: "view"; type: "FxListView"; isReadonly: true; isPointer: true }
+    }
+    Component {
+        name: "FxKeyEvent"
+        prototype: "QObject"
+        exports: ["QtQuick/KeyEvent 2.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [0]
+        Property { name: "key"; type: "int"; isReadonly: true }
+        Property { name: "accepted"; type: "bool" }
+    }
+    Component {
+        name: "FxAnimation"
+        prototype: "QObject"
+        exports: ["QtQuick/Animation 2.0"]
+        isCreatable: false
+        exportMetaObjectRevisions: [0]
+        Property { name: "duration"; type: "int" }
+        Property { name: "running"; type: "bool" }
+        Method { name: "start" }
+    }
+    Component {
+        name: "FxColorAnimation"
+        prototype: "FxAnimation"
+        exports: ["QtQuick/ColorAnimation 2.0"]
+        exportMetaObjectRevisions: [0]
+        Property { name: "to"; type: "QColor" }
+    }
+}

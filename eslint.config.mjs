@@ -19,6 +19,7 @@ export default tseslint.config(
             'test/unit/settings/*.ts',
             'test/unit/devices/*.ts',
             'test/unit/qtqml/*.ts',
+            'test/unit/qml/*.ts',
             'test/unit/snippets/*.ts',
             'test/unit/wizard/*.ts',
             'test/unit/targets/*.ts',

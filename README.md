@@ -21,7 +21,7 @@ on a device or the emulator without leaving the editor.
 - Device Monitor tab: connection, CPU, memory, crashes per device.
 - Phone-side settings for screen view, control and logs.
 - Clean install and uninstall of the device agent; nothing left behind.
-- Silica QML snippets and no telemetry.
+- Silica QML snippets, completion, hover and checks for unknown types and properties, and no telemetry.
 
 ## Quick start
 
@@ -48,7 +48,6 @@ on a device or the emulator without leaving the editor.
 
 ## What's next
 
-- Silica QML IntelliSense, planned for 0.1.12.
 - QML and JavaScript debugging, planned for 0.1.13.
 - Profiling (CPU, memory, QML) in a later version.
 
