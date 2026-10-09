@@ -13,6 +13,7 @@ esbuild.mjs
 eslint.config.mjs
 .gitignore
 .git/**
+docs/**
 device-agent/**
 PLAN*.md
 HANDOFF.md
