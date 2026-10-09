@@ -1,5 +1,6 @@
 #include "stats.h"
 #include "statsmath.h"
+#include "stallwatch.h"
 
 #include <QDateTime>
 #include <QDir>
@@ -35,6 +36,8 @@ StatsStream::StatsStream(QLocalSocket *socket, const QString &exe, int intervalM
     , m_ended(false)
     , m_pid(0)
     , m_lastWallMs(0)
+    , m_lastScanMs(-1)
+    , m_stall(new StallWatch(socket))
     , m_lastTicks(0)
     , m_haveTicks(false)
     , m_lastBusy(0)
@@ -59,12 +62,16 @@ StatsStream::StatsStream(QLocalSocket *socket, const QString &exe, int intervalM
 
 // The process followed so far while its first argument still equals the path, so a tick reads one
 // cmdline instead of every process's.
-int StatsStream::findPid() const
+int StatsStream::findPid(qint64 now)
 {
     if (m_pid != 0
         && statsmath::cmdlineMatches(readProc(QStringLiteral("/proc/%1/cmdline").arg(m_pid)), m_exe.toStdString())) {
         return m_pid;
     }
+    if (!statsmath::rescanDue(now, m_lastScanMs)) {
+        return 0;
+    }
+    m_lastScanMs = now;
     return scanForPid();
 }
 
@@ -124,7 +131,7 @@ void StatsStream::tick()
         sys.insert(QStringLiteral("memAvailableKb"), static_cast<double>(avail));
     }
 
-    const int pid = findPid();
+    const int pid = findPid(now);
     if (pid != m_pid) {
         if (m_pid != 0) {
             QJsonObject ev;
@@ -183,6 +190,17 @@ void StatsStream::writeLine(const QByteArray &json)
     m_socket->write(json);
     m_socket->write("\n");
     m_socket->flush();
+    if (m_stall->stalled()) {
+        dropSlowClient();
+    }
+}
+
+void StatsStream::dropSlowClient()
+{
+    fprintf(stderr, "sailfish-devagent: stats stream ended: client too slow\n");
+    m_timer.stop();
+    m_socket->abort(); // emits disconnected: onClientGone() ends the stream
+    markEnded();
 }
 
 void StatsStream::onClientGone()

@@ -6,6 +6,7 @@
 #include <QTimer>
 
 class QLocalSocket;
+class StallWatch;
 
 // The stats stream (agent 1.10.0): one JSON line per interval about the process whose first command
 // line argument is `exe`, plus system numbers, until the client disconnects. Reads /proc only.
@@ -17,6 +18,9 @@ public:
 
     bool active() const { return !m_ended; }
     QString client() const { return m_client; }
+
+    // Ends the stream at once without a last line: the client stopped reading.
+    void dropSlowClient();
 
     // Ends the stream from the phone: one last line {"ok":false,"error":<reason>}, then the
     // connection is closed (Developer Mode went off, "Stop all sessions now").
@@ -31,7 +35,7 @@ private slots:
     void onClientGone();
 
 private:
-    int findPid() const;
+    int findPid(qint64 now);
     int scanForPid() const;
     void writeLine(const QByteArray &json);
     void markEnded();
@@ -43,6 +47,8 @@ private:
     bool m_ended;
     int m_pid;
     qint64 m_lastWallMs;
+    qint64 m_lastScanMs; // -1 before the first /proc scan
+    StallWatch *m_stall;
     unsigned long long m_lastTicks;
     bool m_haveTicks;
     unsigned long long m_lastBusy;

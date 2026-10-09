@@ -1,4 +1,5 @@
 #include "logs.h"
+#include "stallwatch.h"
 
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -63,6 +64,7 @@ LogStream::LogStream(QLocalSocket *socket, int lines, const QString &client, boo
     , m_client(client)
     , m_ended(false)
     , m_atLineStart(true)
+    , m_stall(new StallWatch(socket))
 {
     m_process.setProcessChannelMode(QProcess::MergedChannels);
     connect(&m_process, &QProcess::readyReadStandardOutput, this, &LogStream::onOutput);
@@ -94,11 +96,13 @@ LogStream::LogStream(QLocalSocket *socket, int lines, const QString &client, boo
 
 void LogStream::onOutput()
 {
-    if (m_socket->state() != QLocalSocket::ConnectedState) {
+    if (m_ended || m_socket->state() != QLocalSocket::ConnectedState) {
         return;
     }
     write(m_process.readAllStandardOutput());
-    m_socket->flush();
+    if (!m_ended) {
+        m_socket->flush();
+    }
 }
 
 void LogStream::write(const QByteArray &data)
@@ -108,6 +112,24 @@ void LogStream::write(const QByteArray &data)
     }
     m_socket->write(data);
     m_atLineStart = data.endsWith('\n');
+    if (m_stall->stalled()) {
+        dropSlowClient();
+    }
+}
+
+void LogStream::dropSlowClient()
+{
+    if (m_ended) {
+        return;
+    }
+    m_process.disconnect(this);
+    if (m_process.state() != QProcess::NotRunning) {
+        m_process.kill();
+        m_process.waitForFinished(1000);
+    }
+    fprintf(stderr, "sailfish-devagent: log stream ended: client too slow\n");
+    m_socket->abort();
+    markEnded();
 }
 
 void LogStream::onClientGone()

@@ -33,6 +33,12 @@ int main()
     check(clampInterval(250) == 250 && clampInterval(1000) == 1000 && clampInterval(10000) == 10000, "interval in range kept");
     check(clampInterval(10001) == 10000 && clampInterval(1LL << 40) == 10000, "interval above 10000 -> 10000");
 
+    // /proc rescans while the app is not running.
+    check(rescanDue(1000, -1), "rescan: the first scan is due at once");
+    check(!rescanDue(1000 + RESCAN_MS - 1, 1000), "rescan: not again within 5 s");
+    check(rescanDue(1000 + RESCAN_MS, 1000), "rescan: due after 5 s");
+    check(rescanDue(500, 1000), "rescan: due when the clock went back");
+
     // exe validation.
     check(validExe("/usr/bin/harbour-demo"), "exe: plain path");
     check(validExe("/usr/bin/a+b_c-d.e"), "exe: allowed punctuation");

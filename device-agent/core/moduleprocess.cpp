@@ -2,8 +2,15 @@
 #include "childlink.h"
 #include "modules.h"
 
+#include <QTimer>
 #include <csignal>
 #include <cstdio>
+
+namespace {
+
+const int END_GRACE_MS = 5000;
+
+}
 
 ModuleProcess *ModuleProcess::start(const QString &module, int clientFd, const QJsonObject &control,
                                     const QString &client, QString *error, QObject *parent)
@@ -47,6 +54,10 @@ void ModuleProcess::send(const QJsonObject &line)
 
 void ModuleProcess::end(const QString &reason)
 {
+    if (!m_ending) {
+        // A module stuck on a client that stopped reading must not outlive its end for long.
+        QTimer::singleShot(END_GRACE_MS, this, &ModuleProcess::kill);
+    }
     m_ending = true;
     QJsonObject line;
     line.insert(QStringLiteral("end"), reason);

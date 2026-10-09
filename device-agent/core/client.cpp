@@ -7,6 +7,7 @@
 #include <QJsonObject>
 #include <QLocalSocket>
 #include <QSocketNotifier>
+#include <QTimer>
 #include <cstdio>
 #include <cstring>
 #include <unistd.h>
@@ -15,6 +16,13 @@ namespace {
 
 const int CONNECT_TIMEOUT_MS = 3000;
 const int UPSTREAM_LINE_MAX = 256;
+// Log and stats streams ask for a keepalive lease and renew it while this client runs and its
+// stdout drains; a client stuck on a stalled SSH link stops renewing and the stream ends. Agents
+// before 1.11.0 ignore both.
+const int STREAM_LEASE_S = 30;
+const int KEEPALIVE_MS = 10000;
+// A write to stdout blocked this long means the SSH link is gone: SIGALRM ends the client.
+const unsigned STDOUT_STALL_S = 60;
 
 void printNotRunning()
 {
@@ -24,6 +32,10 @@ void printNotRunning()
 
 bool writeOut(const QByteArray &data)
 {
+    alarm(STDOUT_STALL_S);
+    struct AlarmOff {
+        ~AlarmOff() { alarm(0); }
+    } alarmOff;
     size_t off = 0;
     while (off < static_cast<size_t>(data.size())) {
         const size_t n = fwrite(data.constData() + off, 1, data.size() - off, stdout);
@@ -120,6 +132,10 @@ int Client::run(const QStringList &args)
         i += 2;
     }
 
+    const bool leased = cmd == QLatin1String("logs") || cmd == QLatin1String("stats");
+    if (leased) {
+        request.insert(QStringLiteral("lease"), STREAM_LEASE_S);
+    }
     QLocalSocket socket;
     socket.connectToServer(Paths::socketPath());
     if (!socket.waitForConnected(CONNECT_TIMEOUT_MS)) {
@@ -207,6 +223,16 @@ int Client::run(const QStringList &args)
             pending.clear();
         }
     });
+
+    QTimer keepalive;
+    qint64 keepalives = 0;
+    QObject::connect(&keepalive, &QTimer::timeout, &socket, [&]() {
+        socket.write("{\"keepalive\":" + QByteArray::number(++keepalives) + "}\n");
+        socket.flush();
+    });
+    if (leased) {
+        keepalive.start(KEEPALIVE_MS);
+    }
 
     if (socket.state() == QLocalSocket::ConnectedState) {
         QCoreApplication::exec();

@@ -6,6 +6,7 @@
 #include <QString>
 
 class QLocalSocket;
+class StallWatch;
 
 // Runs `journalctl -f` and copies its output to the client socket until the
 // client disconnects (then journalctl is killed) or journalctl exits.
@@ -28,6 +29,8 @@ public:
     // Ends the stream from the phone (agent 1.9.0): journalctl is stopped, what it already wrote is
     // passed on, then one last line {"ok":false,"error":<reason>} and the connection is closed.
     void endWithError(const QString &reason);
+    // Ends the stream at once without a last line: the client stopped reading.
+    void dropSlowClient();
 
     bool active() const { return !m_ended; }
     QString client() const { return m_client; }
@@ -51,6 +54,7 @@ private:
     QString m_client;
     bool m_ended;
     bool m_atLineStart; // the bytes sent so far end with a newline
+    StallWatch *m_stall;
 };
 
 #endif

@@ -1,5 +1,7 @@
 #include "logs.h"
+#include "keepalivelease.h"
 #include "modulehost.h"
+#include "streamlimits.h"
 
 #include <QCoreApplication>
 #include <QLocalSocket>
@@ -12,6 +14,17 @@ const int MAX_LINES = 10000;
 
 // Streams raw journal lines until the client goes away. "format":"json" (agent 1.10.0) is opt-in;
 // anything else is text, byte for byte as before.
+// The opt-in keepalive lease (agent 1.11.0): the stream ends when the client stops renewing it.
+void addLease(const QJsonObject &request, QLocalSocket *socket, LogStream *stream)
+{
+    const QJsonValue requested = request.value(QStringLiteral("lease"));
+    const int seconds = streamLeaseSeconds(requested.isDouble(), requested.toDouble());
+    if (seconds > 0) {
+        KeepaliveLease *lease = new KeepaliveLease(socket, seconds, stream);
+        QObject::connect(lease, &KeepaliveLease::expired, stream, [stream]() { stream->endWithError(QStringLiteral("lease expired")); });
+    }
+}
+
 LogStream *startStream(ModuleHost &host, const QJsonObject &control)
 {
     const QJsonObject request = control.value(QStringLiteral("request")).toObject();
@@ -21,8 +34,10 @@ LogStream *startStream(ModuleHost &host, const QJsonObject &control)
     if (json) {
         LogStream::probeOutputFields();
     }
-    return new LogStream(host.socket(), lines, control.value(QStringLiteral("client")).toString(), json,
-                         json && LogStream::validCursor(after) ? after : QString());
+    LogStream *stream = new LogStream(host.socket(), lines, control.value(QStringLiteral("client")).toString(), json,
+                                      json && LogStream::validCursor(after) ? after : QString());
+    addLease(request, host.socket(), stream);
+    return stream;
 }
 
 }
@@ -41,6 +56,9 @@ int main(int argc, char **argv)
         QObject::connect(stream.data(), &LogStream::ended, &host, [&]() { host.finish(QStringLiteral("ended")); });
         if (host.socket()->state() != QLocalSocket::ConnectedState) {
             stream->endWithError(QStringLiteral("client gone"));
+        }
+        if (!stream->active()) {
+            host.finish(QStringLiteral("client gone")); // it ended before the connection above
         }
     });
     QObject::connect(&host, &ModuleHost::endRequested, [&](const QString &reason) {

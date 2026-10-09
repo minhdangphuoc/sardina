@@ -13,6 +13,14 @@ namespace statsmath {
 const int INTERVAL_MIN_MS = 250;
 const int INTERVAL_MAX_MS = 10000;
 const int INTERVAL_DEFAULT_MS = 1000;
+// While the app is not running, /proc is scanned for it at most this often (not every tick).
+const long long RESCAN_MS = 5000;
+
+// Whether a full /proc scan is due; `lastScanMs` < 0: never scanned.
+inline bool rescanDue(long long nowMs, long long lastScanMs)
+{
+    return lastScanMs < 0 || nowMs - lastScanMs >= RESCAN_MS || nowMs < lastScanMs;
+}
 
 // `interval` clamped to 250..10000 ms.
 inline int clampInterval(long long ms)

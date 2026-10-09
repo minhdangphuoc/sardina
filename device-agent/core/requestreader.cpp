@@ -17,7 +17,7 @@ void writeAll(int fd, const QByteArray &data)
     const char *p = data.constData();
     size_t left = static_cast<size_t>(data.size());
     while (left > 0) {
-        const ssize_t n = send(fd, p, left, MSG_NOSIGNAL);
+        const ssize_t n = send(fd, p, left, MSG_NOSIGNAL | MSG_DONTWAIT);
         if (n < 0 && errno == EINTR) {
             continue;
         }
@@ -73,9 +73,8 @@ void RequestReader::replyAndClose(int fd, const QJsonObject &reply)
     if (fd < 0) {
         return;
     }
-    // Blocking for the one short line: a client that stopped reading cannot hold more than the
-    // socket buffer anyway.
-    fcntl(fd, F_SETFL, fcntl(fd, F_GETFL) & ~O_NONBLOCK);
+    // Never blocks the daemon: one short line always fits the empty buffer of a new connection,
+    // and a client that does not take it loses the rest.
     writeAll(fd, QJsonDocument(reply).toJson(QJsonDocument::Compact) + '\n');
     shutdown(fd, SHUT_WR);
     close(fd);
