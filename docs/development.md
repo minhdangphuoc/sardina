@@ -24,6 +24,16 @@ SDK and copies them to `media/agent/`; see
 [`device-agent/README.md`](../device-agent/README.md) for its build needs and
 protocol.
 
+`make -C device-agent/tools emulator-test` is an opt-in end-to-end test on the
+SDK emulator (VirtualBox VM `SailfishOS-5.1.0.11`, or `VM=<name>`; `HEADLESS=1`
+for no window). It takes a snapshot, starts the VM, installs the RPMs from
+`media/agent/i486`, stress-tests the phone's touch indicator (sessions, killed
+sessions, clipboard changes, rotation, lock and display off, keyboard, taps and
+swipes) and then removes one module and the whole agent, printing PASS or FAIL
+per case. It always restores and deletes the snapshot and powers the VM off. It
+needs Docker (to build two small helpers), `npm ci` and the SDK's SSH key in
+`~/SailfishOS/vmshare`. It is not part of `npm run verify` or CI.
+
 See [`CONVENTIONS.md`](../CONVENTIONS.md) for the module layout, stub APIs, and how tests stub UI
 prompts and use the fake `sfdk` binary.
 

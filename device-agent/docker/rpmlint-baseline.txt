@@ -11,6 +11,8 @@
 # - dangerous-command-in-%postun rm: intended, removes the settings directory on uninstall.
 # - dangerous-command-in-%post rm (1.10.1): intended, removes only the agent's own
 #   `systemctl enable` link in /etc left by agents up to 1.10.0 (the package now ships the link).
+# - use-tmp-in-%postun (1.11.2): intended, removes only the unit's PrivateTmp folders
+#   (/tmp/systemd-private-*-sailfish-devagent.service-*) that systemd may leave.
 # - unstripped-binary / position-independent-executable-suggested / invalid-license /
 #   no-changelogname-tag: SDK defaults and the SPDX licence name; harmless.
 # - The module packages (agent 1.11.0) add the same unstripped-binary and
@@ -18,6 +20,7 @@
 E: no-changelogname-tag
 E: non-readable /var/lib/sailfish-devagent/settings.json 660
 E: non-standard-dir-perm /var/lib/sailfish-devagent 770
+E: use-tmp-in-%postun
 W: dangerous-command-in-%post rm
 W: dangerous-command-in-%postun rm
 W: invalid-license GPL-3.0-or-later
