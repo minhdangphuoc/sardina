@@ -66,6 +66,7 @@ const EXPECTED_ROWS: RowSpec[] = [
   { key: 'sardina.run.customCommand', type: 'string', default: '', scope: 'resource' },
   { key: 'sardina.run.killBeforeLaunch', type: 'boolean', default: true, scope: 'resource' },
   { key: 'sardina.debug.openDeviceMonitor', type: 'boolean', default: true, scope: 'resource' },
+  { key: 'sardina.qmlDebug.port', type: 'integer', default: 3768, scope: 'resource' },
   { key: 'sardina.monitor.pollIntervalSeconds', type: 'integer', default: 5, scope: 'window' },
   { key: 'sardina.monitor.logLines', type: 'integer', default: 500, scope: 'window' },
   { key: 'sardina.build.type', type: 'string', default: 'release', scope: 'resource', enum: ['release', 'debug'] },

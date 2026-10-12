@@ -206,7 +206,12 @@ export class SshForward {
    * The same hardened forward for `127.0.0.1:<port>` on both ends (a debugger port). A port that is
    * busy on this computer fails as `local-bind`.
    */
-  static async openTcp(device: SfdkDeviceInfo, port: number, o: SshForwardCommonOptions): Promise<SshForwardOpenResult> {
+  static async openTcp(
+    device: SfdkDeviceInfo,
+    port: number,
+    o: SshForwardCommonOptions,
+    options: { probeRemote?: boolean } = {},
+  ): Promise<SshForwardOpenResult> {
     if (!Number.isInteger(port) || port < 1 || port > 65535) {
       return failOpen(o.output, 'other', `${port} is not a valid port`);
     }
@@ -216,17 +221,23 @@ export class SshForward {
       occupant.destroy();
       return failOpen(o.output, 'local-bind', `port ${port} is in use on this computer`);
     }
-    return SshForward.start(device, o, () => ({
-      forward: { kind: 'tcp', port },
-      target: { host: '127.0.0.1', port },
-      marker: `127.0.0.1:${port}:127.0.0.1:${port}`,
-    }));
+    return SshForward.start(
+      device,
+      o,
+      () => ({
+        forward: { kind: 'tcp', port },
+        target: { host: '127.0.0.1', port },
+        marker: `127.0.0.1:${port}:127.0.0.1:${port}`,
+      }),
+      options.probeRemote ?? true,
+    );
   }
 
   private static async start(
     d: SfdkDeviceInfo,
     o: SshForwardCommonOptions,
     plan: (sessionDir: string) => ForwardPlan | { error: string },
+    probeRemote = true,
   ): Promise<SshForwardOpenResult> {
     const fail = (cls: SshFailureClass, detail: string): SshForwardOpenResult => failOpen(o.output, cls, detail);
     if (!d.host || !d.user || d.port === undefined || !d.privateKey) {
@@ -286,6 +297,18 @@ export class SshForward {
       }
     }
     o.output.log('debug', `mirror forward: ssh ${args.join(' ')}`);
+
+    // A QML debugger has not opened its remote listener when this forward is prepared. Connecting
+    // here would both report a false failure and consume the debugger's first client connection.
+    // Give ssh a short chance to report an invalid local bind, then let the debugger make the first
+    // real connection through this loopback-only forward.
+    if (!probeRemote) {
+      await sleep(POLL_MS * 2);
+      if (!forward.exitInfo) return { ok: true, forward };
+      const { stderrTail, spawnErrorCode, code } = forward.exitInfo;
+      await forward.close();
+      return fail(classifySshFailure(stderrTail, { spawnErrorCode }), stderrTail.trim() || `ssh exited with code ${code}`);
+    }
 
     const deadline = Date.now() + (o.readyTimeoutMs ?? READY_TIMEOUT_MS);
     for (;;) {

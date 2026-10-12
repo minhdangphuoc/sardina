@@ -23,6 +23,7 @@ export interface SardinaSettings {
   'run.customCommand': string;
   'run.killBeforeLaunch': boolean;
   'debug.openDeviceMonitor': boolean;
+  'qmlDebug.port': number;
   'monitor.pollIntervalSeconds': number;
   'monitor.logLines': number;
   'qtqml.silenceQmlls': boolean;
@@ -52,6 +53,7 @@ export const DEFAULTS: SardinaSettings = {
   'run.customCommand': '',
   'run.killBeforeLaunch': true,
   'debug.openDeviceMonitor': true,
+  'qmlDebug.port': 3768,
   'monitor.pollIntervalSeconds': 5,
   'monitor.logLines': 500,
   'qtqml.silenceQmlls': true,

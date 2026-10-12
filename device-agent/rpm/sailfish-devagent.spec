@@ -1,8 +1,8 @@
 Name:       sailfish-devagent
 Summary:    Developer agent for VS Code: the service and its Settings page
-Version:    1.11.2
+Version:    1.11.3
 Release:    1
-License:    GPL-3.0-or-later
+License:    LGPL-3.0-or-later
 URL:        https://github.com/minhdangphuoc/sardina
 Source0:    %{name}-%{version}.tar.bz2
 Requires:   systemd
@@ -208,6 +208,7 @@ fi
 
 %files
 %defattr(-,root,root,-)
+%license THIRD_PARTY_NOTICES
 %{_bindir}/sailfish-devagent
 /usr/lib/systemd/system/sailfish-devagent.service
 /usr/lib/systemd/system/multi-user.target.wants/sailfish-devagent.service

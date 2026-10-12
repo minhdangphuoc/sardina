@@ -48,12 +48,11 @@ on a device or the emulator without leaving the editor.
 
 ## What's next
 
-- QML and JavaScript debugging, planned for 0.1.13.
 - Profiling (CPU, memory, QML) in a later version.
 
 ## Status
 
-Version 0.1.12. Not on the VS Code Marketplace yet.
+Version 0.1.13. Not on the VS Code Marketplace yet.
 
 | Linux | macOS | Windows |
 |---|---|---|
@@ -61,7 +60,7 @@ Version 0.1.12. Not on the VS Code Marketplace yet.
 
 ## License
 
-GPL-3.0-or-later. See [LICENSE](LICENSE).
+LGPL-3.0-or-later. See [LICENSE](LICENSE) and [third-party notices](THIRD_PARTY_NOTICES).
 
 Published by `sailfish-tools-dev`, a placeholder id that does not stand for
 Jolla or any company.

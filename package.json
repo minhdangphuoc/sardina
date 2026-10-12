@@ -11,8 +11,8 @@
     "sardina"
   ],
   "publisher": "sailfish-tools-dev",
-  "version": "0.1.12",
-  "license": "GPL-3.0-or-later",
+  "version": "0.1.13",
+  "license": "LGPL-3.0-or-later",
   "repository": {
     "type": "git",
     "url": "https://github.com/minhdangphuoc/sardina.git"
@@ -125,6 +125,13 @@
         "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
+        "command": "sardina.debugQmlOnDevice",
+        "title": "QML/JavaScript Debug on Device",
+        "category": "Sardina",
+        "icon": "$(debug-alt)",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
+      },
+      {
         "command": "sardina.setupSigning",
         "title": "Set Up Package Signing",
         "category": "Sardina"
@@ -175,6 +182,12 @@
       {
         "command": "sardina.debugInstalled",
         "title": "Debug Installed App",
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
+      },
+      {
+        "command": "sardina.debugQmlInstalled",
+        "title": "QML/JavaScript Debug Installed App",
         "category": "Sardina",
         "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
@@ -462,6 +475,14 @@
           "default": true,
           "scope": "resource",
           "markdownDescription": "Open the Device Monitor tab (connection, app stats and actions) beside the editor when you start **Debug on Device** or **Debug Installed App**. The editor keeps the focus."
+        },
+        "sardina.qmlDebug.port": {
+          "type": "integer",
+          "default": 3768,
+          "minimum": 1024,
+          "maximum": 65535,
+          "scope": "resource",
+          "markdownDescription": "Loopback TCP port used for QML/JavaScript debugging. The app binds it only on the device; Sardina forwards it only to 127.0.0.1 on this computer."
         },
         "sardina.monitor.pollIntervalSeconds": {
           "type": "integer",

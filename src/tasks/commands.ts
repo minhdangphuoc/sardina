@@ -295,7 +295,7 @@ async function appIsInstalled(services: Services, project: ProjectDescriptor, de
 export async function installedAppThen(
   services: Services,
   title: string,
-  fullCommand: 'sardina.buildDeployRun' | 'sardina.debugOnDevice',
+  fullCommand: 'sardina.buildDeployRun' | 'sardina.debugOnDevice' | 'sardina.debugQmlOnDevice',
   then: (app: DeployedApp, progress: vscode.Progress<{ message?: string }>, token: vscode.CancellationToken) => Promise<void>,
   resolvedProject?: ProjectDescriptor,
 ): Promise<void> {

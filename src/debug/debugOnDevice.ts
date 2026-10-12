@@ -30,7 +30,7 @@ async function ensureCppTools(services: Services): Promise<boolean> {
 }
 
 /** Breakpoints need debug info; offer to switch a Release build type first. */
-async function ensureDebugBuild(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
+export async function ensureDebugBuild(services: Services, folder: vscode.WorkspaceFolder): Promise<boolean> {
   if (services.settings.get('build.type', folder.uri) === 'debug') return true;
   const choice = await services.prompts.showWarningMessage(
     'Sardina: the build type is Release, so breakpoints and variables may not work. Switch to Debug?',

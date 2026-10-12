@@ -19,6 +19,7 @@ import { activateMonitor } from './monitor/index';
 import { FORWARD_TIMING, MIRROR_TIMING } from './agent/mirror';
 import { activateQtQml } from './qtqml/silence';
 import { activateQmlFeatures } from './qml';
+import { activateQmlDebug } from './qmldebug/debugOnDevice';
 import { activateWalkthrough } from './walkthrough/index';
 import { getShownMessages } from './ui/prompts';
 import { getLastTargetList, resetLastTargetListForTests } from './targets/targetListCache';
@@ -50,6 +51,7 @@ export function activate(ctx: vscode.ExtensionContext) {
   activateMonitor(ctx, services);
   watchDeviceChange(ctx, services);
   activateQtQml(ctx, services);
+  activateQmlDebug(ctx, services);
   const qmlFeatures = activateQmlFeatures(ctx, services);
   activateWalkthrough(ctx, services);
 

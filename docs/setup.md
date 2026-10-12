@@ -290,7 +290,23 @@ Tips:
   changed code, stop the session and press 🐞 **Debug** again.
 
 **Debug Installed App** starts the app already on the device under the
-debugger, without building or deploying again. QML and JavaScript debugging are not supported yet.
+debugger, without building or deploying again.
+
+### QML and JavaScript debugging
+
+Install a current **Qt QML** extension (the extension dependency is
+`theqtcompany.qt-qml`). **Sardina: QML/JavaScript Debug on Device** rebuilds
+and deploys a Debug build, starts it with Qt's QML debugger enabled, and
+attaches the Qt QML debugger in VS Code. Use **QML/JavaScript Debug Installed
+App** for an already deployed Debug build. Breakpoints, stepping, variables,
+watches, and expression evaluation work in QML and JavaScript.
+
+The debug server listens only on `127.0.0.1` on the device and Sardina forwards
+it only to `127.0.0.1` on the computer through the SDK's authenticated SSH
+connection. The default port is 3768; change it with `sardina.qmlDebug.port`
+only when it conflicts with another local service. Qt's QML tooling plugins
+must be present on the device. A Release build cannot be attached because it
+does not include `QT_QML_DEBUG`.
 
 ### Part 9: Sign packages (optional)
 
@@ -321,4 +337,3 @@ it up before building: a name matching exactly one key is used by its
 fingerprint, and a name matching none or several keys stops the build with a
 clear message (gpg matches names as substrings, so `Jane Doe` also matches
 `Jane Doe Dev`).
-
