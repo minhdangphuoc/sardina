@@ -153,7 +153,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
 
 ## Protocol
 
-One request per connection: one JSON line in, then the reply. Current version: **1.11.2**. 1.11.0
+One request per connection: one JSON line in, then the reply. Current version: **1.11.3**. 1.11.0
 splits the agent into modules: `ping` adds `"modules":["logs",…]` (the installed ones), the capability
 fields below appear only with the module that serves them (`logFormats` with logs, `stats` with stats,
 `mirrorEncodings` with mirror, `mirrorInput` and `keypad` with input), and a request for a missing
@@ -169,7 +169,7 @@ Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts 
 `touchIndicatorPath` to the phone-settings message and the `contact` record (below); 1.10.5 adds the
 mirror request field `idle` and a faster return to the full pace after an idle screen; 1.10.7 allows VP8 up
 to 60 fps under the phone's `maxFps` setting, double-buffers the capture and adds per-frame stage times;
-1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change); 1.11.1 and 1.11.2 change how the phone's touch indicator is shown, and 1.11.2 cleans up after a removed module (no protocol change). All additions are
+1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change); 1.11.1 and 1.11.2 change how the phone's touch indicator is shown, 1.11.2 cleans up after a removed module, and 1.11.3 updates licensing notices (no protocol change). All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
