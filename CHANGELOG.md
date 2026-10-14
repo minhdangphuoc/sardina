@@ -1,19 +1,54 @@
 # Changelog
 
+## v0.1.14
+
+- Device agent 1.13.3 adds a bounded renewable lease to the read-only PackageKit observer and replaces the earlier 1.13.2 pre-release binary on device update.
+- Add an opt-in `--skip-scopes` mode to the guarded local Qt QML 1.16/Qt 5 repair. Breakpoints, stepping, call stacks and manually entered Watch expressions have worked in a live session with this mode; automatic Locals/Scopes remain empty. The phone-side cause of the earlier exit still needs verification.
+- Update the guarded local Qt QML 1.16/Qt 5 compatibility repair: resolve backtrace references and keep synthetic QML expression frames without physical source paths in the call stack, rather than failing the debug session. This repair changes the installed Qt QML extension only when run explicitly and has a verified original backup.
+- Device agent 1.13.2 fixes debugger readiness on phones where the agent daemon's `privileged` group cannot read the app's `/proc/<pid>/fd` links. Its SSH-side client, running with the app user's group, confirms the exact listener inode; the daemon accepts only a fresh confirmation for the selected PID and current socket. The daemon's group and screenshot permissions remain unchanged.
+- Device agent 1.13.1 distinguishes an open port with unverified ownership from a port that has not opened. Direct procfs file-descriptor enumeration alone did not resolve the phone's group-based access restriction; 1.13.2 completes that fix.
+- Device agent 1.13.0 adds the **Debugger Monitoring Agent** for C++ and QML/JavaScript. Its private, read-only status stream reports app/server processes, QML arguments and verified socket ownership in parallel with startup. Both debuggers now require the current bundled agent and attach only after its listener event; Sardina offers to install or update an older agent before build/launch instead of falling back to port checks or terminal output. The monitor stops with the session and has a mandatory keepalive lease.
+- The PackageKit observer also has a bounded renewable keepalive lease. Privileged tool installation accepts only the fixed deploy/debug package allow-list and stops if package-manager state cannot be checked safely.
+- Close SFDK's unused input pipe for QML app launches, matching the scoped launches that open the listener and allowing startup to proceed while readiness is checked.
+- Keep Install and Remove adjacent in the device context menu. Remove now confirms once and removes all installed deploy/debug tools without a package picker.
+- Device-tool operations now show a loading indicator and a stage-weighted progress bar, keep percentage updates in the notification, and reduce PackageKit output to milestones. Restored **Remove Deploy & Debug Tools from Device** with one confirmation for all installed tool packages, plain-mode output and post-removal verification.
+- Report explicitly when the QML application has its debug argument but does not open the listener during the startup window.
+- Run PackageKit's console client in machine-readable `--plain` mode to avoid its animated terminal path growing to gigabytes on a phone, and fix agent 1.12.2's live `TransactionListChanged` D-Bus signature to match Sailfish PackageKit.
+- Use installed RPM ownership—not executable `PATH` or Qt plugin-directory assumptions—when checking deploy/debug tools, and use Sailfish's fixed `/usr/bin/rpm` path in device agent 1.12.1's PackageKit stall verifier.
+
+- Fixed: device-package installation no longer mistakes `pkcon`'s newline-free
+  terminal redraws for a three-minute hang or writes megabytes of padded
+  progress text to the output log. Cancelling or timing out first sends Ctrl+C
+  through the remote PTY, so the root-owned package process stops on the
+  device instead of surviving after local SFDK exits.
+- Fixed: repeated package-install attempts no longer stack concurrent root
+  `pkcon` processes on one device. Sardina detects an existing transaction and
+  asks you to wait (or reboot after a genuine stall), permits only one
+  privileged operation per device in one extension host, and tries cached
+  package metadata before doing the much slower repository refresh.
+- Changed: installing deploy and debug tools now opens the **Sardina** output
+  channel and streams the sanitized `pkcon` output while it runs. With device
+  agent 1.12.0, a read-only PackageKit observer also reports dependency
+  resolution, downloads, per-package installation and percentage in the
+  progress notification. If PackageKit stops producing events after all
+  requested packages are verifiably installed, Sardina reports that condition
+  and closes the stale client safely. Older or absent agents keep the existing
+  text-progress path, including when the agent itself is being installed.
+- Fixed: QML/JavaScript Debug no longer relies on a phone-side `ss` command or
+  consumes Qt's single blocking debugger connection while checking readiness.
+  The required agent verifies the owning process and loopback listener from
+  Linux's TCP table.
+
 ## v0.1.13
 
 - New: **QML/JavaScript Debug on Device** and **QML/JavaScript Debug Installed
   App** launch Qt's QML debug server in blocking mode and attach the official
-  Qt QML VS Code debugger. The server and its SSH forward are loopback-only;
-  QML and JavaScript breakpoints, stepping, variables, watches and expressions
-  stay in VS Code without exposing a debug port on the network. Requires a
-  current `theqtcompany.qt-qml` extension and QML tooling plugins on the device.
+  Qt QML VS Code debugger. The server and its SSH forward are loopback-only.
+  Sailfish Qt 5 compatibility and debugger readiness are improved in v0.1.14;
+  see that release's limitations before relying on breakpoint inspection.
 - Changed: relicensed Sardina and the device agent under LGPL-3.0-or-later.
   `THIRD_PARTY_NOTICES` ships in the VSIX; the same complete notices are
   installed with the device-agent core RPM as `%license`.
-
-## v0.1.13
-
 - The touch indicator is drawn on the phone again (device agent 1.11.2), as a window above apps and the lock screen that is not listed in the switcher; the mirror draws the marker itself when the phone cannot. Fixed a Lipstick crash the earlier indicator could cause after a control session or on a clipboard change. Tested on the emulator (sessions, killed sessions, clipboard changes, rotation, lock and display off, keyboard, taps and swipes passing through) with the new opt-in `make -C device-agent/tools emulator-test`; not yet on a phone.
 - Removing one agent module leaves nothing of it: the module's package removes its own files from the agent's runtime folder (unfetched screenshots and lipstick's staging folder for `screenshot`, frame buffers for `mirror` and `input`), and VS Code then removes them too for older agents and checks read-only that none of the module's packages, files or processes is left, in the same kind of notification as a full removal. A full removal also removes the service's private `/tmp` folders if systemd left them, and checks for them. `device-agent/tools/emulator/uninstall-check.sh`, run as root on a device, lists anything of the agent still there. Checked on the emulator, for one module and for the whole agent; not yet on a phone.
 - The extension is now called Sardina (id `sailfish-tools-dev.sardina`). Commands, views, tasks and settings use `sardina.` instead of `sailfish.`; the repository is now github.com/minhdangphuoc/sardina. On first start it copies your `sailfish.*` settings to `sardina.*` where the new one is unset, and the old extension's pinned host keys, signing passphrases and keypad layouts; old values are kept. Install Sardina and remove the old extension; task type `sailfish` in `tasks.json` must be changed to `sardina`.

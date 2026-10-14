@@ -9,13 +9,14 @@ const base: BuildViewInput = {
   device: 'Jolla Phone',
   buildType: 'release',
   deployMethod: 'sdk',
+  debugLanguage: 'cpp',
   sign: false,
   snapshot: { phase: 'idle' },
   now: 0,
 };
 
 describe('buildRows', () => {
-  it('has the seven rows with their click commands', () => {
+  it('has the build and debugger selectors with their click commands', () => {
     const rows = buildRows(base);
     assert.deepStrictEqual(
       rows.map((r) => [r.id, r.command]),
@@ -23,8 +24,9 @@ describe('buildRows', () => {
         ['project', undefined],
         ['target', 'sardina.selectTarget'],
         ['device', 'sardina.device.setDefault'],
-        ['type', 'sardina.selectBuildType'],
+        ['build', 'sardina.selectBuildType'],
         ['deploy', 'sardina.selectDeployMethod'],
+        ['debugger', 'sardina.selectDebugLanguage'],
         ['signing', 'sardina.setupSigning'],
         ['last', 'sardina.showBuildLog'],
       ],
@@ -34,8 +36,9 @@ describe('buildRows', () => {
     assert.strictEqual(rows[1].description, 'SailfishOS-4.6-aarch64');
     assert.strictEqual(rows[3].description, 'Release');
     assert.strictEqual(rows[4].description, 'Deploy as RPM package');
-    assert.strictEqual(rows[5].description, 'off');
-    assert.strictEqual(rows[6].description, 'idle');
+    assert.strictEqual(rows[5].description, 'C++');
+    assert.strictEqual(rows[6].description, 'off');
+    assert.strictEqual(rows[7].description, 'idle');
   });
 
   it('says what is missing', () => {
@@ -64,8 +67,12 @@ describe('buildRows', () => {
 
   it('shows signing on and the last build result', () => {
     const rows = buildRows({ ...base, sign: true, snapshot: { phase: 'running', startedAt: 0, stage: 'building' }, now: 5000 });
-    assert.strictEqual(rows[5].description, 'on');
-    assert.strictEqual(rows[6].description, '⟳ Building… 0:05 · building');
-    assert.strictEqual(rows[6].icon, 'sync~spin');
+    assert.strictEqual(rows[6].description, 'on');
+    assert.strictEqual(rows[7].description, '⟳ Building… 0:05 · building');
+    assert.strictEqual(rows[7].icon, 'sync~spin');
+  });
+
+  it('shows the selected QML/JavaScript debugger', () => {
+    assert.strictEqual(buildRows({ ...base, debugLanguage: 'qml' })[5].description, 'QML/JavaScript');
   });
 });

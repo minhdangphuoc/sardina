@@ -1,12 +1,20 @@
 import * as vscode from 'vscode';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 import type { Services } from '../core/services';
 import { deviceSessions } from '../core/deviceSessions';
 import { NO_TIMEOUT } from '../sfdk/runner';
 import { buildDeployThen, installedAppThen, type DeployedApp } from '../tasks/commands';
 import { cppdbgArchitecture } from '../tasks/buildConfig';
-import { parseDebugRecipe, type DebugRecipe } from './recipe';
+import { isolatedDebugRecipe, parseDebugRecipe, targetSysrootCandidates, type DebugRecipe } from './recipe';
 import { DebugLifecycle, SESSION_ID_FIELD, gdbserverExitsAfterSession, gdbserverPkillArgs, isRestartRequest, withConnectRetry } from './debugSessionCore';
 import { INSTALL_ON_DEVICE, checkDeviceToolsGuarded, installOnDevice } from '../devices/devicePackages';
+import { ensureKnownHostsFile, pinHostKeys, readPinnedKeys, resolveDeviceEndpoint, SshForward } from '../agent/sshForward';
+import { hostKeyAlias } from '../agent/sshForwardCore';
+import { sfdkDeviceName } from '../devices/listParsing';
+import { startDebugMonitor } from './debugMonitor';
+import { debugMonitorMessage } from './debugMonitorCore';
+import { ensureDebugMonitorAgent } from './ensureDebugMonitor';
 
 const CPPTOOLS_ID = 'ms-vscode.cpptools';
 const INSTALL_CPPTOOLS = 'Install C/C++ extension';
@@ -16,6 +24,7 @@ const LISTEN_TIMEOUT_MS = 30_000;
 const GDBSERVER_INSTALL_HINT = 'devel-su sh -c "pkcon refresh && pkcon install -y gdb-gdbserver"';
 const GDBSERVER_PACKAGE = 'gdb-gdbserver';
 const RUN_WITHOUT_DEBUGGER = 'Run without debugger';
+const DEBUG_PORT = 10_000;
 
 /** C++ debugging goes through the C/C++ extension's `cppdbg` debugger driving the SDK's GDB. */
 async function ensureCppTools(services: Services): Promise<boolean> {
@@ -183,15 +192,48 @@ class GdbserverTerminal {
     const done = new Promise<void>((resolve) => (markDone = resolve));
     const run: GdbserverRun = { stop: () => cts.cancel(), done, finished: false };
     this.current = run;
+    let agentListening = false;
+    let signalListening = (): void => undefined;
+    let agentStatus = '';
+    let monitor: Awaited<ReturnType<typeof startDebugMonitor>>;
+    try {
+      monitor = await startDebugMonitor(services, {
+        device: app.device, target: app.target, cwd: app.cwd, binary: app.project.appBinaryPath,
+      }, 'cpp', DEBUG_PORT, cts.token, (event) => {
+        agentStatus = debugMonitorMessage(event);
+        if (event.event === 'status' && event.state === 'server-listening') {
+          agentListening = true;
+          signalListening();
+        }
+      });
+    } catch (error) {
+      cts.cancel();
+      run.finished = true;
+      markDone();
+      throw error;
+    }
     return new Promise((resolve, reject) => {
       let listening = false;
       const stderrTail: string[] = [];
       const timer = setTimeout(() => {
         if (!listening) {
           cts.cancel();
-          reject(new Error(`gdbserver did not start listening within ${LISTEN_TIMEOUT_MS / 1000}s`));
+          reject(new Error(agentStatus || `gdbserver did not start listening within ${LISTEN_TIMEOUT_MS / 1000}s`));
         }
       }, LISTEN_TIMEOUT_MS);
+      signalListening = (): void => {
+        if (listening) return;
+        listening = true;
+        clearTimeout(timer);
+        resolve();
+      };
+      void monitor.done.then(() => {
+        if (!listening && !cts.token.isCancellationRequested) {
+          clearTimeout(timer);
+          cts.cancel();
+          reject(new Error('Debugger Monitoring Agent disconnected before gdbserver opened its listener'));
+        }
+      });
       void services.runner
         .run({
           args: ['device', 'exec', '--', ...recipe.gdbserver],
@@ -200,17 +242,14 @@ class GdbserverTerminal {
           cwd: app.cwd,
           token: cts.token,
           timeoutMs: NO_TIMEOUT,
+          stdin: '',
           onLine: (line, stream) => {
             this.write.fire(`${line}\r\n`);
             if (stream === 'stderr') stderrTail.push(line);
-            if (!listening && /Listening on port/i.test(line)) {
-              listening = true;
-              clearTimeout(timer);
-              resolve();
-            }
           },
         })
         .then((result) => {
+          monitor.stop();
           run.finished = true;
           markDone();
           if (!this.closed) this.write.fire(`\r\n[gdbserver ${result.cancelled ? 'stopped' : `exited with code ${result.exitCode}`}]\r\n`);
@@ -226,6 +265,7 @@ class GdbserverTerminal {
             );
           }
         });
+      if (agentListening) signalListening();
     });
   }
 }
@@ -263,13 +303,14 @@ async function openMonitorForDebug(services: Services, folder: vscode.WorkspaceF
 }
 
 /** "Sardina: Debug on Device": build, deploy, start the app under gdbserver and attach VS Code's debugger. */
-export async function debugOnDevice(services: Services): Promise<void> {
+export async function debugOnDevice(ctx: vscode.ExtensionContext, services: Services, storageDir?: string): Promise<void> {
   if (!(await ensureCppTools(services))) return;
   const project = await services.projects.resolveActive();
   if (!project) {
     void services.prompts.showWarningMessage('Sardina: no Sailfish OS project found in this workspace.');
     return;
   }
+  if (!(await ensureDebugMonitorAgent(ctx, services, project.folder))) return;
   const gdbserver = await ensureGdbserver(services, project.folder);
   if (gdbserver === 'run-instead') {
     await vscode.commands.executeCommand('sardina.buildDeployRun');
@@ -279,17 +320,18 @@ export async function debugOnDevice(services: Services): Promise<void> {
   if (!(await ensureDebugBuild(services, project.folder))) return;
   await openMonitorForDebug(services, project.folder);
 
-  await buildDeployThen(services, 'Sardina: Debug on Device', (app, progress, token) => attachDebugger(services, app, progress, token), project);
+  await buildDeployThen(services, 'Sardina: Debug on Device', (app, progress, token) => attachDebugger(services, app, progress, token, storageDir), project);
 }
 
 /** "Sardina: Debug Installed App": the app already on the device, under the debugger, without building or deploying. */
-export async function debugInstalled(services: Services): Promise<void> {
+export async function debugInstalled(ctx: vscode.ExtensionContext, services: Services, storageDir?: string): Promise<void> {
   if (!(await ensureCppTools(services))) return;
   const project = await services.projects.resolveActive();
   if (!project) {
     void services.prompts.showWarningMessage('Sardina: no Sailfish OS project found in this workspace.');
     return;
   }
+  if (!(await ensureDebugMonitorAgent(ctx, services, project.folder))) return;
   const gdbserver = await ensureGdbserver(services, project.folder);
   if (gdbserver === 'run-instead') {
     await vscode.commands.executeCommand('sardina.runInstalled');
@@ -299,7 +341,61 @@ export async function debugInstalled(services: Services): Promise<void> {
   // No Release-to-Debug offer here: nothing is rebuilt, so switching the build type would not help this session.
   await openMonitorForDebug(services, project.folder);
   await installedAppThen(services, 'Sardina: Debug Installed App', 'sardina.debugOnDevice', (app, progress, token) =>
-    attachDebugger(services, app, progress, token), project);
+    attachDebugger(services, app, progress, token, storageDir), project);
+}
+
+async function prepareIsolatedRecipe(
+  services: Services,
+  app: DeployedApp,
+  storageDir: string | undefined,
+  token: vscode.CancellationToken,
+): Promise<{ recipe: DebugRecipe; forward: SshForward } | undefined> {
+  if (!storageDir || !app.device || !app.target) return undefined;
+  const sdk = services.sdk.current() ?? (await services.sdk.refresh());
+  if (!sdk) return undefined;
+
+  const sysroot = targetSysrootCandidates(sdk.root, app.target).find((candidate) => fs.statSync(candidate, { throwIfNoEntry: false })?.isDirectory());
+  const localProgram = path.join(app.cwd, path.basename(app.project.appBinaryPath));
+  const gdbPath = path.join(sdk.root, 'bin', process.platform === 'win32' ? 'gdb.exe' : 'gdb');
+  if (!sysroot || !fs.statSync(gdbPath, { throwIfNoEntry: false })?.isFile() || !fs.statSync(localProgram, { throwIfNoEntry: false })?.isFile()) {
+    services.output.log('error', `Debug isolation prerequisites are missing (sysroot=${sysroot ?? 'not found'}, gdb=${gdbPath}, program=${localProgram}).`);
+    return undefined;
+  }
+
+  const endpoint = await resolveDeviceEndpoint(services, undefined, app.device);
+  if (!endpoint) return undefined;
+  const name = sfdkDeviceName(endpoint);
+  const knownHosts = await ensureKnownHostsFile(storageDir);
+  const alias = hostKeyAlias(name);
+  if ((await readPinnedKeys(knownHosts, alias)).length === 0 && (await pinHostKeys(services, name, knownHosts, alias)) === 'no-host-key') {
+    services.output.log('error', `Debug isolation failed: "${name}" returned no usable SSH host key through the SDK connection.`);
+    return undefined;
+  }
+  const open = () => SshForward.openTcp(
+      endpoint,
+      DEBUG_PORT,
+      { storageDir, token, output: services.output },
+      // gdbserver starts after the tunnel; probing now would report a false remote failure.
+      { probeRemote: false },
+    );
+  let opened = await open();
+  if (!opened.ok && opened.cls === 'not-pinned' && (await pinHostKeys(services, name, knownHosts, alias)) === 'pinned') {
+    opened = await open();
+  }
+  if (!opened.ok) {
+    services.output.log('error', `Debug isolation tunnel failed: ${opened.detail}`);
+    return undefined;
+  }
+  return {
+    recipe: isolatedDebugRecipe({
+      sdkRoot: sdk.root,
+      sysroot,
+      localProgram,
+      remoteProgram: app.project.appBinaryPath,
+      port: DEBUG_PORT,
+    }),
+    forward: opened.forward,
+  };
 }
 
 /** Starts the installed app under gdbserver and attaches VS Code's debugger to it. */
@@ -308,6 +404,7 @@ async function attachDebugger(
   app: DeployedApp,
   progress: vscode.Progress<{ message?: string }>,
   token: vscode.CancellationToken,
+  storageDir?: string,
 ): Promise<void> {
   progress.report({ message: 'starting debugger…' });
   if (app.pkillArgs) {
@@ -321,7 +418,23 @@ async function attachDebugger(
     cwd: app.cwd,
     token,
   });
-  const recipe = dryRun.exitCode === 0 ? parseDebugRecipe(dryRun.stdout) : undefined;
+  let recipe = dryRun.exitCode === 0 ? parseDebugRecipe(dryRun.stdout) : undefined;
+  let isolatedForward: SshForward | undefined;
+  if (!recipe || !recipe.program) {
+    if (token.isCancellationRequested) return;
+    services.output.log(
+      'warn',
+      `sfdk debug --dry-run could not prepare a usable recipe (exit ${dryRun.exitCode}); trying Sardina's isolated debugger tunnel.`,
+    );
+    let isolated: Awaited<ReturnType<typeof prepareIsolatedRecipe>> = undefined;
+    try {
+      isolated = await prepareIsolatedRecipe(services, app, storageDir, token);
+    } catch (err) {
+      services.output.log('error', `Debug isolation setup failed: ${err instanceof Error ? err.message : String(err)}`);
+    }
+    recipe = isolated?.recipe;
+    isolatedForward = isolated?.forward;
+  }
   if (!recipe || !recipe.program) {
     services.output.log('error', `sfdk debug --dry-run gave no usable GDB setup (exit ${dryRun.exitCode}): ${dryRun.stdout}${dryRun.stderr}`);
     void services.prompts.showErrorMessage('Sardina: could not prepare the debugger (see the Sardina output).');
@@ -332,6 +445,7 @@ async function attachDebugger(
   try {
     await terminal.start(token);
   } catch (err) {
+    await isolatedForward?.close();
     void services.prompts.showErrorMessage(`Sardina: ${err instanceof Error ? err.message : String(err)}`);
     return;
   }
@@ -369,6 +483,7 @@ async function attachDebugger(
       for (const s of subs) s.dispose();
       registration?.dispose();
       void terminal.stop();
+      void isolatedForward?.close();
     },
     stopSession: () => {
       if (debugSession) void Promise.resolve(vscode.debug.stopDebugging(debugSession)).catch(() => undefined);
@@ -439,8 +554,8 @@ const restartTracker: vscode.DebugAdapterTrackerFactory = {
 
 export function activateDebug(ctx: vscode.ExtensionContext, services: Services): void {
   ctx.subscriptions.push(
-    vscode.commands.registerCommand('sardina.debugOnDevice', () => debugOnDevice(services)),
-    vscode.commands.registerCommand('sardina.debugInstalled', () => debugInstalled(services)),
+    vscode.commands.registerCommand('sardina.debugOnDevice', () => debugOnDevice(ctx, services, ctx.globalStorageUri.fsPath)),
+    vscode.commands.registerCommand('sardina.debugInstalled', () => debugInstalled(ctx, services, ctx.globalStorageUri.fsPath)),
     vscode.debug.registerDebugAdapterTrackerFactory('cppdbg', restartTracker),
   );
 }

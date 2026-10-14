@@ -7,14 +7,18 @@ import type { Reachability } from '../devices/reachability';
 import { scopeFolder } from '../targets/statusBar';
 import {
   BUILD_TYPES,
+  DEBUG_LANGUAGES,
   DEPLOY_METHODS,
   buildTypeText,
+  debugLanguageCommand,
+  debugLanguageText,
   deployMethodLabel,
   deployMethodText,
   debugActionText,
   deviceTextWithSessions,
   sessionTooltip,
   type BuildType,
+  type DebugLanguage,
   type DeployMethod,
 } from './buildConfig';
 
@@ -27,11 +31,13 @@ export class BuildConfigStatusBar {
   private readonly device = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
   private readonly buildType = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
   private readonly deployMethod = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
-  private readonly debugAction = actionItem(92, '$(debug-alt) Debug', 'sardina.debugOnDevice', 'Sardina: Build, Deploy & Debug on the device. To debug without rebuilding: "Sardina: Debug Installed App"');
+  private readonly debugLanguage = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 92);
+  private readonly debugAction = actionItem(91, '$(debug-alt) Debug', 'sardina.debugSelected', 'Sardina: Build, Deploy & Debug using the selected language');
   private readonly actions = [
     actionItem(95, '$(tools)', 'sardina.build', 'Sardina: Build'),
     actionItem(94, '$(package) Deploy', 'sardina.deploy', 'Sardina: Build & Deploy to the device, without launching'),
     actionItem(93, '$(play) Run', 'sardina.buildDeployRun', 'Sardina: Build, Deploy & Run (Ctrl+Alt+R). To launch without rebuilding: "Sardina: Run Installed App"'),
+    this.debugLanguage,
     this.debugAction,
   ];
 
@@ -42,6 +48,7 @@ export class BuildConfigStatusBar {
     this.device.command = 'sardina.device.setDefault';
     this.buildType.command = 'sardina.selectBuildType';
     this.deployMethod.command = 'sardina.selectDeployMethod';
+    this.debugLanguage.command = 'sardina.selectDebugLanguage';
   }
 
   refresh(): void {
@@ -54,6 +61,7 @@ export class BuildConfigStatusBar {
     const device = this.services.settings.get('device', folderUri);
     const buildType = this.services.settings.get('build.type', folderUri);
     const method = this.services.settings.get('deploy.method', folderUri);
+    const debugLanguage = this.services.settings.get('debug.language', folderUri);
 
     const unregistered = !!device && this.registeredDevices !== undefined && !this.registeredDevices.has(device);
     const offline = !!device && this.registeredDevices?.get(device) === 'offline';
@@ -73,9 +81,12 @@ export class BuildConfigStatusBar {
     this.device.backgroundColor = unregistered || debugging ? new vscode.ThemeColor('statusBarItem.warningBackground') : undefined;
     this.debugAction.text = debugActionText(sessions);
     this.buildType.text = buildTypeText(buildType);
-    this.buildType.tooltip = 'Sardina: build type (click to change)';
+    this.buildType.tooltip = 'Sardina: build configuration (click to change)';
     this.deployMethod.text = deployMethodText(method);
     this.deployMethod.tooltip = `Sardina: ${deployMethodLabel(method)} (click to change)`;
+    this.debugLanguage.text = debugLanguageText(debugLanguage);
+    this.debugLanguage.tooltip = `Sardina: ${debugLanguage === 'qml' ? 'QML/JavaScript' : 'C++'} debugger (click to change)`;
+    this.debugAction.tooltip = `Sardina: Build, Deploy & Debug using ${debugLanguage === 'qml' ? 'QML/JavaScript' : 'C++'}`;
     for (const item of items) item.show();
   }
 
@@ -119,7 +130,7 @@ function actionItem(priority: number, text: string, command: string, tooltip: st
 }
 
 /** Saves a selector choice next to `sardina.target`: the active project's folder settings. */
-async function saveFolderSetting(services: Services, key: 'build.type' | 'deploy.method', value: string): Promise<void> {
+async function saveFolderSetting(services: Services, key: 'build.type' | 'deploy.method' | 'debug.language', value: string): Promise<void> {
   const folder = scopeFolder(services) ?? vscode.workspace.workspaceFolders?.[0];
   if (!folder) {
     void services.prompts.showWarningMessage('Sardina: no workspace folder to save the setting to');
@@ -157,11 +168,25 @@ export function activateBuildConfigStatusBar(ctx: vscode.ExtensionContext, servi
       const value = await pick<DeployMethod>(services, DEPLOY_METHODS, current, 'Select how to deploy to the device');
       if (value) await saveFolderSetting(services, 'deploy.method', value);
     }),
+    vscode.commands.registerCommand('sardina.selectDebugLanguage', async () => {
+      const current = services.settings.get('debug.language', scopeFolder(services)?.uri);
+      const value = await pick<DebugLanguage>(services, DEBUG_LANGUAGES, current, 'Select the toolbar debugger');
+      if (value) await saveFolderSetting(services, 'debug.language', value);
+    }),
+    vscode.commands.registerCommand('sardina.debugSelected', () => {
+      const language = services.settings.get('debug.language', scopeFolder(services)?.uri);
+      return vscode.commands.executeCommand(debugLanguageCommand(language));
+    }),
+    vscode.commands.registerCommand('sardina.debugSelectedInstalled', () => {
+      const language = services.settings.get('debug.language', scopeFolder(services)?.uri);
+      return vscode.commands.executeCommand(language === 'qml' ? 'sardina.debugQmlInstalled' : 'sardina.debugInstalled');
+    }),
     services.projects.onDidChange(() => statusBar.refresh()),
     deviceSessions.onDidChange(() => statusBar.refresh()),
     services.settings.onDidChange('device', () => statusBar.refresh()),
     services.settings.onDidChange('build.type', () => statusBar.refresh()),
     services.settings.onDidChange('deploy.method', () => statusBar.refresh()),
+    services.settings.onDidChange('debug.language', () => statusBar.refresh()),
     vscode.window.onDidChangeActiveTextEditor(() => statusBar.refresh()),
   );
   statusBar.refresh();

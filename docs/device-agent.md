@@ -4,7 +4,7 @@
 The device agent is a small service you install on a device once. After that,
 VS Code can take screenshots, show the system log and mirror the screen without
 asking for the developer-mode password each time. It works on phones and on the
-emulator. This extension includes agent **1.11.2**, a small core plus modules
+emulator. Sardina v0.1.14 bundles agent **1.13.3**, a small core plus modules
 you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
 `mirror`).
 
@@ -15,7 +15,7 @@ you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
    (all are ticked on a new phone; on a phone that has the agent, the installed
    ones), read the dialog, which lists only what those modules can do, confirm,
    and enter the developer-mode password once.
-   **Check:** **Sardina: Device Agent Status** reports agent 1.11.2 running
+   **Check:** **Sardina: Device Agent Status** reports agent 1.13.3 running
    with the installed modules, and which are not installed.
 3. **Take a screenshot.** **Sardina: Take Device Screenshot**, or the camera
    button on the device in the Devices view. Choose where to save
@@ -68,6 +68,14 @@ you choose: `logs`, `stats`, `screenshot`, `mirror` and `input` (control, needs
    The same action is in the Devices view's right-click menu and the Command
    Palette. The SDK
    tools (`rsync`, `sdk-deploy-rpm`, `gdb-gdbserver`) are not touched.
+
+The core also runs two read-only helpers while requested: a PackageKit
+transaction observer for tool-install progress and a **Debugger Monitoring
+Agent** that checks the selected application's process and debugger-listener
+ownership. Both stop when their session ends or their keepalive lease expires.
+They do not install packages or start the debugger themselves. C++ and
+QML/JavaScript debugging require the current bundled agent; unlike a tool
+installation, debugger startup has no older-agent port-check fallback.
 
 If the agent or the module a command needs is missing, **Take Device
 Screenshot**, **Show Device Logs** and **Mirror Device Screen** offer to install
@@ -153,8 +161,9 @@ notice says the developer agent is running.
   from the SDK connection, and refuses a key that changed. An emulator is
   re-trusted automatically; for a phone VS Code warns and offers **Trust New
   Key**, and uses the SDK connection until then.
-- **Lease.** A mirror ends by itself 60 seconds after the last renewal, so a
-  hung or disconnected computer cannot leave the screen streaming.
+- **Lease.** Mirror and read-only streaming helpers end after missed
+  renewals (60 seconds for the mirror), so a hung or disconnected computer
+  cannot leave them running indefinitely.
 - **Visible on the phone.** A notification is shown while the screen is viewed,
   and control stays off until the phone has confirmed the "being controlled"
   notification.
@@ -173,8 +182,7 @@ Details: [`device-agent/README.md`](../device-agent/README.md).
 
 ## What is not verified yet
 
-The device agent is new. These parts are built and tested on the emulator and
-with test fixtures, but not yet confirmed on a real phone:
+These parts still need broader real-phone confirmation or longer-running tests:
 
 - Tap and swipe control: injection on a phone's touchscreen, all screen
   rotations, and the change of the on-phone notification to "being
@@ -193,4 +201,3 @@ with test fixtures, but not yet confirmed on a real phone:
   VS Code colour theme (light, dark, high contrast light and dark).
 - If the phone lacks the JPEG image plugin, the agent sends larger PNG frames
   on the JPEG path; which package provides that plugin is not known yet.
-

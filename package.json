@@ -11,7 +11,7 @@
     "sardina"
   ],
   "publisher": "sailfish-tools-dev",
-  "version": "0.1.13",
+  "version": "0.1.14",
   "license": "LGPL-3.0-or-later",
   "repository": {
     "type": "git",
@@ -127,6 +127,26 @@
       {
         "command": "sardina.debugQmlOnDevice",
         "title": "QML/JavaScript Debug on Device",
+        "category": "Sardina",
+        "icon": "$(debug-alt)",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
+      },
+      {
+        "command": "sardina.selectDebugLanguage",
+        "title": "Select Debug Language",
+        "category": "Sardina",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
+      },
+      {
+        "command": "sardina.debugSelected",
+        "title": "Debug Using Selected Language",
+        "category": "Sardina",
+        "icon": "$(debug-alt)",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
+      },
+      {
+        "command": "sardina.debugSelectedInstalled",
+        "title": "Debug Installed App Using Selected Language",
         "category": "Sardina",
         "icon": "$(debug-alt)",
         "enablement": "sardina.sdkAvailable && sardina.platformSupported"
@@ -321,6 +341,13 @@
         "enablement": "sardina.sdkAvailable && sardina.platformSupported"
       },
       {
+        "command": "sardina.device.removeTools",
+        "title": "Remove Deploy & Debug Tools from Device",
+        "category": "Sardina",
+        "icon": "$(trash)",
+        "enablement": "sardina.sdkAvailable && sardina.platformSupported"
+      },
+      {
         "command": "sardina.agent.install",
         "title": "Install Device Agent",
         "category": "Sardina",
@@ -475,6 +502,20 @@
           "default": true,
           "scope": "resource",
           "markdownDescription": "Open the Device Monitor tab (connection, app stats and actions) beside the editor when you start **Debug on Device** or **Debug Installed App**. The editor keeps the focus."
+        },
+        "sardina.debug.language": {
+          "type": "string",
+          "enum": [
+            "cpp",
+            "qml"
+          ],
+          "enumDescriptions": [
+            "Use GDB for native C++ debugging.",
+            "Use the Qt QML adapter for QML and JavaScript debugging."
+          ],
+          "default": "cpp",
+          "scope": "resource",
+          "markdownDescription": "Debugger used by the single **Debug** button in the Sardina status bar. Click the adjacent C++ / QML/JS selector to change it."
         },
         "sardina.qmlDebug.port": {
           "type": "integer",
@@ -939,7 +980,7 @@
           "group": "3_installed@1"
         },
         {
-          "command": "sardina.debugInstalled",
+          "command": "sardina.debugSelectedInstalled",
           "when": "view == sardina.build",
           "group": "3_installed@2"
         },
@@ -997,7 +1038,13 @@
         },
         {
           "command": "sardina.device.installTools",
-          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/"
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "group": "2_development_tools@1"
+        },
+        {
+          "command": "sardina.device.removeTools",
+          "when": "view == sardina.devices && viewItem =~ /^hardware-device(\\+sessions)?$/",
+          "group": "2_development_tools@2"
         },
         {
           "command": "sardina.device.remove",

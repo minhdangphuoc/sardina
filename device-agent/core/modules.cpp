@@ -12,6 +12,8 @@ namespace {
 const ModuleSpec MODULES[] = {
     { "logs", "logs", "logs" },
     { "stats", "stats", nullptr }, // Developer Mode only: /proc is readable over the SSH login
+    { "packages", "packages", nullptr }, // read-only PackageKit transaction progress
+    { "debugmonitor", "debugmonitor", nullptr }, // read-only debugger process/listener status
     { "screenshot", "screenshot", "screenView" },
     { "mirror", "mirror", "screenView" },
     { "input", nullptr, nullptr },
@@ -48,7 +50,9 @@ QStringList installedNames()
 {
     QStringList names;
     for (const ModuleSpec &spec : MODULES) {
-        if (installed(QLatin1String(spec.name))) {
+        // packages is a core helper, not an optional user-facing feature module.
+        if (QLatin1String(spec.name) != QLatin1String("packages") && QLatin1String(spec.name) != QLatin1String("debugmonitor")
+            && installed(QLatin1String(spec.name))) {
             names << QLatin1String(spec.name);
         }
     }

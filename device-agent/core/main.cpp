@@ -18,6 +18,7 @@ int usage()
             "       sailfish-devagent --request logs [--lines N] [--format json|text] [--after CURSOR]\n"
             "                         [--client TEXT]\n"
             "       sailfish-devagent --request stats --exe PATH [--interval MS] [--client TEXT]\n"
+            "       sailfish-devagent --request debugmonitor --mode cpp|qml --exe /usr/bin/APP --port PORT\n"
             "       sailfish-devagent --request mirror [--fps N] [--width N] [--quality N] [--lease N] [--input]\n"
             "                         [--phone-state] [--client TEXT]\n"
             "       sailfish-devagent --remove-notifications\n"

@@ -1,8 +1,14 @@
 # Conventions
 
-One file for later agents to read instead of the full TRD/validation docs.
-Binding rules are in the workflow task text; this file summarizes them for
-day-to-day work in this repo.
+Historical v0.1 scaffold/task-allocation notes. The task letters, unimplemented-stub claims,
+`sailfish.*` command names and `../docs` paths below describe the original development phase,
+not the current v0.1.13 release or unreleased v0.1.14 working tree. Current ownership and
+handoff rules are in `AGENTS.md` and `HANDOFF.md`; current implementation is under this
+repository's `src/`, `device-agent/`, `test/` and `docs/`. Recheck any command or API below
+against source before using it.
+
+Binding rules were in the original workflow task text; this file preserves the old conventions
+for historical context.
 
 ## Repository layout and file ownership
 

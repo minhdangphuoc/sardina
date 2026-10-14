@@ -24,8 +24,9 @@ void KeepaliveLease::onReadable()
     m_lines.feed(data.constData(), static_cast<size_t>(data.size()), lines);
     for (const std::string &line : lines) {
         const QJsonDocument doc = QJsonDocument::fromJson(QByteArray(line.data(), static_cast<int>(line.size())));
-        if (doc.isObject() && doc.object().value(QStringLiteral("keepalive")).isDouble()) {
-            m_timer.start();
-        }
+        if (!doc.isObject()) continue;
+        const QJsonObject value = doc.object();
+        if (value.value(QStringLiteral("keepalive")).isDouble()) m_timer.start();
+        else emit message(value);
     }
 }

@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseDebugRecipe, shellWords } from '../../../src/debug/recipe';
+import { isolatedDebugRecipe, parseDebugRecipe, shellWords, targetSysrootCandidates } from '../../../src/debug/recipe';
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..', '..');
 const captured = (name: string) =>
@@ -30,5 +30,39 @@ describe('sfdk debug --dry-run recipe', () => {
     assert.strictEqual(parseDebugRecipe(''), undefined);
     assert.strictEqual(parseDebugRecipe('Fatal: no device'), undefined);
     assert.strictEqual(parseDebugRecipe("gdbserver --once :1\n/gdb --init-eval-command 'file /x'"), undefined);
+  });
+
+  it('builds an isolated loopback recipe without shared sfdk target inspection', () => {
+    const recipe = isolatedDebugRecipe({
+      sdkRoot: '/opt/Sailfish SDK',
+      sysroot: '/opt/Sailfish SDK/mersdk/targets/SailfishOS-5.1-aarch64.default',
+      localProgram: '/home/user/My App/app',
+      remoteProgram: '/usr/bin/app',
+      port: 10000,
+    });
+    assert.deepStrictEqual(recipe.gdbserver, ['gdbserver', '--multi', '--once', ':10000']);
+    assert.strictEqual(recipe.gdbPath, '/opt/Sailfish SDK/bin/gdb');
+    assert.ok(recipe.initCommands.includes('target extended-remote tcp:127.0.0.1:10000'));
+    assert.ok(recipe.initCommands.includes('set remote exec-file /usr/bin/app'));
+    assert.ok(!recipe.initCommands.some((command) => command.startsWith('set remote exec-file "')));
+    assert.ok(recipe.initCommands.includes('file "/home/user/My App/app"'));
+    assert.strictEqual(recipe.program, '/home/user/My App/app');
+  });
+
+  it('prefers the base default sysroot over accidental nested defaults', () => {
+    assert.deepStrictEqual(
+      targetSysrootCandidates('/sdk', 'SailfishOS-5.1-aarch64.default.default'),
+      [
+        '/sdk/mersdk/targets/SailfishOS-5.1-aarch64.default',
+        '/sdk/mersdk/targets/SailfishOS-5.1-aarch64.default.default',
+      ],
+    );
+    assert.deepStrictEqual(
+      targetSysrootCandidates('/sdk', 'SailfishOS-5.1-aarch64'),
+      [
+        '/sdk/mersdk/targets/SailfishOS-5.1-aarch64.default',
+        '/sdk/mersdk/targets/SailfishOS-5.1-aarch64',
+      ],
+    );
   });
 });

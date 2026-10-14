@@ -31,7 +31,7 @@ class BuildRowItem extends vscode.TreeItem {
   }
 }
 
-/** The "Build" view: the state a build uses (target, device, type, deploy, signing) and the last build's result. */
+/** The "Build" view: the state a build/debug action uses and the last build's result. */
 export class BuildTreeDataProvider implements vscode.TreeDataProvider<BuildRowItem>, vscode.Disposable {
   private readonly emitter = new vscode.EventEmitter<void>();
   readonly onDidChangeTreeData = this.emitter.event;
@@ -49,7 +49,7 @@ export class BuildTreeDataProvider implements vscode.TreeDataProvider<BuildRowIt
         this.syncTicker();
         refresh();
       }),
-      ...(['target', 'device', 'build.type', 'deploy.method', 'build.sign'] as const).map((key) => services.settings.onDidChange(key, refresh)),
+      ...(['target', 'device', 'build.type', 'deploy.method', 'debug.language', 'build.sign'] as const).map((key) => services.settings.onDidChange(key, refresh)),
     ];
   }
 
@@ -96,6 +96,7 @@ export class BuildTreeDataProvider implements vscode.TreeDataProvider<BuildRowIt
       registeredDevices: this.registeredDevices,
       buildType: settings.get('build.type', uri),
       deployMethod: settings.get('deploy.method', uri),
+      debugLanguage: settings.get('debug.language', uri),
       sign: settings.get('build.sign', uri),
       snapshot: buildState.snapshot(),
       now: Date.now(),

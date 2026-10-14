@@ -134,12 +134,13 @@ From left to right:
 |---|---|---|
 | `SailfishOS-5.1.0.11-aarch64` | Build target | Pick a target. Its architecture must match the device: `i486` for the emulator, `aarch64` or `armv7hl` for a phone. |
 | 📱 `Jolla Phone` | Deploy device | Pick the device. Shows ⚠ if the SDK does not know the device, and `(offline)` if it does not answer. |
-| ⚙ `Release` | Build type | Switch between Release and Debug (`sfdk build --enable-debug`, compiled without optimisation). |
+| ⚙ `Build: Release` | Build type | Switch between Release and Debug (`sfdk build --enable-debug`, compiled without optimisation). |
 | ☁ `RPM` | Deploy method | Pick how the app gets onto the device (below). |
 | 🔧 | Build | Build the project. |
 | 📦 `Deploy` | Deploy | Build and install on the device, without starting the app. |
 | ▶ `Run` | Run | Build, install and start the app (**Ctrl+Alt+R**, **Cmd+Alt+R** on macOS). |
-| 🐞 `Debug` | Debug | Build, install and start the app under the debugger (Part 8). |
+| `C++` / `QML/JavaScript` | Debug language | Pick which debugger the adjacent Debug action uses. The choice is remembered per project. |
+| 🐞 `Debug` | Debug | Build, install and start the app under the selected debugger (Part 8). |
 
 To start or debug what is already installed without building again, use
 **Sardina: Run Installed App** or **Sardina: Debug Installed App** from the
@@ -229,11 +230,15 @@ SDK not found**; click it to open the install guide.
    repositories, so **turn on Wi-Fi or mobile data on the phone first** (the
    USB link has no internet). In the **Devices** view, right-click the phone →
    **Install Deploy & Debug Tools on Device**, and enter the developer-mode
-   password when asked. To do it by hand instead, run this in the phone's
+   password when asked. Sardina opens its output channel for the live package
+   log; with device agent 1.12.2 or newer it also shows a loading indicator,
+   a progress bar, dependency/download phases and per-package percentages in
+   the notification. To do it by hand
+   instead, run this in the phone's
    **Terminal** app (`devel-su` needs a real terminal):
 
    ```sh
-   devel-su sh -c 'pkcon refresh && pkcon install rsync sdk-deploy-rpm gdb-gdbserver'
+   devel-su pkcon --plain install -y rsync sdk-deploy-rpm gdb-gdbserver qt5-qtdeclarative-plugin-qmlinspector
    ```
 
    **Check:** the install reports success (by hand: `pkcon` ends with
@@ -254,7 +259,9 @@ open an SSH terminal to a device; you type the password there yourself.
 3. Press 🐞 **Debug**. The first time, accept installing the **C/C++**
    extension (`ms-vscode.cpptools`), which provides the debugger view. If
    `gdbserver` is missing on the device, choose **Install on device** and enter
-   the developer-mode password (the phone needs internet).
+   the developer-mode password (the phone needs internet). If prompted to
+   install or update the Device Agent, accept and enter that password: the
+   current bundled agent's debugger monitor is required before build/launch.
 4. The app starts on the device and stops at your breakpoints. Use the Run and
    Debug view to step and inspect variables and the call stack. The app's
    output is in the terminal "<app> (debug)". Stopping the debug session stops
@@ -294,19 +301,36 @@ debugger, without building or deploying again.
 
 ### QML and JavaScript debugging
 
-Install a current **Qt QML** extension (the extension dependency is
-`theqtcompany.qt-qml`). **Sardina: QML/JavaScript Debug on Device** rebuilds
+Install the **Qt QML** extension (the extension dependency is
+`theqtcompany.qt-qml`). Select **QML/JavaScript** in the status bar, or run
+**Sardina: QML/JavaScript Debug on Device**. Sardina rebuilds
 and deploys a Debug build, starts it with Qt's QML debugger enabled, and
 attaches the Qt QML debugger in VS Code. Use **QML/JavaScript Debug Installed
-App** for an already deployed Debug build. Breakpoints, stepping, variables,
-watches, and expression evaluation work in QML and JavaScript.
+App** for an already deployed Debug build. The current bundled Device Agent
+is required; its read-only debugger monitor verifies that the selected app
+owns the listener before Qt QML attaches. It does not fall back to blind port
+checks on an older agent.
 
 The debug server listens only on `127.0.0.1` on the device and Sardina forwards
 it only to `127.0.0.1` on the computer through the SDK's authenticated SSH
 connection. The default port is 3768; change it with `sardina.qmlDebug.port`
-only when it conflicts with another local service. Qt's QML tooling plugins
-must be present on the device. A Release build cannot be attached because it
-does not include `QT_QML_DEBUG`.
+only when it conflicts with another local service. Sardina checks for the
+device package `qt5-qtdeclarative-plugin-qmlinspector` first. If it is missing,
+choose **Install on device**, enter the device's Developer Mode password, and
+Sardina verifies the QML debug server before continuing. The device needs
+internet access to Jolla's repositories. A Release build cannot be attached
+because it does not include `QT_QML_DEBUG`.
+
+**Qt 5.6 compatibility:** Qt QML 1.16.0 currently needs an opt-in repair of
+its locally installed adapter to keep Sailfish Qt 5.6 breakpoint sessions
+stable. From this source checkout, run
+`node scripts/qt-qml-1.16-qt5-compat.mjs /absolute/path/to/theqtcompany.qt-qml-1.16.0/out/extension.js --skip-scopes`
+and reload VS Code. The script accepts only the verified 1.16.0 bundle, saves
+an original backup and can restore it with `--restore` after the same path.
+In a phone test, breakpoints, stepping, call stack and manual Watch
+expressions worked with this repair; automatic Locals/Scopes are intentionally
+empty. This is a local workaround, not an automatic Sardina or device-agent
+change. See [Troubleshooting](troubleshooting.md) before applying it.
 
 ### Part 9: Sign packages (optional)
 

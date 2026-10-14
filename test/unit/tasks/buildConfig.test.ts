@@ -1,12 +1,15 @@
 import * as assert from 'assert';
 import {
   BUILD_TYPES,
+  DEBUG_LANGUAGES,
   DEPLOY_METHODS,
   buildTypeText,
   cppdbgArchitecture,
   deployInstallsApp,
   deployMethodLabel,
   debugActionText,
+  debugLanguageCommand,
+  debugLanguageText,
   deployMethodText,
   deviceTextWithSessions,
   sessionTooltip,
@@ -30,11 +33,16 @@ describe('buildConfig status bar selectors', () => {
   });
 
   it('renders compact status bar text', () => {
-    assert.strictEqual(buildTypeText('debug'), '$(gear) Debug');
+    assert.strictEqual(buildTypeText('debug'), '$(gear) Build: Debug');
     assert.strictEqual(deployMethodText('sdk'), '$(cloud-upload) RPM');
     assert.strictEqual(deviceText('Jolla Phone 2026'), '$(device-mobile) Jolla Phone 2026');
     assert.strictEqual(deviceText(''), '$(device-mobile) No device');
     assert.deepStrictEqual(BUILD_TYPES.map((b) => b.value), ['release', 'debug']);
+    assert.deepStrictEqual(DEBUG_LANGUAGES.map((language) => language.value), ['cpp', 'qml']);
+    assert.strictEqual(debugLanguageText('cpp'), '$(code) C++');
+    assert.strictEqual(debugLanguageText('qml'), '$(code) QML/JavaScript');
+    assert.strictEqual(debugLanguageCommand('cpp'), 'sardina.debugOnDevice');
+    assert.strictEqual(debugLanguageCommand('qml'), 'sardina.debugQmlOnDevice');
   });
 
   it('only a manual deploy leaves nothing installed to launch', () => {

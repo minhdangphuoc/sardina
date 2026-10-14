@@ -5,14 +5,16 @@ grants permission once, when installing it; after that VS Code can take screensh
 system log, and show and control a live view of the screen, without asking for the developer-mode
 password each time. It only serves while Developer Mode is on.
 
-It is plain Qt, with no Silica. Since 1.11.0 it is one small core and one package per feature,
-all with the same version:
+It is plain Qt, with no Silica. Since 1.11.0 it is one small core and one package per optional
+feature, all with the same version:
 
 - `sailfish-devagent` (core) is the systemd service (`--daemon`, links only QtCore, QtDBus and
   QtNetwork) and the client (`--request <cmd>`, which connects to the daemon's socket, sends the
   request and copies the reply to stdout; the extension runs it through `sfdk device exec`). It owns
   the socket, the Developer Mode and phone-switch checks, the settings, the notifications and the
-  Settings page.
+  Settings page. Since 1.12.0 the core also contains a short-lived `packages` helper that observes
+  PackageKit progress for Sardina's fixed deploy/debug tool list; it cannot install or remove
+  packages.
 - Five module packages, each one executable in `/usr/libexec/sailfish-devagent/` that the core
   starts for one request or stream and that ends with it: `-logs`, `-stats`, `-screenshot`,
   `-mirror` (QtGui, Wayland, libvpx) and `-input` (requires `-mirror`). Nothing of a module is
@@ -20,7 +22,7 @@ all with the same version:
 
 | Folder | Package | Aarch64 RPM |
 |---|---|---|
-| `core/` (with `common/`) | `sailfish-devagent` | 98 KB |
+| `core/`, `packages/`, `debugmonitor/` (with `common/`) | `sailfish-devagent` | 149 KB |
 | `logs/` | `sailfish-devagent-logs` | 38 KB |
 | `stats/` | `sailfish-devagent-stats` | 42 KB |
 | `screenshot/` | `sailfish-devagent-screenshot` | 37 KB |
@@ -28,6 +30,9 @@ all with the same version:
 | `input/` | `sailfish-devagent-input` | 60 KB |
 
 `rpm -e sailfish-devagent` with modules installed is refused by rpm; erase them in one transaction.
+
+Agent 1.13.3 is bundled with Sardina v0.1.14. The core also includes the read-only Debugger Monitoring
+Agent, which verifies the selected app or gdbserver's debugger listener before attach.
 
 ## Building the RPMs
 
@@ -88,8 +93,9 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   container's AppArmor profile, and on hosts whose AppArmor confines `unix_chkpwd` (Ubuntu 24.04
   and later) every `sudo` inside the container then fails, so mb2 cannot install the build
   dependencies. `SAILFISH_DOCKER_RUN_ARGS` adds extra `docker run` arguments.
-- The result matches the sfdk build: same version and release (1.10.8-1), file list, owners and
-  modes, requirements, provides and scriptlets (checked for i486 on 2026-10-07).
+- Docker and sfdk build outputs were compared for agent 1.10.8-1 on i486 on 2026-10-07: version,
+  release, file list, owners, modes, requirements, provides and scriptlets matched. Repeat the
+  comparison for newer versions when release equivalence matters.
 - Without Docker the script stops with an installation hint. Plain `device-agent/build.sh` (or
   `--sdk`) is unchanged and still uses sfdk and the SDK build engine.
 
@@ -132,7 +138,10 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
   entry left by a daemon that did not stop cleanly.
 - On every request, valid stream keepalive and input activation it checks that Developer Mode is on
   (`jolla-developer-mode` installed, `/usr/bin/devel-su` present). A failed renewal ends the stream.
-- Accepts a fixed set of commands with validated arguments. Nothing is passed to a shell.
+- Accepts a fixed set of commands with validated arguments. Nothing is passed to a shell. The
+  1.12.0 PackageKit observer accepts only `rsync`, `sdk-deploy-rpm`, `gdb-gdbserver` and
+  `qt5-qtdeclarative-plugin-qmlinspector`; it reads transaction signals and verifies those RPMs
+  with fixed `rpm -q` arguments, but has no method that starts or authorizes an installation.
 - Removable: `rpm -e sailfish-devagent` (or **Uninstall Device Agent** in VS Code) leaves nothing
   behind. On erase (not on an upgrade, which keeps the settings) `%preun` stops and disables the
   service, whose SIGTERM handler closes its notifications and removes the socket directory and any
@@ -153,7 +162,7 @@ architecture (all three in about 2 minutes on a ThinkPad T14s).
 
 ## Protocol
 
-One request per connection: one JSON line in, then the reply. Current version: **1.11.3**. 1.11.0
+One request per connection: one JSON line in, then the reply. Current version: **1.13.3**. 1.11.0
 splits the agent into modules: `ping` adds `"modules":["logs",…]` (the installed ones), the capability
 fields below appear only with the module that serves them (`logFormats` with logs, `stats` with stats,
 `mirrorEncodings` with mirror, `mirrorInput` and `keypad` with input), and a request for a missing
@@ -169,7 +178,7 @@ Developer Mode goes off; 1.10.3 reports a hardware keypad in `ping` and accepts 
 `touchIndicatorPath` to the phone-settings message and the `contact` record (below); 1.10.5 adds the
 mirror request field `idle` and a faster return to the full pace after an idle screen; 1.10.7 allows VP8 up
 to 60 fps under the phone's `maxFps` setting, double-buffers the capture and adds per-frame stage times;
-1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change); 1.11.1 and 1.11.2 change how the phone's touch indicator is shown, 1.11.2 cleans up after a removed module, and 1.11.3 updates licensing notices (no protocol change). All additions are
+1.10.8 encodes with more threads, converts faster and paces by the capture cycle too (no protocol change); 1.11.1 and 1.11.2 change how the phone's touch indicator is shown, 1.11.2 cleans up after a removed module, 1.11.3 updates licensing notices (no protocol change), 1.12.0 adds the allow-listed read-only PackageKit observer, 1.12.1 fixes its installed-RPM verification path, and 1.12.2 fixes the live transaction signal type. All additions are
 capability-gated; older extensions continue to use the older view-only requests.
 
 | Request | Reply |
@@ -178,6 +187,8 @@ capability-gated; older extensions continue to use the older view-only requests.
 | `{"cmd":"screenshot"}` | `{"ok":true,"path":"/run/user/100000/sailfish-devagent/shot-<ts>.png"}` |
 | `{"cmd":"logs","lines":100}` | Raw `journalctl` lines (`short-precise`), streamed until the client disconnects. Optional (1.10.0): `"format":"json"` streams `journalctl -o json` (one object per line, `__CURSOR` included) with a fixed `--output-fields` list when the installed `journalctl` accepts it (probed once at daemon start); `"after":"<cursor>"` resumes after that cursor (`--after-cursor`, else the last `lines`) and is ignored unless it matches `^[A-Za-z0-9;=:._-]{1,512}$`. Any other `format` is text. A phone-side stop ends the stream with `{"ok":false,"error":…}`. Reserved for later: `"filter":{"priority":0..7,"identifiers":[…],"pids":[…]}`. |
 | `{"cmd":"stats","exe":"/usr/bin/harbour-demo","interval":1000}` | 1.10.0. Streamed: first `{"ok":true,"stream":"stats","interval":1000}`, then per interval `{"ts":…,"pid":4321,"state":"S","cpu":12.4,"rssKb":48216,"threads":9,"started":…,"sys":{"cpu":31.0,"load1":0.82,"memAvailableKb":812000}}` (`pid` 0 and no process fields when the app is not running; `cpu` is percent of one core and absent on the first sample of a pid), and `{"event":"start"|"exit","pid":…,"ts":…}` at pid transitions. The process is the lowest pid whose first command line argument equals `exe` (fallback: `comm` equals the base name cut to 15 characters). `exe` must match `^/[A-Za-z0-9._+/-]{1,255}$` without `..` (else `{"ok":false,"error":"invalid exe"}`); `interval` is clamped to 250..10000 ms (default 1000). Gated by Developer Mode only (reads `/proc`, no phone setting, no indicator); counted as `monitorStreams` in the Settings service status. |
+| `{"cmd":"packages","packages":["gdb-gdbserver",…]}` | 1.12.0. Read-only stream used while the extension runs its existing privileged installer. After `{"ok":true,"stream":"packages","event":"ready"}`, reports a newly created PackageKit transaction's status, package, percentage, error and finish events. After 60 seconds without activity it emits `{"event":"stalled","seconds":60,"installed":[…],"missing":[…]}` from fixed `rpm -q` checks. Package names must be in the four-name allow-list above; this request cannot create or authorize a PackageKit transaction. Current source gives this stream a bounded 10–60 s renewable client lease. |
+| `{"cmd":"debugmonitor","mode":"qml","exe":"/usr/bin/APP","port":3768,"lease":30}` | 1.13.2. **Debugger Monitoring Agent**, also supports `mode:"cpp"` for gdbserver. Watches the requested app's PID, QML argument and debugger socket ownership through `/proc`; emits state changes only. Its SSH-side client checks the app's file-descriptor links under the app's group and reports the exact socket inode. The daemon accepts the report only while that PID and inode are current, and expires it after 1.5 seconds. It never launches/kills an app or opens a debug connection. Uses the private socket, Developer Mode gate and mandatory 10–60 s keepalive lease. Installed in the core RPM, not an optional feature module. |
 | `{"cmd":"mirror","fps":4,"width":360,"quality":60}` | Streamed events (below). Optional fields: `"encoding":"binary"|"vp8"`, `"lease":<seconds>`, `"adapt":true`, `"bitrate":<kbit/s>`, `"input":true`. JPEG fps is 1..10; VP8 fps is 1..30, since 1.10.7 1..60 capped by the phone's `maxFps` setting (30 or 60, default 30). `width` is 0 (native) or 90..2160 and `quality` is 1..100. Values are clamped and the status echoes what is in effect. |
 | anything else | `{"ok":false,"error":"unknown command"}` |
 
@@ -366,11 +377,14 @@ components, so the agent stages the file in `~/sailfish-devagent/` and moves it 
 folder (`/run/user/<uid>/sailfish-devagent/shot-<ms>.png`, the path in the reply). The extension fetches it with
 `sfdk device exec -- base64 <path>` over a connection without a terminal, then deletes it.
 
-## What is not verified yet
+## Verification still needed
 
-- Agent 1.10.0 `logs` JSON output and `stats` run only against fixtures and the unit tests
-  (`make -C device-agent/tools test`); nothing has run on the emulator or a phone.
-- `journalctl --output-fields` is probed at daemon start; whether the systemd of Sailfish OS 5.1
-  accepts it is not confirmed.
-- The `stats` process match (first command line argument equal to `exe`, `comm` fallback) is not
-  checked for apps started through `invoker` on a device.
+- The 1.13.2 debugger monitor verified a live QML app's owned listener on a phone and the Qt QML
+  adapter reached breakpoints, stepping, call stack and manual Watch with the explicit local
+  Qt 5 compatibility repair. Automatic Locals are unavailable with `--skip-scopes`; complete
+  QML debug behavior without that repair remains unverified.
+- The 1.13.3 package-observer lease and the full C++ debugger path have not been rechecked in a
+  live session since the latest source changes. Run the repository checks and three-architecture
+  build before release; this README alone is not a test report.
+- Whether Sailfish OS 5.1's `journalctl` accepts `--output-fields`, and the `stats` process match
+  for apps launched through `invoker`, remain unconfirmed here.

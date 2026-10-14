@@ -3,6 +3,8 @@
 #include "paths.h"
 
 #include <QCoreApplication>
+#include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocalSocket>
@@ -10,6 +12,7 @@
 #include <QTimer>
 #include <cstdio>
 #include <cstring>
+#include <dirent.h>
 #include <unistd.h>
 
 namespace {
@@ -47,6 +50,37 @@ bool writeOut(const QByteArray &data)
     return fflush(stdout) == 0;
 }
 
+// This CLI runs under the authenticated SSH login's primary group, unlike the daemon's
+// privileged primary group. procfs permits it to read the app's fd links and attest the
+// exact listener inode without changing the daemon's screenshot credentials.
+QByteArray ownedInode(int pid, const QList<QByteArray> &inodes)
+{
+    if (pid <= 0 || inodes.isEmpty()) return QByteArray();
+    const QByteArray folder = QByteArrayLiteral("/proc/") + QByteArray::number(pid) + QByteArrayLiteral("/fd");
+    DIR *dir = opendir(folder.constData());
+    if (!dir) return QByteArray();
+    QByteArray match;
+    for (struct dirent *entry = readdir(dir); entry; entry = readdir(dir)) {
+        const char *fd = entry->d_name;
+        if (!*fd) continue;
+        bool numeric = true;
+        for (const char *digit = fd; *digit; ++digit) {
+            if (*digit < '0' || *digit > '9') { numeric = false; break; }
+        }
+        if (!numeric) continue;
+        const QByteArray name = folder + '/' + fd;
+        char target[256];
+        const ssize_t length = readlink(name.constData(), target, sizeof target);
+        if (length <= 0) continue;
+        const QByteArray link(target, static_cast<int>(length));
+        if (!link.startsWith("socket:[") || !link.endsWith(']')) continue;
+        const QByteArray inode = link.mid(8, link.size() - 9);
+        if (inodes.contains(inode)) { match = inode; break; }
+    }
+    closedir(dir);
+    return match;
+}
+
 }
 
 int Client::run(const QStringList &args)
@@ -56,7 +90,8 @@ int Client::run(const QStringList &args)
     }
     const QString cmd = args.at(0);
     if (cmd != QLatin1String("ping") && cmd != QLatin1String("screenshot") && cmd != QLatin1String("logs")
-        && cmd != QLatin1String("mirror") && cmd != QLatin1String("stats")) {
+        && cmd != QLatin1String("mirror") && cmd != QLatin1String("stats") && cmd != QLatin1String("packages")
+        && cmd != QLatin1String("debugmonitor")) {
         fprintf(stderr, "sailfish-devagent: unknown request \"%s\"\n", qPrintable(cmd));
         return 2;
     }
@@ -93,8 +128,21 @@ int Client::run(const QStringList &args)
             i += 2;
             continue;
         }
-        if (cmd == QLatin1String("stats") && opt == QLatin1String("--exe")) {
+        if ((cmd == QLatin1String("stats") || cmd == QLatin1String("debugmonitor")) && opt == QLatin1String("--exe")) {
             request.insert(QStringLiteral("exe"), args.at(i + 1).left(1024));
+            i += 2;
+            continue;
+        }
+        if (cmd == QLatin1String("debugmonitor") && opt == QLatin1String("--mode")) {
+            request.insert(QStringLiteral("mode"), args.at(i + 1));
+            i += 2;
+            continue;
+        }
+        if (cmd == QLatin1String("debugmonitor") && opt == QLatin1String("--port")) {
+            bool valid = false;
+            const int port = args.at(i + 1).toInt(&valid);
+            if (!valid || port < 1024 || port > 65535) return 2;
+            request.insert(QStringLiteral("port"), port);
             i += 2;
             continue;
         }
@@ -105,6 +153,13 @@ int Client::run(const QStringList &args)
                 return 2;
             }
             request.insert(QStringLiteral("interval"), qBound(250, value, 10000));
+            i += 2;
+            continue;
+        }
+        if (cmd == QLatin1String("packages") && opt == QLatin1String("--package")) {
+            QJsonArray packages = request.value(QStringLiteral("packages")).toArray();
+            packages.append(args.at(i + 1).left(128));
+            request.insert(QStringLiteral("packages"), packages);
             i += 2;
             continue;
         }
@@ -132,7 +187,8 @@ int Client::run(const QStringList &args)
         i += 2;
     }
 
-    const bool leased = cmd == QLatin1String("logs") || cmd == QLatin1String("stats");
+    const bool leased = cmd == QLatin1String("logs") || cmd == QLatin1String("stats") || cmd == QLatin1String("packages")
+        || cmd == QLatin1String("debugmonitor");
     if (leased) {
         request.insert(QStringLiteral("lease"), STREAM_LEASE_S);
     }
@@ -147,9 +203,25 @@ int Client::run(const QStringList &args)
     socket.flush();
 
     int exitCode = 0;
-    const bool streaming = cmd == QLatin1String("logs") || cmd == QLatin1String("mirror") || cmd == QLatin1String("stats");
+    const bool streaming = cmd == QLatin1String("logs") || cmd == QLatin1String("mirror") || cmd == QLatin1String("stats")
+        || cmd == QLatin1String("packages") || cmd == QLatin1String("debugmonitor");
     FirstLine firstLine;
     bool judged = false;
+    QByteArray pendingEvents;
+    int debugCandidatePid = 0;
+    QList<QByteArray> debugInodes;
+    QTimer verifyTimer;
+    if (cmd == QLatin1String("debugmonitor")) {
+        QObject::connect(&verifyTimer, &QTimer::timeout, &socket, [&]() {
+            const QByteArray inode = ownedInode(debugCandidatePid, debugInodes);
+            if (inode.isEmpty()) return;
+            const QJsonObject proof{ { QStringLiteral("event"), QStringLiteral("socket-owner") },
+                { QStringLiteral("pid"), debugCandidatePid }, { QStringLiteral("inode"), QString::fromLatin1(inode) } };
+            socket.write(QJsonDocument(proof).toJson(QJsonDocument::Compact) + '\n');
+            socket.flush();
+        });
+        verifyTimer.start(500);
+    }
     // Only the first line is the status. A log stream starts with journal text instead; only a
     // refusal ("logs disabled on the phone", Developer Mode off) is a JSON object with "ok":false.
     const auto judgeFirstLine = [&]() {
@@ -169,6 +241,30 @@ int Client::run(const QStringList &args)
         const QByteArray data = socket.readAll();
         if (!judged && firstLine.feed(data.constData(), static_cast<size_t>(data.size()))) {
             judgeFirstLine();
+        }
+        if (cmd == QLatin1String("debugmonitor")) {
+            pendingEvents += data;
+            if (pendingEvents.size() > 8192) pendingEvents.clear();
+            int newline = pendingEvents.indexOf('\n');
+            while (newline >= 0) {
+                const QJsonDocument event = QJsonDocument::fromJson(pendingEvents.left(newline));
+                pendingEvents.remove(0, newline + 1);
+                if (event.isObject() && event.object().value(QStringLiteral("event")) == QLatin1String("status")) {
+                    const QJsonObject status = event.object();
+                    const bool qml = request.value(QStringLiteral("mode")) == QLatin1String("qml");
+                    debugCandidatePid = status.value(qml ? QStringLiteral("pid") : QStringLiteral("serverPid")).toInt();
+                    debugInodes.clear();
+                    const QJsonArray values = status.value(QStringLiteral("listenerInodes")).toArray();
+                    for (const QJsonValue &value : values) {
+                        const QByteArray inode = value.toString().toLatin1();
+                        if (inode.isEmpty() || inode.size() > 20 || debugInodes.size() >= 32) continue;
+                        bool numeric = true;
+                        for (const char digit : inode) if (digit < '0' || digit > '9') numeric = false;
+                        if (numeric) debugInodes.append(inode);
+                    }
+                }
+                newline = pendingEvents.indexOf('\n');
+            }
         }
         if (!writeOut(data)) {
             // stdout is gone (ssh closed): drop the connection so the daemon stops streaming.

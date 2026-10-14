@@ -21,7 +21,8 @@ flowchart LR
   DEV["Phone or emulator<br/>Sailfish OS"]
   subgraph ONDEV["On the device"]
     AG["sailfish-devagent core<br/>systemd service"]
-    MOD["Module processes, one per stream:<br/>logs, stats, screenshot, mirror, input"]
+    MOD["Optional module processes:<br/>logs, stats, screenshot, mirror, input"]
+    HELP["Core read-only helpers:<br/>packages, debugmonitor"]
     SOCK["Unix socket agent.sock"]
     DBUS["D-Bus settings service<br/>on the session bus"]
     SET["Settings page<br/>Settings, System, Developer agent"]
@@ -37,6 +38,7 @@ flowchart LR
   DEV --- AG
   AG --- SOCK
   AG -->|"starts, after the checks"| MOD
+  AG -->|"starts, after the checks"| HELP
   EXT -->|"ssh -L unix socket"| SOCK
   CLI -->|"sailfish-devagent --request"| SOCK
   AG --- DBUS
@@ -54,6 +56,8 @@ flowchart LR
 - On the device the agent is one small core plus one package per feature (a
   module). The core owns the socket, the checks and the Settings page; a module
   runs as its own short-lived process, only while its request or stream runs.
+  The PackageKit observer and debugger monitor are read-only core helpers,
+  not separately selected RPM modules; their streams are lease-bounded.
 - The agent is reached two ways: one-shot requests run
   `sfdk device exec -- sailfish-devagent --request <cmd>`; the mirror uses a
   direct `ssh -N -L` forward to the agent's Unix socket. The phone's Settings
@@ -71,6 +75,7 @@ sequenceDiagram
   participant LOG as Sardina Build channel
   participant SF as sfdk
   participant DEV as Device
+  participant MON as Debugger Monitoring Agent
   participant DBG as cppdbg, C/C++ extension
   U->>UI: Build, Run or Debug
   UI->>BD: start under a progress notification
@@ -83,8 +88,10 @@ sequenceDiagram
   BD->>ST: end succeeded or failed
   ST-->>UI: Last build row and Stop button
   Note over BD,DBG: Debug only, after the deploy
+  BD->>MON: observe selected app and debugger process
   BD->>SF: sfdk device exec gdbserver --multi --once
   SF->>DEV: gdbserver listens on a port
+  MON-->>BD: verified process-owned listener
   BD->>DBG: startDebugging with type cppdbg
   DBG->>DEV: target extended-remote tcp device port
   DBG-->>U: breakpoints, stepping, variables
@@ -102,7 +109,12 @@ sequenceDiagram
   notification's Cancel button.
 - `tasks/buildLog.ts` streams the engine start, `sfdk build` and `sfdk deploy`
   into the **Sardina Build** channel.
-- `debug/` builds the debug configuration from `sfdk`'s own gdbserver recipe.
+- `debug/` builds the debug configuration from `sfdk`'s own gdbserver recipe,
+  or an isolated recipe using the intact base sysroot when that dry run is
+  unusable. Both C++ and QML/JavaScript debugging require the bundled device
+  agent's process/listener monitor before launching; the extension offers an
+  explicit agent install or update instead of using older port checks. QML
+  debugging uses a device-local loopback listener and a local SSH tunnel.
   **Restart** (Ctrl+Shift+F5) starts gdbserver again without building (see
   `debug/debugSessionCore.ts`); Stop cleans up and ends the sessions.
 - **Clean Project Build** (`tasks/cleanProject.ts`) deletes generated files on
@@ -203,7 +215,7 @@ flowchart LR
 | Folder | What it owns |
 |---|---|
 | `src/extension.ts` | Activation: creates the services and activates every module in a fixed order. |
-| `src/core/` | `services.ts` (the container), `output.ts` (the **Sailfish OS** channel), `contextKeys.ts`, `deviceSessions.ts` (what runs on which device), external tool checks. |
+| `src/core/` | `services.ts` (the container), `output.ts` (the **Sardina** channel), `contextKeys.ts`, `deviceSessions.ts` (what runs on which device), external tool checks. |
 | `src/settings/` | The `sardina.*` settings, their defaults and change dispatch. |
 | `src/sfdk/` | Finding the SDK, running `sfdk` (`runner.ts`), parsing its output, **Download SDK**. |
 | `src/project/` | Detecting Sailfish OS projects and reading the `.spec` file. |
@@ -211,6 +223,7 @@ flowchart LR
 | `src/tasks/` | Build, deploy, run, package and clean tasks, the build and run commands, signing, argument building, path mapping, the build log, the build and device status bar items. |
 | `src/build/` | The **Build** view and the shared build state. |
 | `src/debug/` | Debug on Device: gdbserver recipe, `cppdbg` configuration, Restart handling. |
+| `src/qmldebug/` | QML/JavaScript debug launch, verified listener readiness and Qt QML adapter configuration. |
 | `src/devices/` | The **Devices** view, Add Device, `devices.xml`, key push, reachability, SSH launch, clean-up on device change. |
 | `src/agent/` | Installing and talking to the device agent; the mirror (`mirror*.ts`, `sshForward*.ts`). |
 | `src/monitor/` | The Device Monitor: panel, sources, models and `webview/` page code. |
@@ -229,9 +242,9 @@ unit tests run them without a VS Code window.
 | `screenshot/` | `-screenshot` (37 KB) | One screenshot through Lipstick. |
 | `mirror/` | `-mirror` (101 KB) | The mirror stream: Lipstick recorder, VP8 and JPEG encoding, frame pacing. The only module that loads QtGui, Wayland and libvpx. |
 | `input/` | `-input` (60 KB) | Tap, swipe and key injection and the touch indicator; needs `-mirror`. |
+| `packages/`, `debugmonitor/` | core | Read-only PackageKit transaction events and verified debugger process/listener state; both streams have keepalive leases. |
 | `settings/DeveloperAgentPage.qml` | core | The **Developer agent** page in Settings, System. |
 | `sailfish-devagent.service`, `rpm/`, `sailfish-devagent.pro` | | The systemd unit, the one RPM spec for all six packages, the qmake project. |
 | `build.sh` | | Builds the six RPMs for `aarch64`, `armv7hl` and `i486` and copies them to `media/agent/`. |
 
 RPM sizes are for `aarch64`.
-

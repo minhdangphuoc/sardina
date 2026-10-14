@@ -12,8 +12,8 @@ it fits beside the editor.
    Opening a second time shows the tab that is already open.
 2. **What it shows.**
    - **Connection:** a dot with **Connected** or **Offline**, then
-     `Wi-Fi · aarch64 · OS 5.1.0.11 · agent 1.10.0` (connection, architecture,
-     OS version, agent version).
+     for example `Wi-Fi · aarch64 · OS 5.1.0.11 · agent 1.13.3`
+     (connection, architecture, OS version, installed agent version).
    - **App:** the launched app's name, process id and mode, CPU and memory with
      a small line graph each, and `up m:ss · restarts N · crashes N`, live
      while it runs. With agent 1.10.0 it updates every second; without it,
@@ -32,4 +32,3 @@ it fits beside the editor.
    System → Developer agent, Show logs says so. Changing the selected device
    stops the monitor's stats stream and the log stream; the tab stays open and
    offers **Resume**. An unreachable device shows **Offline** with **Retry**.
-

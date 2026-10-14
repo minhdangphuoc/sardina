@@ -5,11 +5,11 @@
 #include <QString>
 #include <QStringList>
 
-// The feature modules: the request each serves and the phone switch that gates it. A module is
-// installed when its executable is present; that is checked on every request, so an install or
-// removal shows at once.
+// The optional feature modules, plus core-bundled request helpers: the request each serves and the
+// phone switch that gates it. A helper is available when its executable is present; that is checked
+// on every request, so an install or removal shows at once.
 struct ModuleSpec {
-    const char *name;    // also the package suffix: sailfish-devagent-<name>
+    const char *name;    // executable suffix; also the package suffix for optional feature modules
     const char *command; // the request's "cmd", or nullptr (input: used by the mirror only)
     const char *gate;    // the Settings key that must be on, or nullptr
 };

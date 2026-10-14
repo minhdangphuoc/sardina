@@ -23,7 +23,7 @@ E: non-standard-dir-perm /var/lib/sailfish-devagent 770
 E: use-tmp-in-%postun
 W: dangerous-command-in-%post rm
 W: dangerous-command-in-%postun rm
-W: invalid-license GPL-3.0-or-later
+W: invalid-license LGPL-3.0-or-later
 W: non-standard-gid /var/lib/sailfish-devagent privileged
 W: non-standard-gid /var/lib/sailfish-devagent/settings.json privileged
 W: non-standard-uid /var/lib/sailfish-devagent/settings.json defaultuser
@@ -31,11 +31,15 @@ W: position-independent-executable-suggested /usr/bin/sailfish-devagent
 W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-input
 W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-logs
 W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-mirror
+W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-packages
+W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-debugmonitor
 W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-screenshot
 W: position-independent-executable-suggested /usr/libexec/sailfish-devagent/sailfish-devagent-stats
 W: unstripped-binary-or-object /usr/bin/sailfish-devagent
 W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-input
 W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-logs
 W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-mirror
+W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-packages
+W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-debugmonitor
 W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-screenshot
 W: unstripped-binary-or-object /usr/libexec/sailfish-devagent/sailfish-devagent-stats

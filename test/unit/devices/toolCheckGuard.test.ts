@@ -9,11 +9,12 @@ import {
   offlineMessage,
   rootShellAbortMessage,
   rootShellProgressMessage,
+  rootShellScript,
   type ToolCheckRun,
 } from '../../../src/devices/devicePackagesCore';
 
-const ALL_OK = 'sfdev-tool:rsync:ok\nsfdev-tool:sdk-deploy-rpm:ok\nsfdev-tool:gdbserver:ok\n';
-const GDB_MISSING = 'sfdev-tool:rsync:ok\nsfdev-tool:sdk-deploy-rpm:ok\nsfdev-tool:gdbserver:missing\n';
+const ALL_OK = 'sfdev-tool:rsync:ok\nsfdev-tool:sdk-deploy-rpm:ok\nsfdev-tool:gdbserver:ok\nsfdev-tool:qml-debug-server:ok\n';
+const GDB_MISSING = 'sfdev-tool:rsync:ok\nsfdev-tool:sdk-deploy-rpm:ok\nsfdev-tool:gdbserver:missing\nsfdev-tool:qml-debug-server:ok\n';
 
 function run(over: Partial<ToolCheckRun>): ToolCheckRun {
   return { exitCode: 0, stdout: '', stderr: '', timedOut: false, cancelled: false, ...over };
@@ -96,6 +97,15 @@ describe('root shell watch', () => {
     assert.strictEqual(w.check(60_000), undefined);
   });
 
+  it('counts a newline-free terminal redraw as activity', () => {
+    const w = new RootShellWatch(limits, 0);
+    w.onOutput('Password:', 1000);
+    w.onActivity(179_000);
+    assert.strictEqual(w.phase, 'running');
+    assert.strictEqual(w.check(180_000), undefined);
+    assert.strictEqual(w.check(359_000), 'stalled');
+  });
+
   it('stops on a second password prompt (refused password)', () => {
     const w = new RootShellWatch(limits, 0);
     w.onOutput('Password:', 1000);
@@ -132,6 +142,14 @@ describe('root shell watch', () => {
 });
 
 describe('root shell messages', () => {
+  it('gives the remote process group a deadline independent of the extension host', () => {
+    const script = rootShellScript('pkcon install -y x', 10_001);
+    assert.match(script, /sleep 11/);
+    assert.match(script, /kill -INT -"\$sardina_parent"/);
+    assert.match(script, /trap .* EXIT/);
+    assert.match(script, /pkcon install -y x/);
+  });
+
   it('says what it waits for, phase by phase', () => {
     assert.strictEqual(rootShellProgressMessage('Flip WLAN', 'connecting', 'installing rsync…'), 'connecting to "Flip WLAN"…');
     assert.strictEqual(rootShellProgressMessage('Flip WLAN', 'password', 'installing rsync…'), 'checking the developer-mode password…');

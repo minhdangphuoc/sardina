@@ -2,14 +2,15 @@
 #define KEEPALIVELEASE_H
 
 #include <QObject>
+#include <QJsonObject>
 #include <QTimer>
 
 #include "linebuffer.h"
 
 class QLocalSocket;
 
-// The opt-in lease of a log or stats stream: every {"keepalive":...} line from the client renews
-// it; expired() fires once it ran out. Other lines are ignored, lines over 256 bytes dropped.
+// The opt-in stream lease: {"keepalive":...} renews it; other bounded JSON objects may be
+// consumed by a module (the debugger's socket-owner confirmation). Oversize lines are dropped.
 class KeepaliveLease : public QObject
 {
     Q_OBJECT
@@ -18,6 +19,7 @@ public:
 
 signals:
     void expired();
+    void message(const QJsonObject &value);
 
 private slots:
     void onReadable();

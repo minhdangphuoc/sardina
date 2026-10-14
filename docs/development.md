@@ -23,6 +23,15 @@ The device agent is a separate Qt program in `device-agent/`.
 SDK and copies them to `media/agent/`; see
 [`device-agent/README.md`](../device-agent/README.md) for its build needs and
 protocol.
+`sh device-agent/build.sh --docker --no-install` verifies the three-arch agent
+build without replacing the bundled RPMs.
+
+The opt-in `scripts/qt-qml-1.16-qt5-compat.mjs` repairs only a verified local
+Qt QML 1.16.0 adapter bundle for Sailfish Qt 5.6 debugger frames. It is not
+part of the VSIX and never changes phone packages. Its focused tests are in
+`scripts/qt-qml-1.16-qt5-compat.test.mjs`; pass an original adapter bundle as
+`QT_QML_BUNDLE_FOR_TEST` when running them. The `--skip-scopes` mode intentionally
+leaves automatic Locals empty while keeping manual Watch available.
 
 `make -C device-agent/tools emulator-test` is an opt-in end-to-end test on the
 SDK emulator (VirtualBox VM `SailfishOS-5.1.0.11`, or `VM=<name>`; `HEADLESS=1`
@@ -36,4 +45,3 @@ needs Docker (to build two small helpers), `npm ci` and the SDK's SSH key in
 
 See [`CONVENTIONS.md`](../CONVENTIONS.md) for the module layout, stub APIs, and how tests stub UI
 prompts and use the fake `sfdk` binary.
-

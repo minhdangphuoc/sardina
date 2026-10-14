@@ -12,6 +12,8 @@
  *   	--init-eval-command 'file /home/u/proj/app' …
  */
 
+import * as path from 'node:path';
+
 export interface DebugRecipe {
   /** argv to run on the device, e.g. ['gdbserver', '--multi', '--once', ':10000']. */
   gdbserver: string[];
@@ -21,6 +23,49 @@ export interface DebugRecipe {
   initCommands: string[];
   /** The local binary from `file <path>`, which carries the debug symbols. */
   program: string | undefined;
+}
+
+export interface IsolatedDebugRecipeOptions {
+  sdkRoot: string;
+  sysroot: string;
+  localProgram: string;
+  remoteProgram: string;
+  port: number;
+}
+
+/**
+ * The SDK normally prints this recipe itself. When its shared target hierarchy is malformed by
+ * another build, `sfdk debug --dry-run` refuses to do that even though the selected target's
+ * sysroot is intact. This equivalent recipe uses Sardina's private loopback SSH tunnel instead of
+ * the device's externally reachable address, so debugger preparation no longer has to repair or
+ * mutate shared SDK state.
+ */
+export function isolatedDebugRecipe(options: IsolatedDebugRecipeOptions): DebugRecipe {
+  const quote = (value: string): string => `"${value.replace(/(["\\])/g, '\\$1')}"`;
+  return {
+    gdbserver: ['gdbserver', '--multi', '--once', `:${options.port}`],
+    gdbPath: path.join(options.sdkRoot, 'bin', process.platform === 'win32' ? 'gdb.exe' : 'gdb'),
+    initCommands: [
+      `set sysroot ${quote(options.sysroot)}`,
+      `set substitute-path /usr/src ${quote(path.join(options.sysroot, 'usr', 'src'))}`,
+      `target extended-remote tcp:127.0.0.1:${options.port}`,
+      // Unlike `file`, GDB's remote exec-file setting keeps quote characters literally.
+      `set remote exec-file ${options.remoteProgram}`,
+      `file ${quote(options.localProgram)}`,
+      'set args',
+    ],
+    program: options.localProgram,
+  };
+}
+
+/** Candidate sysroots in preference order, normalizing accidental `.default.default` nesting. */
+export function targetSysrootCandidates(sdkRoot: string, target: string): string[] {
+  const root = path.join(sdkRoot, 'mersdk', 'targets');
+  const normalized = target.replace(/(?:\.default)+$/, '');
+  const names = normalized === target
+    ? [`${target}.default`, target]
+    : [`${normalized}.default`, target];
+  return [...new Set(names)].map((name) => path.join(root, name));
 }
 
 /** POSIX-shell word splitting for sfdk's printed command lines: '…', "…", \x and line continuations. */

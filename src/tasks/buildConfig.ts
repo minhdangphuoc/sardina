@@ -8,6 +8,7 @@ import { DEBUG_GLOBAL_CFLAGS } from './argv';
 
 export type BuildType = 'release' | 'debug';
 export type DeployMethod = 'sdk' | 'pkcon' | 'rsync' | 'zypper' | 'zypper-dup' | 'manual';
+export type DebugLanguage = 'cpp' | 'qml';
 
 export interface Choice<T extends string> {
   value: T;
@@ -18,6 +19,11 @@ export interface Choice<T extends string> {
 export const BUILD_TYPES: ReadonlyArray<Choice<BuildType>> = [
   { value: 'release', label: 'Release', description: 'sfdk build' },
   { value: 'debug', label: 'Debug', description: 'sfdk build --enable-debug · unoptimised (-O0)' },
+];
+
+export const DEBUG_LANGUAGES: ReadonlyArray<Choice<DebugLanguage>> = [
+  { value: 'cpp', label: 'C++', description: 'GDB and native breakpoints' },
+  { value: 'qml', label: 'QML/JavaScript', description: 'QML and JavaScript breakpoints' },
 ];
 
 export const DEPLOY_METHODS: ReadonlyArray<Choice<DeployMethod>> = [
@@ -40,7 +46,16 @@ const DEPLOY_SHORT: Record<DeployMethod, string> = {
 };
 
 export function buildTypeText(type: BuildType): string {
-  return `$(gear) ${BUILD_TYPES.find((c) => c.value === type)?.label ?? type}`;
+  return `$(gear) Build: ${BUILD_TYPES.find((c) => c.value === type)?.label ?? type}`;
+}
+
+export function debugLanguageText(language: DebugLanguage): string {
+  const label = DEBUG_LANGUAGES.find((choice) => choice.value === language)?.label ?? language;
+  return `$(code) ${label}`;
+}
+
+export function debugLanguageCommand(language: DebugLanguage): string {
+  return language === 'qml' ? 'sardina.debugQmlOnDevice' : 'sardina.debugOnDevice';
 }
 
 export function deployMethodText(method: DeployMethod): string {

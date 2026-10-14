@@ -1,11 +1,11 @@
 import type { Reachability } from '../devices/reachability';
-import { BUILD_TYPES, deployMethodLabel, type BuildType, type DeployMethod } from '../tasks/buildConfig';
+import { BUILD_TYPES, DEBUG_LANGUAGES, deployMethodLabel, type BuildType, type DebugLanguage, type DeployMethod } from '../tasks/buildConfig';
 import { lastBuildText, type BuildSnapshot } from './buildStateCore';
 
 /** Rows of the Build view as plain data; the tree provider only turns them into TreeItems. No `vscode` import. */
 
 export interface BuildRow {
-  id: 'project' | 'target' | 'device' | 'type' | 'deploy' | 'signing' | 'last';
+  id: 'project' | 'target' | 'device' | 'build' | 'deploy' | 'debugger' | 'signing' | 'last';
   label: string;
   description: string;
   /** Codicon id without `$(…)`. */
@@ -27,6 +27,7 @@ export interface BuildViewInput {
   registeredDevices?: ReadonlyMap<string, Reachability>;
   buildType: BuildType;
   deployMethod: DeployMethod;
+  debugLanguage: DebugLanguage;
   sign: boolean;
   snapshot: BuildSnapshot;
   now: number;
@@ -85,11 +86,11 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
       command: 'sardina.device.setDefault',
     },
     {
-      id: 'type',
-      label: 'Type',
+      id: 'build',
+      label: 'Build',
       description: BUILD_TYPES.find((c) => c.value === input.buildType)?.label ?? input.buildType,
       icon: 'gear',
-      tooltip: 'Build type (click to change)',
+      tooltip: 'Build configuration (click to change)',
       command: 'sardina.selectBuildType',
     },
     {
@@ -99,6 +100,14 @@ export function buildRows(input: BuildViewInput): BuildRow[] {
       icon: 'cloud-upload',
       tooltip: 'Deploy method (click to change)',
       command: 'sardina.selectDeployMethod',
+    },
+    {
+      id: 'debugger',
+      label: 'Debugger',
+      description: DEBUG_LANGUAGES.find((c) => c.value === input.debugLanguage)?.label ?? input.debugLanguage,
+      icon: 'debug-alt',
+      tooltip: 'Debugger used by Debug actions (click to change)',
+      command: 'sardina.selectDebugLanguage',
     },
     {
       id: 'signing',

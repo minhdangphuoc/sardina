@@ -26,7 +26,12 @@
   Debug builds are unoptimised (`-O0 -g`), **Restart** (Ctrl+Shift+F5) starts
   `gdbserver` again without building, and Debug opens the Device Monitor beside
   the editor.
-- Run, Debug and Deploy stream their build log live into the **Sailfish OS
+- QML/JavaScript debugging uses the Qt QML extension and a device-local,
+  loopback-only debug server. On Sailfish Qt 5.6 with Qt QML 1.16.0, an
+  [opt-in local adapter repair](troubleshooting.md) is needed for stable
+  breakpoints and stepping; with its `--skip-scopes` option, automatic Locals
+  are empty, while manual Watch expressions work.
+- Run, Debug and Deploy stream their build log live into the **Sardina
   Build** channel, and a running app, log stream or mirror shows in the status
   bar and the Devices view; changing the device stops what ran on the old one.
 - VS Code tasks of type `sardina` (build, build (debug), deploy, run,
@@ -61,10 +66,33 @@
   copies it to the phone and registers the phone with the SDK and the build
   engine. **Remove Device** undoes it.
 - **Install Deploy & Debug Tools on Device** installs `rsync`,
-  `sdk-deploy-rpm` and `gdb-gdbserver` on the phone.
+  `sdk-deploy-rpm`, `gdb-gdbserver` and the Qt QML debug-server plugin on the
+  phone. Its notification has a loading indicator, a stage-weighted progress
+  bar and the current phase/package percentage with device agent 1.12.2 or
+  newer. The bar reserves completion until the command finishes successfully;
+  **Sardina** output keeps phase changes, package names, errors and results.
+  An older or absent agent falls back to the `pkcon` text output without
+  preventing installation. This fallback applies to tool installation, not
+  debugger startup.
+- **Remove Deploy & Debug Tools from Device** sits beside Install in the device
+  menu and removes all installed deployment/debug tool packages after one
+  confirmation and the Developer Mode password. It
+  uses the same notification and verifies the requested RPMs are absent afterward.
+  These tools are shared with other SDKs/editors; PackageKit may remove dependent
+  packages too. The action does not select the device agent for removal.
 
 ## Device agent: screenshots, logs, screen mirror and control
 
+- **Debugger Monitoring Agent** (device agent 1.13.2+) supports C++ and
+  QML/JavaScript startup in parallel. It reports process state and verifies that
+  the relevant debugger process owns its listener before attaching. Its status
+  changes appear in Sardina output. QML startup with this monitor uses real
+  process/listener events and a bounded no-progress guard. Both debuggers require
+  the current bundled agent; Sardina offers to install or update it before
+  building or launching, and does not fall back to older port checks. The monitor has no launch, kill or network-listen
+  operation and stops with the debug session or keepalive lease. The package
+  observer is also a read-only, lease-bounded core helper; package changes
+  still run through the explicitly authorized Developer Mode password flow.
 - **Take Device Screenshot** saves a PNG where you choose and opens it.
 - **Show Device Logs** streams the phone's system log into the **Sardina
   Device Log** output channel (also reachable from the Device Monitor).
@@ -96,3 +124,6 @@
   projects, where it only reports false errors (see
   [What this is not (yet)](troubleshooting.md#what-this-is-not-yet)).
 
+Target-aware **C++** indexing is not implemented yet. The QML editing
+features above do not configure the C/C++ extension's include paths or
+preprocessor definitions.

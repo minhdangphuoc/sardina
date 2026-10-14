@@ -1,6 +1,6 @@
 Name:       sailfish-devagent
 Summary:    Developer agent for VS Code: the service and its Settings page
-Version:    1.11.3
+Version:    1.13.3
 Release:    1
 License:    LGPL-3.0-or-later
 URL:        https://github.com/minhdangphuoc/sardina
@@ -20,8 +20,10 @@ BuildRequires:  pkgconfig(vpx)
 %description
 A small service for developers, installed from the Sailfish OS Tools extension
 for VS Code. It listens on a Unix socket that only the device user can open;
-VS Code reaches it through the SDK's existing SSH login. Each feature is a
-module package of its own, started only for one request or stream. It runs as
+VS Code reaches it through the SDK's existing SSH login. Optional features use
+separate module packages. A module starts only for one request or stream. The
+core also contains a read-only PackageKit progress observer for Sardina's
+fixed deploy and debug tool list. It runs as
 defaultuser with the privileged and systemd-journal groups only, serves only
 while Developer Mode (jolla-developer-mode) is installed, and opens no network
 port.
@@ -210,6 +212,9 @@ fi
 %defattr(-,root,root,-)
 %license THIRD_PARTY_NOTICES
 %{_bindir}/sailfish-devagent
+%dir %{_libexecdir}/sailfish-devagent
+%{_libexecdir}/sailfish-devagent/sailfish-devagent-packages
+%{_libexecdir}/sailfish-devagent/sailfish-devagent-debugmonitor
 /usr/lib/systemd/system/sailfish-devagent.service
 /usr/lib/systemd/system/multi-user.target.wants/sailfish-devagent.service
 /usr/share/jolla-settings/entries/sailfish-devagent.json

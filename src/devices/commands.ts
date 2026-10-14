@@ -12,7 +12,7 @@ import { buildSshLaunch } from './sshLaunch';
 import { buildWlanSshLaunch, isValidPort } from './connectWlan';
 import { addDevice, removeDevice } from './addDevice';
 import { deviceFromItem, sfdkDeviceName } from './listParsing';
-import { installDeviceTools } from './devicePackages';
+import { installDeviceTools, removeDeviceTools } from './devicePackages';
 import { setDeviceDirectory } from './offlineGuard';
 
 /** Structural check, not `instanceof DeviceTreeItem`: the item may come from a different copy of the `tree` module. */
@@ -373,6 +373,7 @@ export function activateDevices(ctx: vscode.ExtensionContext, services: Services
     vscode.commands.registerCommand('sardina.device.add', addDevice(services, ctx)),
     vscode.commands.registerCommand('sardina.device.remove', removeDevice(services)),
     vscode.commands.registerCommand('sardina.device.installTools', installDeviceTools(services)),
+    vscode.commands.registerCommand('sardina.device.removeTools', removeDeviceTools(services)),
   );
 
   return provider;

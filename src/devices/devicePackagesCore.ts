@@ -1,19 +1,29 @@
 /** Pure parts of devicePackages.ts (no `vscode` import, unit-testable under plain mocha). */
 
-/** What the SDK needs on a device: rsync (every deploy method copies with it), sdk-deploy-rpm (--sdk installs) and gdbserver (debugging). */
-export const DEVICE_TOOL_PACKAGES = ['rsync', 'sdk-deploy-rpm', 'gdb-gdbserver'] as const;
+export const QML_DEBUG_SERVER_PACKAGE = 'qt5-qtdeclarative-plugin-qmlinspector';
 
-/** Each tool the SDK needs, the command that proves it is present, and the package that provides it. */
+/** Read-only check used before starting a package transaction. */
+export const CHECK_PACKAGE_MANAGER_SCRIPT =
+  'if pidof pkcon >/dev/null 2>&1; then echo sfdev-package-manager:busy; else echo sfdev-package-manager:idle; fi';
+
+/** What Sardina needs on a device for deployment plus C++ and QML/JavaScript debugging. */
+export const DEVICE_TOOL_PACKAGES = ['rsync', 'sdk-deploy-rpm', 'gdb-gdbserver', QML_DEBUG_SERVER_PACKAGE] as const;
+
+/** Each tool Sardina needs and the package that provides it. RPM ownership is the canonical check:
+ * binaries/plugins can live outside the login shell's PATH or move between Sailfish releases. */
 const TOOL_CHECKS = [
-  { command: 'rsync', pkg: 'rsync' },
-  { command: 'sdk-deploy-rpm', pkg: 'sdk-deploy-rpm' },
-  { command: 'gdbserver', pkg: 'gdb-gdbserver' },
+  { id: 'rsync', pkg: 'rsync' },
+  { id: 'sdk-deploy-rpm', pkg: 'sdk-deploy-rpm' },
+  { id: 'gdbserver', pkg: 'gdb-gdbserver' },
+  { id: 'qml-debug-server', pkg: QML_DEBUG_SERVER_PACKAGE },
 ] as const;
 
 const CHECK_MARK = 'sfdev-tool';
 
-/** Read-only (no root) script for `device exec -- sh -c`: reports `sfdev-tool:<command>:ok|missing` for each tool. Fixed text. */
-export const CHECK_TOOLS_SCRIPT = `for c in ${TOOL_CHECKS.map((t) => t.command).join(' ')}; do if command -v "$c" >/dev/null 2>&1; then echo "${CHECK_MARK}:$c:ok"; else echo "${CHECK_MARK}:$c:missing"; fi; done`;
+/** Read-only (no root) script for `device exec -- sh -c`. Every command is fixed source text. */
+export const CHECK_TOOLS_SCRIPT = TOOL_CHECKS.map(
+  (tool) => `if /usr/bin/rpm -q ${tool.pkg} >/dev/null 2>&1; then echo "${CHECK_MARK}:${tool.id}:ok"; else echo "${CHECK_MARK}:${tool.id}:missing"; fi`,
+).join('; ');
 
 /**
  * Parses CHECK_TOOLS_SCRIPT's output into the packages that are missing, in DEVICE_TOOL_PACKAGES order.
@@ -28,7 +38,7 @@ export function parseToolCheck(output: string): string[] | undefined {
   }
   const missing: string[] = [];
   for (const t of TOOL_CHECKS) {
-    const present = seen.get(t.command);
+    const present = seen.get(t.id);
     if (present === undefined) return undefined;
     if (!present) missing.push(t.pkg);
   }
@@ -42,8 +52,8 @@ export function packagesToInstall(missing: readonly string[] | undefined): reado
 
 /** A step and optional percent read from a line of `pkcon` output; undefined when the line says neither. */
 export function parseInstallProgress(line: string): { step: string; percent?: number } | undefined {
-  const stepMatch = /(refresh|download|install|resolv|dependenc|updat|query|wait|finish)/i.exec(line);
-  const pct = /(\d{1,3})\s*%/.exec(line);
+  const stepMatch = /(refresh|download|install|remov|resolv|dependenc|updat|query|wait|finish)/i.exec(line);
+  const pct = /(?:^Percentage:\s*|\b)(\d{1,3})(?:\s*%|\s*$)/i.exec(line);
   const percent = pct && Number(pct[1]) <= 100 ? Number(pct[1]) : undefined;
   if (!stepMatch && percent === undefined) return undefined;
   const word = stepMatch?.[1].toLowerCase();
@@ -52,9 +62,101 @@ export function parseInstallProgress(line: string): { step: string; percent?: nu
   return percent === undefined ? { step } : { step, percent };
 }
 
-/** One root shell: refresh the package lists, then install. Package names are fixed constants, never user input. */
+/** Keep terminal-style package-manager progress readable and bounded before logging it. */
+export function cleanRootShellOutput(raw: string): string {
+  const withoutAnsi = raw
+    .replace(/\x1b\[[0-?]*[ -/]*[@-~]/g, '')
+    .replace(/\x1b][^\x07]*(?:\x07|\x1b\\)/g, '')
+    .replace(/\x1b./g, '')
+    .replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]/g, '');
+  const compact = withoutAnsi.replace(/[ \t]+/g, ' ').trim();
+  return compact.length <= 2000 ? compact : `${compact.slice(0, 1999)}…`;
+}
+
+/**
+ * Installs from the existing metadata first. Exit 4 is what pkcon reports for stale metadata, so
+ * only then refresh and retry. Package names are fixed constants, never user input.
+ */
 export function installScript(packages: readonly string[]): string {
-  return `pkcon refresh && pkcon install -y ${packages.join(' ')}`;
+  if (!packages.length || packages.some((pkg) => !(DEVICE_TOOL_PACKAGES as readonly string[]).includes(pkg))) {
+    throw new Error('Invalid device tool package selection');
+  }
+  const install = `pkcon --plain install -y ${packages.join(' ')}`;
+  return `${install} || { status=$?; [ "$status" -eq 4 ] || exit "$status"; pkcon --plain refresh && ${install}; }`;
+}
+
+/** Only the fixed deployment/debug package allow-list can enter a privileged removal command. */
+export function removeToolsScript(packages: readonly string[]): string {
+  if (!packages.length || packages.some((pkg) => !(DEVICE_TOOL_PACKAGES as readonly string[]).includes(pkg))) {
+    throw new Error('Invalid device tool package selection');
+  }
+  return `pkcon --plain remove -y ${[...new Set(packages)].join(' ')}`;
+}
+
+/** A monotonic, stage-weighted notification bar. PackageKit restarts percentages for queries,
+ * downloads and individual packages; a package's 100% must not finish the entire operation. */
+export class DevicePackageProgress {
+  private phase: 'preparing' | 'downloading' | 'installing' | 'removing' = 'preparing';
+  private completed = 0;
+  private readonly items = new Map<string, number>();
+
+  constructor(private readonly packages: readonly string[]) {}
+
+  update(step: string | undefined, percentage?: number, pkg?: string): number {
+    if (step) {
+      if (/download/i.test(step)) this.phase = 'downloading';
+      else if (/install|reinstall|updat/i.test(step)) this.phase = 'installing';
+      else if (/remov/i.test(step)) this.phase = 'removing';
+      else if (/quer|resolv|dependenc|refresh|prepar/i.test(step)) this.phase = 'preparing';
+    }
+    if (percentage === undefined || !Number.isFinite(percentage) || percentage <= 0 || percentage > 100) return 0;
+    let percent = percentage;
+    if (pkg) {
+      if (!this.packages.includes(pkg)) return 0;
+      const key = `${this.phase}:${pkg}`;
+      this.items.set(key, Math.max(this.items.get(key) ?? 0, percent));
+      percent = this.packages.reduce((sum, item) => sum + (this.items.get(`${this.phase}:${item}`) ?? 0), 0) / this.packages.length;
+    }
+    const [start, weight] = this.phase === 'downloading' ? [10, 45]
+      : this.phase === 'installing' ? [55, 40]
+      : this.phase === 'removing' ? [10, 85] : [0, 10];
+    const next = Math.max(this.completed, Math.min(95, start + weight * percent / 100));
+    const increment = next - this.completed;
+    this.completed = next;
+    return increment;
+  }
+
+  complete(): number {
+    const increment = 100 - this.completed;
+    this.completed = 100;
+    return increment;
+  }
+}
+
+export type PackageManagerState = 'idle' | 'busy' | 'unknown';
+
+/** Parses only Sardina's fixed marker; diagnostic noise cannot become a false idle result. */
+export function packageManagerState(output: string, exitCode: number): PackageManagerState {
+  if (exitCode !== 0) return 'unknown';
+  const lines = output.split(/\r?\n/).map((line) => line.trim());
+  if (lines.includes('sfdev-package-manager:busy')) return 'busy';
+  if (lines.includes('sfdev-package-manager:idle')) return 'idle';
+  return 'unknown';
+}
+
+/**
+ * Gives the remote process group its own deadline. The host watches the same limit, but this
+ * watchdog remains effective if VS Code reloads or the detached sfdk process is orphaned.
+ */
+export function rootShellScript(script: string, overallMs: number): string {
+  const seconds = Math.max(1, Math.ceil(overallMs / 1000));
+  return (
+    `sardina_parent=$$; ` +
+    `(sleep ${seconds}; kill -INT -"$sardina_parent") & sardina_watchdog=$!; ` +
+    `trap 'kill "$sardina_watchdog" 2>/dev/null || true' EXIT; ` +
+    `trap 'exit 124' HUP INT TERM; ` +
+    `${script}; sardina_status=$?; exit "$sardina_status"`
+  );
 }
 
 /** What to tell the user after the install finishes. */
@@ -197,6 +299,100 @@ export const DEFAULT_ROOT_SHELL_LIMITS: RootShellLimits = {
   overallMs: 10 * 60_000,
 };
 
+export type PackageMonitorEvent =
+  | { event: 'ready' }
+  | { event: 'transaction' }
+  | { event: 'package'; package: string; phase: string; summary?: string }
+  | { event: 'progress'; package: string; percentage: number }
+  | { event: 'status'; phase?: string; package?: string; percentage?: number }
+  | { event: 'error'; code: string; details: string }
+  | { event: 'finished'; exit: string; installed: string[]; missing: string[] }
+  | { event: 'stalled'; seconds: number; installed: string[]; missing: string[] };
+
+/** Fixed argv for the unprivileged agent's read-only PackageKit transaction stream. */
+export function packageMonitorArgs(packages: readonly string[]): string[] {
+  return ['device', 'exec', '--', 'sailfish-devagent', '--request', 'packages', ...packages.flatMap((pkg) => ['--package', pkg])];
+}
+
+/** Accept only the small event vocabulary emitted by agent 1.12.0; arbitrary JSON never reaches UI text. */
+export function parsePackageMonitorEvent(line: string, requested: readonly string[]): PackageMonitorEvent | undefined {
+  let value: unknown;
+  try {
+    value = JSON.parse(line);
+  } catch {
+    return undefined;
+  }
+  if (!value || typeof value !== 'object') return undefined;
+  const record = value as Record<string, unknown>;
+  if (record.ok === true && record.stream === 'packages' && record.event === 'ready') return { event: 'ready' };
+  if (record.event === 'transaction') return { event: 'transaction' };
+  const allowed = new Set(requested);
+  const pkg = typeof record.package === 'string' && allowed.has(record.package) ? record.package : undefined;
+  const percentage = typeof record.percentage === 'number' && Number.isInteger(record.percentage) && record.percentage >= 0 && record.percentage <= 100
+    ? record.percentage
+    : undefined;
+  const stringArray = (item: unknown): string[] | undefined =>
+    Array.isArray(item) && item.every((entry) => typeof entry === 'string' && allowed.has(entry)) ? [...new Set(item)] : undefined;
+  if (record.event === 'package' && pkg && typeof record.phase === 'string') {
+    return { event: 'package', package: pkg, phase: record.phase.slice(0, 64), ...(typeof record.summary === 'string' ? { summary: record.summary.slice(0, 200) } : {}) };
+  }
+  if (record.event === 'progress' && pkg && percentage !== undefined) return { event: 'progress', package: pkg, percentage };
+  if (record.event === 'status') {
+    const phase = typeof record.phase === 'string' ? record.phase.slice(0, 64) : undefined;
+    if (!phase && !pkg && percentage === undefined) return undefined;
+    return { event: 'status', ...(phase ? { phase } : {}), ...(pkg ? { package: pkg } : {}), ...(percentage !== undefined ? { percentage } : {}) };
+  }
+  if (record.event === 'error' && typeof record.code === 'string' && typeof record.details === 'string') {
+    return { event: 'error', code: record.code.slice(0, 64), details: record.details.slice(0, 500) };
+  }
+  if (record.event === 'finished' || record.event === 'stalled') {
+    const installed = stringArray(record.installed);
+    const missing = stringArray(record.missing);
+    if (!installed || !missing) return undefined;
+    if (record.event === 'finished' && typeof record.exit === 'string') {
+      return { event: 'finished', exit: record.exit.slice(0, 64), installed, missing };
+    }
+    if (record.event === 'stalled' && typeof record.seconds === 'number' && record.seconds >= 1 && record.seconds <= 3600) {
+      return { event: 'stalled', seconds: Math.round(record.seconds), installed, missing };
+    }
+  }
+  return undefined;
+}
+
+export function packageMonitorMessage(event: PackageMonitorEvent): string | undefined {
+  switch (event.event) {
+    case 'ready':
+      return 'watching PackageKit…';
+    case 'transaction':
+      return 'PackageKit transaction started…';
+    case 'package':
+      return `${event.phase} ${event.package}…`;
+    case 'progress':
+      return `${event.package}: ${event.percentage}%`;
+    case 'status': {
+      const subject = [event.phase, event.package].filter(Boolean).join(' ');
+      return `${subject || 'PackageKit'}${event.percentage === undefined ? '…' : `: ${event.percentage}%`}`;
+    }
+    case 'error':
+      return `PackageKit error: ${event.code}`;
+    case 'finished':
+      return `PackageKit ${event.exit}`;
+    case 'stalled':
+      return event.missing.length === 0
+        ? 'packages installed; closing the stalled PackageKit client…'
+        : `PackageKit has made no progress for ${event.seconds} s…`;
+  }
+}
+
+/** UI receives every progress event; the output channel keeps milestones instead of every percent. */
+export function packageMonitorLogMessage(event: PackageMonitorEvent, complete: boolean): string | undefined {
+  if (event.event === 'progress' || event.event === 'transaction') return undefined;
+  if (event.event === 'status' && (!event.phase || event.percentage !== undefined || event.phase === 'finished')) return undefined;
+  if (event.event === 'finished' && !complete && event.exit === 'succeeded') return undefined;
+  if (event.event === 'error') return `PackageKit error ${event.code}: ${cleanRootShellOutput(event.details)}`;
+  return packageMonitorMessage(event);
+}
+
 export type RootShellPhase = 'connecting' | 'password' | 'running';
 export type RootShellAbort = 'no-prompt' | 'stalled' | 'timeout' | 'dropped' | 'password-rejected';
 
@@ -223,6 +419,12 @@ export class RootShellWatch {
 
   get aborted(): RootShellAbort | undefined {
     return this.abortValue;
+  }
+
+  /** Bytes without a newline are still activity (pkcon redraws one terminal line in place). */
+  onActivity(now: number): void {
+    this.lastOutput = now;
+    if (this.phaseValue === 'password') this.phaseValue = 'running';
   }
 
   /**
